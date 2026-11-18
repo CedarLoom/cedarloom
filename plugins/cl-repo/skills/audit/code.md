@@ -1,6 +1,6 @@
 # Lens: code
 
-For source and tests. This lens looks for code that should not be there. A search for bugs or security holes is a code review or a security review, not this audit.
+This lens looks for code that should not be there. A search for bugs or security holes is a code review or a security review, not this audit.
 
 First run the read-only checks the repository names in AGENTS.md or its package scripts (type check, lint, unused code, duplicates) and cite their output. Then read.
 

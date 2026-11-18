@@ -9,9 +9,9 @@ writes: "Specs, issue and review threads, prompts, approvals, handoff copies, co
 
 # Orchestrating projects
 
-This session is the coordinator. Workers do the issue work in their own worktrees, each working by the workflow skill at its depth (the Flow line of [spec-template.md](spec-template.md)); the coordinator picks, specs, watches, reviews and merges by policy ([review-and-merge.md](review-and-merge.md)), cleans up and starts the next. Orca starts and reaches the workers: its commands are in [orca.md](orca.md), and a run starts only when the start condition of [Start the run](orca.md#start-the-run) holds.
+This session is the coordinator. Workers do the issue work in their own worktrees, each working by the workflow skill at its depth (the Flow line of [spec-template.md](spec-template.md)). Orca starts and reaches the workers: its commands are in [orca.md](orca.md), and a run starts only when the start condition of [Start the run](orca.md#start-the-run) holds.
 
-Projects: $ARGUMENTS without a leading `--mode supervised` ([modes](modes.md#modes)) (Codex: the paths after the skill name). Any other argument that starts with `--` starts no run: name it to the owner. Each is a repository with a GitHub remote and an `AGENTS.md`.
+Projects: $ARGUMENTS without a leading `--mode supervised` ([modes](modes.md#modes)). Any other argument that starts with `--` starts no run: name it to the owner. Each is a repository with a GitHub remote and an `AGENTS.md`.
 
 ## Rules
 
@@ -75,7 +75,6 @@ Every session of a run has one role: the owner, the coordinator (this session), 
    - One coordinator runs per project: the precheck prints a batch's issue until it carries `cl:in-progress` or its PR exists, so pick nothing in a project the handoff file names for another session, or while an earlier session of its schedule is alive.
 2. **Spec**: copy [spec-template.md](spec-template.md) into the run folder and fill its fields as its head says. Build every spec from the template; a spec copied or edited from the previous one carries that issue's details into the next.
 3. **Start** one worker per free slot by [Start the run](orca.md#start-the-run), up to `workersPerProject` and `hostWorkerLimit`, in its project's mode ([Rules](#rules)).
-   - Projects run in parallel; a project with no free slot waits.
    - Right before a worker starts, put `cl:in-progress` on each issue of its batch (`gh issue edit <number> -R <owner/repo> --add-label cl:in-progress`): an issue is never started twice. Where that edit fails, start no worker for the issue and list it for the owner. When the worker stops, take the label off each issue of its batch that has no PR, also where another issue of the batch has one: a BLOCKED issue is picked again ([Batches](spec-template.md#batches)). At the start of a run, list for the owner each issue that carries it (`gh issue list -R <owner/repo> --label cl:in-progress`) with no open PR: the owner takes it off once no worker holds it (`gh issue edit <number> -R <owner/repo> --remove-label cl:in-progress`).
    - Before an automatic worker, pass the checks and probe of [Automatic start](modes.md#automatic-start) it needs.
    - Before a project's first start in the run, take its baseline ([Reconciliation](#reconciliation)).
@@ -90,9 +89,7 @@ Every session of a run has one role: the owner, the coordinator (this session), 
    - Each wake-up checks worker messages (a report, a batch's status message, a question), worker state, merged PRs, PRs whose merge waits and the owner's answers to the approvals in the handoff file's `## Open`, and once per day the [Reconciliation](#reconciliation). Where the run folder holds a `facts.md` that [facts.mjs](facts.mjs) wrote, read them there first and ask `gh` only for what it lacks or shows `unread`.
    - A PR merged by the owner or a bot settles that issue's work even when its worker never reported.
    - Read and act on an owner's answer as [approvals.md](approvals.md#the-answer) says: an answer lifts a `design` or `question` gate only and merges nothing.
-   - Questions: [Questions and owner decisions](#questions-and-owner-decisions). Dialogs: [Rules](#rules).
    - A worker whose state reports alive or idle may be waiting at a prompt, so state alone proves nothing: apply the stall check.
-   - A coordinator that waits on its own ([Waiting](#waiting)) wakes at least every 10 minutes.
 5. **React** to each outcome ([Outcomes](#outcomes)), clean up, then return to 1 for every project with a free slot, within both caps.
    - A waiting follow-up takes a free slot before any pick.
    - The run closes when no worker is active, no PR waits for a review, a merge or its default-branch watch, and no project has an issue to pick (a project that the worktree rule of [Sandbox on](modes.md#sandbox-on) holds has none), after a last [Reconciliation](#reconciliation).

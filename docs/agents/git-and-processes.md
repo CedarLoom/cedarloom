@@ -1,6 +1,6 @@
 # Git and child processes
 
-Read this before changing plugin code that runs git or another program. Each item names what goes wrong and, where the plugins have it, the code that already avoids it; reuse that code instead of writing a new runner.
+Each item names what goes wrong and, where the plugins have it, the code that already avoids it; reuse that code instead of writing a new runner.
 
 ## Child processes
 
@@ -22,5 +22,3 @@ Read this before changing plugin code that runs git or another program. Each ite
 - **Case and device names.** macOS and Windows file systems join names that differ only in case, and Windows opens a device for a name such as `con` or `nul`. Name files in one case and behind a prefix.
 - **Links and FIFOs.** An open follows a symbolic link and waits on a FIFO. Reads that must do neither open with `O_NOFOLLOW` and `O_NONBLOCK` (`plugins/cl-orchestration/skills/coordinate/facts.mjs`). Windows has neither flag, and making a link there takes admin rights or developer mode.
 - **Flushing a folder** fails on Windows, which cannot open one; NTFS journals the rename instead.
-
-The plugin tests run on Linux and macOS only (`plugin-tests` in [checks.yml](../../.github/workflows/checks.yml)): a Windows-only branch has no CI run.

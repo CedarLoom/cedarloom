@@ -75,7 +75,6 @@ For other agents, follow its own README.
 2. Once per repository, run `claude` there and then `/cl-repo:setup`. It also writes the coordinator's policy, `docs/agents/orchestration.json`, whose `startLabel` names the label that lets the coordinator start an issue ([policy](plugins/cl-orchestration/skills/coordinate/policy.md)). The coordinator starts nothing until that file is on the default branch.
 3. Per task, without the coordinator:
    - Describe the task: the workflow picks the kind and the depth. Start a bigger one with `/cl-workflow:plan <task>`, and run `/cl-workflow:ask` to let the agent ask you questions in the terminal for a while.
-   - Keep the repository in shape with `/cl-repo:maintain`, and run `/cl-repo:audit`, `/cl-repo:improve` and `/cl-repo:debloat` on its instructions, docs or code.
 4. Per issue, with the coordinator (needs `cl-orchestration`):
    - Label the issues with the `startLabel` (`cl:ready-for-agent` by default).
    - In a terminal (an Orca terminal for Orca workers), run `CEDARLOOM_ROLE=coordinator claude` in the default permission mode, then `/cl-orchestration:coordinate <project paths>`. It starts a worker per issue through [Orca](plugins/cl-orchestration/skills/coordinate/orca.md) and a fresh reviewer per pull request. Releases and tags stay yours.

@@ -1,6 +1,6 @@
 # Diagnose
 
-A bug whose cause is unknown, at standard or deep depth. A bug with a known cause skips this file: a failing test first where the [test rule](SKILL.md#verify) allows one.
+A bug whose cause is unknown, at standard or deep depth.
 
 1. **Reproduce.** Before any change, one command that shows the symptom and fails (a test, a script, a request). Note the command and its output for the report. No such command can be built (missing data, an account, hardware): name what blocks it and ask; without terminal questions it goes to the task's issue with what you tried, and the task waits.
 2. **Narrow.** Read the code path the command runs. Add temporary debug output only where reading does not settle it.

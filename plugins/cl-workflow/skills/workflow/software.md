@@ -2,8 +2,6 @@
 
 ## Steps
 
-Standard and deep. The order per depth is the checklist in [SKILL.md](SKILL.md), and its change-type table and Verify apply; deep also [deep.md](deep.md). Standard: for a refactor the suite passes before and after with tests unchanged. Detail:
-
 - **Installed skills** that match a step may run it under the gates of [SKILL.md](SKILL.md): a test first where the [test rule](SKILL.md#verify) calls for one, bug diagnosis ([diagnose.md](diagnose.md) is the floor), interface design, prototypes, domain docs. A skill only the user starts is suggested, then wait. None installed: do the step directly.
 - **Review before pushing** standard, deep or risky work.
   - First a scope line: the branch or diff range and the issue it implements, when one exists.

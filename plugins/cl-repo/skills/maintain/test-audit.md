@@ -4,7 +4,7 @@ Question per module: which deliberate break of the code do its tests catch? A mu
 
 ## Bounds
 
-A mutant can loop or allocate without end: one run of a 49-line module was killed by the operating system's memory guard after using several GB of swap. Set all of these before the first run:
+A mutant can loop or allocate without end. Set all of these before the first run:
 
 - One module per run, chosen by the user or by logic that has its own tests. The whole tree takes hours (0.6 to 0.75 s per mutant at concurrency 4, 3 to 5 mutants per line).
 - Concurrency 4, never the default (all cores but one).
