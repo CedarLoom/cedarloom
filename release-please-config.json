@@ -1,6 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "group-pull-request-title-pattern": "chore${scope}: release cedarloom",
+  "pull-request-header": "Release prepared from the commits since the last version.",
   "bump-minor-pre-major": true,
   "plugins": [
     {
@@ -15,14 +16,12 @@
       "release-type": "simple",
       "component": "cedarloom",
       "include-component-in-tag": true,
-      "release-as": "0.1.0",
       "extra-files": [{ "type": "json", "path": ".claude-plugin/plugin.json", "jsonpath": "$.version" }]
     },
     "plugins/cl-workflow": {
       "release-type": "simple",
       "component": "cedarloom-workflow",
       "include-component-in-tag": true,
-      "release-as": "0.1.0",
       "extra-files": [
         { "type": "json", "path": ".claude-plugin/plugin.json", "jsonpath": "$.version" },
         { "type": "json", "path": ".codex-plugin/plugin.json", "jsonpath": "$.version" }
@@ -32,7 +31,6 @@
       "release-type": "simple",
       "component": "cedarloom-repo",
       "include-component-in-tag": true,
-      "release-as": "0.1.0",
       "extra-files": [
         { "type": "json", "path": ".claude-plugin/plugin.json", "jsonpath": "$.version" },
         { "type": "json", "path": ".codex-plugin/plugin.json", "jsonpath": "$.version" }
@@ -42,7 +40,6 @@
       "release-type": "simple",
       "component": "cedarloom-orchestration",
       "include-component-in-tag": true,
-      "release-as": "0.1.0",
       "extra-files": [
         { "type": "json", "path": ".claude-plugin/plugin.json", "jsonpath": "$.version" },
         { "type": "json", "path": ".codex-plugin/plugin.json", "jsonpath": "$.version" }
