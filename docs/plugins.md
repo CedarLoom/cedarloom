@@ -14,7 +14,7 @@ Every hook runs `node`, so Node.js must be on the PATH. Set a plugin's options w
 
 Two rows of text above the prompt in the Claude Code terminal and desktop app (not the VS Code extension), off by default.
 
-- Top row: the project folder, its git branch, and the level of [Ponytail](../README.md#recommended-add-on-ponytail), when installed.
+- Top row: the project folder, its git branch, and the level of [Ponytail](../README.md#recommended-add-on-ponytail), when a valid `.ponytail-active` file is present.
 - Checks row: the last test run and the last lint or type check of the main loop, each `passed`, `failed`, `not run` or `stale (N edits since)`, then `ASK until <time>` (or `ASK for this session`) while [terminal questions](#terminal-questions) are allowed, and the button `?`, which shows a short version of this text.
   - Test runs: `npm test`, `pnpm test`, `yarn test`, `bun test` (also with `run` and as `npm run test:<name>`), `node --test`, `playwright test`, `pytest`, `go test`, `cargo test`, `vitest` or `jest`.
   - Lint or type checks: `eslint`, `npm run lint`, `tsc`, `ruff`, `mypy`, `pyright`, `go vet`, `cargo clippy` or `biome`.
@@ -48,7 +48,7 @@ The coordinator of `/cl-orchestration:coordinate` files an owner question, in th
 | Label | Meaning |
 | --- | --- |
 | `cl:plan` | CedarLoom may read and plan the issue and ask on it; it does not start work |
-| `cl:ready-for-agent` | the coordinator may start the issue (the default `startLabel`) |
+| `cl:ready-for-agent` | the coordinator may start the issue (the default `startLabel`); a question you answered gets it, but an approval never does; a question whose answer drops the work is closed as not planned, and one left open with the label is listed for you, not started |
 | `cl:needs-human` | a question or approval waits for the owner |
 | `cl:in-progress` | a worker holds the issue, so it never starts twice; a label left after its worker ended without a pull request (a host restart) holds the issue until you take it off: `gh issue edit <number> -R <owner/repo> --remove-label cl:in-progress` |
 | `cl:deferred` | the owner parked it: it does not start and the question queue skips it |

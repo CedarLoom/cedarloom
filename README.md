@@ -60,7 +60,7 @@ The role guard is a hook, not a boundary: a command written to get around it can
 
 ## Recommended add-on: Ponytail
 
-[Ponytail](https://github.com/DietrichGebert/ponytail) is a separate plugin, recommended with CedarLoom, that steers the agent to write only what the task needs. CedarLoom works without it and does not install it, and the status band shows its level only when it is installed. In Claude Code, install it from its own marketplace, as two separate prompts:
+[Ponytail](https://github.com/DietrichGebert/ponytail) is a separate plugin, recommended with CedarLoom, that steers the agent to write only what the task needs. CedarLoom works without it and does not install it, and the status band shows a Ponytail level when a valid `.ponytail-active` file is present. In Claude Code, install it from its own marketplace, as two separate prompts:
 
 ```text
 /plugin marketplace add DietrichGebert/ponytail
