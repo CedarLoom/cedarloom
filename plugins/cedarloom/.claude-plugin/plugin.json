@@ -1,0 +1,14 @@
+{
+  "name": "cedarloom",
+  "displayName": "CedarLoom",
+  "version": "0.0.0",
+  "description": "Installs the CedarLoom plugins cl-workflow, cl-repo and cl-orchestration together.",
+  "author": {
+    "name": "CedarLoom",
+    "url": "https://github.com/CedarLoom"
+  },
+  "homepage": "https://github.com/CedarLoom/cedarloom#readme",
+  "repository": "https://github.com/CedarLoom/cedarloom",
+  "license": "ISC",
+  "dependencies": ["cl-workflow", "cl-repo", "cl-orchestration"]
+}

@@ -1,0 +1,18 @@
+version = 1
+
+# Copyright and license of every file, checked by `reuse lint` in checks.yml. When several annotations match a file,
+# the last one wins; `precedence = "override"` also ignores notices inside the file.
+
+[[annotations]]
+path = "**"
+SPDX-FileCopyrightText = "2026 Eike Landin"
+SPDX-License-Identifier = "ISC"
+
+# The CedarLoom name and logos are not under the code license: LICENSES/LicenseRef-Brand.txt, the brand repository's
+# own text.
+[[annotations]]
+path = "brand/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 CedarLoom contributors"
+SPDX-License-Identifier = "LicenseRef-Brand"
+

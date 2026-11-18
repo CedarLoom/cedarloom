@@ -1,0 +1,164 @@
+name: Release
+
+# Nothing releases until a maintainer merges the release pull request (docs/releasing.md). release-please keeps one release
+# pull request open from the Conventional Commits on main (release-please-config.json: the plugins under plugins/, one
+# version for all, set in each .claude-plugin/plugin.json). It creates no tag or Release: after the merge the job
+# `release` tags each plugin, creates the Release cedarloom-v<x.y.z>, moves the branch stable (the ref users add the
+# marketplace at) to the commit that tag names.
+#
+# The release pull request opens with a GitHub App token when one is configured, so that its required checks run without
+# approval (a pull request changed with GITHUB_TOKEN starts no runs until someone approves them). Without one the job
+# falls back to GITHUB_TOKEN, and a maintainer approves the runs on the release pull request.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+# Concurrency is per job, not per workflow: GitHub keeps one pending run per group and cancels the one waiting before
+# it, and only the run of the release merge releases, so a later push must not cancel it.
+jobs:
+  release-please:
+    if: github.repository == 'CedarLoom/cedarloom'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # A pending release-please job that a newer push replaces is dropped: the newer one does the same work.
+    concurrency:
+      group: ${{ github.workflow }}-release-please
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      REPO: ${{ github.repository }}
+    steps:
+      - id: app-token
+        if: ${{ vars.RELEASE_APP_CLIENT_ID != '' }}
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+      - id: rp
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          skip-github-release: true
+      # release-please bumps the versions in the files it knows; a plugin install line in the docs that names a release
+      # tag (version-pins.mjs, checked in checks.yml) gets the new one in one more commit. The next release-please run
+      # rebuilds the branch, and this step runs again.
+      - id: pr
+        name: Find the release pull request
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+        run: |
+          branch=$(gh pr list --repo "$REPO" --state open --label 'autorelease: pending' --json headRefName --jq '.[0].headRefName // empty')
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+      - if: ${{ steps.pr.outputs.branch != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: # zizmor: ignore[artipacked] the next step pushes to the release branch with these credentials
+          ref: ${{ steps.pr.outputs.branch }}
+          token: ${{ steps.app-token.outputs.token || github.token }}
+          path: release-pr
+      - if: ${{ steps.pr.outputs.branch != '' }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.4
+          package-manager-cache: false
+      - if: ${{ steps.pr.outputs.branch != '' }}
+        name: Pin the install commands to the release version
+        working-directory: release-pr
+        run: |
+          node .github/scripts/version-pins.mjs
+          if git diff --quiet; then echo "Pins are current."; exit 0; fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -a -m 'chore: pin the install commands to the release version'
+          git push
+
+  # The merge of the release pull request: each plugin releases at the version of its .claude-plugin/plugin.json.
+  # Every step skips what a previous run did, so rerunning the job after a failure continues where it stopped.
+  release:
+    if: github.repository == 'CedarLoom/cedarloom'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # One group per commit: a push after the release merge never cancels this job, and a rerun waits for a running one.
+    concurrency:
+      group: ${{ github.workflow }}-release-${{ github.sha }}
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      SHA: ${{ github.sha }}
+    steps:
+      - id: pr
+        name: Find the merged release pull request
+        run: |
+          pr=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '[.[] | select(.merged_at != null and any(.labels[]; .name == "autorelease: pending"))][0].number // empty')
+          echo "number=$pr" >> "$GITHUB_OUTPUT"
+      - if: ${{ steps.pr.outputs.number != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: # zizmor: ignore[artipacked] the job pushes stable with these credentials
+          fetch-depth: 0
+      - id: v
+        if: ${{ steps.pr.outputs.number != '' }}
+        name: Version to release
+        run: |
+          bundle=$(jq -r '.packages | to_entries[] | select(.value.component == "cedarloom") | .key' release-please-config.json)
+          version=$(jq -r .version "$bundle/.claude-plugin/plugin.json")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      # release-please finds a component's last release by the tag <component>-v<x.y.z>, so every plugin gets its tag.
+      # The Release on the bundle's tag, cedarloom-v<x.y.z>, holds the changelog sections of all of them.
+      - if: ${{ steps.pr.outputs.number != '' }}
+        name: Tag and create the GitHub Release
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          # The section of version $2: the first one, and only when its heading names that version. A new package has
+          # no changelog until its first release, and that release has no previous tag to link: `## x.y.z (date)`.
+          notes() { [ -f "$1" ] || return 0; awk -v v="$2" '/^## /{if (f || !(index($0, "[" v "]") || $0 == "## " v || index($0, "## " v " ") == 1)) exit; f=1; next} f' "$1"; }
+          # An assignment, not a process substitution, so that a jq failure stops the step.
+          plugins=$(jq -r '.packages | to_entries[] | select(.key | startswith("plugins/")) | "\(.key) \(.value.component)"' release-please-config.json)
+          body=
+          # Each plugin at the version of its plugin.json: a plugin outside this release keeps its last tag.
+          while read -r path component; do
+            v=$(jq -r .version "$path/.claude-plugin/plugin.json")
+            gh api "repos/$REPO/git/ref/tags/$component-v$v" >/dev/null 2>&1 ||
+              gh api "repos/$REPO/git/refs" -f "ref=refs/tags/$component-v$v" -f "sha=$SHA" >/dev/null
+            section=$(notes "$path/CHANGELOG.md" "$VERSION")
+            if [ -n "$section" ]; then body+="## ${path#plugins/}"$'\n'"$section"$'\n\n'; fi
+          done <<<"$plugins"
+          gh release view "cedarloom-v$VERSION" --repo "$REPO" >/dev/null 2>&1 ||
+            gh release create "cedarloom-v$VERSION" --repo "$REPO" --target "$SHA" --title "cedarloom v$VERSION" --notes "$body" --latest
+      # stable only moves forward: main is linear, so this fast-forwards, and a rerun finds it in place.
+      - if: ${{ steps.pr.outputs.number != '' }}
+        name: Move stable to the release tag
+        env:
+          TAG: cedarloom-v${{ steps.v.outputs.version }}
+        run: |
+          git fetch --no-tags origin "refs/tags/$TAG:refs/tags/$TAG"
+          git push origin "refs/tags/$TAG^{commit}:refs/heads/stable"
+      # release-please opens no new release pull request while a merged one is still pending. gh pr edit fails on a
+      # label the repository lacks, after it has removed the pending one: create the label first (--force: no error if
+      # it exists).
+      - if: ${{ steps.pr.outputs.number != '' }}
+        name: Mark the release pull request as tagged
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          gh label create 'autorelease: tagged' --repo "$REPO" --color ededed --description 'release-please: release created' --force
+          gh pr edit "$PR" --repo "$REPO" --remove-label 'autorelease: pending' --add-label 'autorelease: tagged'
+      # A push during the release ran release-please while the pull request was still pending, and that run opened no
+      # release pull request; the job release-please of this run is its own group, so it can run before the label
+      # changes. One more run of this workflow does that work now.
+      - if: ${{ steps.pr.outputs.number != '' }}
+        name: Run release-please again
+        run: gh workflow run release.yml --repo "$REPO" --ref main
