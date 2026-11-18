@@ -48,7 +48,7 @@ The coordinator of `/cl-orchestration:coordinate` files an owner question, in th
 | Label | Meaning |
 | --- | --- |
 | `cl:plan` | CedarLoom may read and plan the issue and ask on it; it does not start work |
-| `cl:ready-for-agent` | the coordinator may start the issue (the default `startLabel`); a question you answered gets it, also a "drop it" answer, which an agent then closes, but an approval never does |
+| `cl:ready-for-agent` | the coordinator may start the issue (the default `startLabel`); a question you answered gets it, but an approval never does; a question whose answer drops the work is closed as not planned, and one left open with the label is listed for you, not started |
 | `cl:needs-human` | a question or approval waits for the owner |
 | `cl:in-progress` | a worker holds the issue, so it never starts twice; a label left after its worker ended without a pull request (a host restart) holds the issue until you take it off: `gh issue edit <number> -R <owner/repo> --remove-label cl:in-progress` |
 | `cl:deferred` | the owner parked it: it does not start and the question queue skips it |

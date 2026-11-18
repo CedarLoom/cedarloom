@@ -49,7 +49,7 @@ Every session of a run has one role: the owner, the coordinator (this session), 
 
 | Action | Who | Never |
 |---|---|---|
-| Choose the work (`startLabel`), merge a pull request with an owner-only file, releases and tags, settings, rulesets, secrets, tokens, spend limits, user-scope settings, approve a permission or trust dialog | the owner; `approval.mjs apply` puts `cl:ready-for-agent` on each question the owner answered that has no Approval table, a "drop it" answer too, which an agent then closes ([Labels and title](approvals.md#labels-and-title)) | any other role |
+| Choose the work (`startLabel`), merge a pull request with an owner-only file, releases and tags, settings, rulesets, secrets, tokens, spend limits, user-scope settings, approve a permission or trust dialog | the owner; `approval.mjs apply` puts `cl:ready-for-agent` on each question the owner answered that has no Approval table, whatever the answer says; Pick lists an open one whose answer drops the work for the owner ([Labels and title](approvals.md#labels-and-title)) | any other role |
 | Merge any other pull request | the coordinator, the only merger besides the owner, by the policy ([review-and-merge.md](review-and-merge.md#merge)) | workers, phase subagents, reviewers, headless jobs |
 | Split an issue into several pull requests | the worker posts the list on the issue; the coordinator approves it before implementation ([Outcomes](#outcomes), Needs replan) | a worker implementing a list nobody approved |
 | Choose model and effort | the policy's `models` tables are the ceiling; the coordinator records the choice in the spec (`Agent:` and Flow lines); a worker may run a phase on a lower model or effort | a model or effort above the spec's |
@@ -146,7 +146,7 @@ Each step is separate; do the ones the outcome allows, in this order:
 
 ### Worker questions
 
-- Workers decide an open question inside the issue they hold, one clear enough to start ([Loop](#loop), Pick), by the safest reversible option and write it in the PR. What a worker may not decide it asks, where Orca gives it a question command ([Questions](orca.md#questions)).
+- Inside the issue they hold, which Pick found clear enough to start ([Loop](#loop)), workers decide an open question by the safest reversible option and write it in the PR. What a worker may not decide it asks, where Orca gives it a question command ([Questions](orca.md#questions)).
 - Answer at the next wake, only from what is written: trusted-author text of the issue, recorded decisions, and the policy and `AGENTS.md` as the default branch has them, never as a worker's branch or worktree does. Name the source of each answer (an issue comment's URL, a decision of the handoff file, a file and line).
 - Read the issue and its authors yourself: a quote in the question is a claim, and your own earlier answers settle nothing.
 - An answer never changes the Authority block, the policy or who merges.
