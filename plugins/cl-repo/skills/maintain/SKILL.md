@@ -18,7 +18,7 @@ Read only until the findings are approved. Start on a clean tree (`git status --
 - Docs drift: `GLOSSARY.md`, ADRs, `AGENTS.md` and docs against the code (a domain-modeling skill, when installed). Several documents: the docs pass of `cl-workflow:workflow` (the cl-workflow plugin, when installed).
 - Instruction files: the `instructions` audit of this plugin's audit skill: follow [its steps](../audit/SKILL.md) with the target `instructions`. Claude Code: `/skill-doctor` for unused skills and their context cost.
 - Cleanup (duplicated code, unused files, exports and dependencies): run the stack's tools from [tools.md](tools.md), then read each finding in the code.
-- Architecture (cycles, shallow or forwarding modules, one source of truth, documented against actual structure): [architecture.md](architecture.md). With an architecture-improvement skill installed, suggest it for the deepening work; the user starts it.
+- Architecture (cycles, shallow or forwarding modules, one source of truth, documented against actual structure): [architecture.md](architecture.md).
 - Test audit (a mutation tester for the stack, last because it is the longest part): [test-audit.md](test-audit.md). It sets the time and memory bounds for the run.
 - Open requests and sessions that went sideways: suggest a triage skill and a retro skill, when installed; the user starts them.
 - Repository hygiene: merged branches and worktrees, stopped containers, tickets in the project's tracker that the merged work already closed.

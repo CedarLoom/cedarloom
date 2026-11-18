@@ -82,7 +82,6 @@ The label set, with the policy's `startLabel` (an existing file's, else the answ
 - `cl:deferred`: the owner parked it: it does not start and the question queue skips it.
 - `cl:follow-up`: found during other work, sized for one pull request; the owner chooses whether it starts.
 - `cl:triage`: filed through the issue template; the owner reads it before adding another label.
-- Rejected work is closed as not planned, with no label.
 
 Where the repository has no `.github/ISSUE_TEMPLATE` folder and its owner has no default issue templates (`gh api repos/<owner>/.github/contents/.github/ISSUE_TEMPLATE` answers 404), propose [issue-templates/work.md](issue-templates/work.md) as `.github/ISSUE_TEMPLATE/work.md` as a plan item (the policy's, where that one is proposed), committed. It labels a new issue `cl:triage`, never `startLabel`: on a public repository anyone can file through it.
 

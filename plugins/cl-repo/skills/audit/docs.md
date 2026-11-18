@@ -1,7 +1,5 @@
 # Lens: docs
 
-For READMEs, `docs/`, guides, release notes templates, pull request and issue templates.
-
 ## Patterns
 
 | Pattern | The text | Action |

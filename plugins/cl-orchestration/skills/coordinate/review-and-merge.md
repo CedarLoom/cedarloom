@@ -21,7 +21,6 @@ What the steps name:
 - The verdict of `<head>` is the JSON that `node <skill folder>/merge-checks.mjs <project path> <scratch path> <default branch> <reviewed head> <head> <risk class>` prints: `next`, `allowed`, `ownerOnly`, `unsafePaths`, `sensitive`, `risky`, `risk`, `pin`, `upToDate` and `shared`.
   - Run it after each read of `<head>`, once the `fetch` has passed ([Scratch clone](#scratch-clone)). Before the first review, pass `<head>` as the reviewed head too.
   - `<risk class>` is `low`, `medium` or `high`, the class you decide for `<head>` ([SKILL.md](SKILL.md#risk-class)). `risky` lists its files under `riskyPaths`, and `risk` is the class the verdict used: yours, raised to medium by such a file.
-  - It lists the pull request's files with `--no-renames` and `-z`: a moved file counts at its old and at its new path, and git quotes no path, whatever characters it holds.
   - Any exit but 0 is no verdict: the step stops, and the report names the line the script printed.
   - A head with several merge bases with the default branch gets none: its file list would hide what a merge of it takes back, so the pull request is the owner's to judge ([Owner-only](#owner-only)).
 
@@ -111,7 +110,6 @@ Verdict: <clean or findings>, Blocking <count>, Important <count>, Minor <count>
 ### Threads
 
 - The threads file: `node <skill folder>/thread.mjs <project path> --pull <n> <run folder>/review-<owner>.<repo>-<n>.md`, written at `<head>` and pasted whole and unchanged. It holds each unresolved thread a trusted author opened, with its id, path, line and trusted comments, and counts the rest. Where it fails, the pull request stays a draft for the owner.
-- The worker answers each review thread with a reply that names its fix commit, or the evidence where nothing changed, and never resolves a thread ([spec-template.md](spec-template.md)).
 - A reviewer resolves only the threads it opened, after it verified the fix. A person's thread stays for that person.
 - You resolve the threads of a review bot that `trustedAuthors` lists, at Merge step 5, and only those that the review of record of the reviewed head found fixed or no finding. Any other unresolved thread keeps the pull request from merging.
 - A thread of such a bot that the review of record did not cover (a review bot often posts minutes after the push) goes to the reviewer in a new threads file of the same head ([Rounds](#rounds)): fixed or no finding lets you resolve it at step 5, a finding starts a round. A thread the reviewer does not settle leaves the pull request ready for the owner, named in the report.
@@ -166,7 +164,7 @@ That list does not cover the title or a commit message, so both keep the keyword
 
 ## Owner-only
 
-The verdict's `ownerOnly` lists the owner-only files: a file under a `merge.ownerOnlyPaths` entry, with a segment of its path equal to a `merge.ownerOnlyNames` entry, or with a name that can define a container (the by-name test of [Container files](trial-merge.md#container-files)) or a lefthook config (`lefthook.yml`, `.lefthook-local.toml` and the like), all compared as a file system that ignores case and Unicode form opens them. With the names `.claude` and `.mcp.json`, `packages/ui/.claude/skills/x/SKILL.md` and `tools/.MCP.JSON` are, and so are `docker/Dockerfile.dev` and `compose.yaml`. Its `unsafePaths` lists the files no command can name ([Scratch clone](#scratch-clone)).
+The verdict's `ownerOnly` lists the owner-only files: a file under a `merge.ownerOnlyPaths` entry, with a segment of its path equal to a `merge.ownerOnlyNames` entry, or with a name that can define a container (the by-name test of [Container files](trial-merge.md#container-files)) or a lefthook config (`lefthook.yml`, `.lefthook-local.toml` and the like), all compared as a file system that ignores case and Unicode form opens them. Its `unsafePaths` lists the files no command can name ([Scratch clone](#scratch-clone)).
 
 A pull request is the owner's when `ownerOnly` or `unsafePaths` lists a file or `risk` is high or above `merge.autoMergeMax` (`next` is then `owner`), when its head has several merge bases with the default branch (no verdict), or when its purpose is a release. Decide this, too, again for every new head and before every merge. Review it and mark it ready as above, then leave it open, whatever `merge.allowed` says: it is never merged by the steps below. Put it to the owner ([SKILL.md](SKILL.md#rules)) and name it and the reason in the report.
 
