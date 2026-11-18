@@ -1,7 +1,7 @@
 {
   "name": "cl-orchestration",
   "displayName": "CedarLoom orchestration",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Coordinates the issues of several projects from one session: worker jobs started through Orca, reviews and merge checks, and a handoff file that a cleared or compacted coordinator resumes from.",
   "author": {
     "name": "CedarLoom",
@@ -10,7 +10,9 @@
   "homepage": "https://github.com/CedarLoom/cedarloom#readme",
   "repository": "https://github.com/CedarLoom/cedarloom",
   "license": "ISC",
-  "dependencies": ["cl-workflow"],
+  "dependencies": [
+    "cl-workflow"
+  ],
   "hooks": "./hooks/claude-code.json",
   "userConfig": {
     "rotateAtTokens": {
