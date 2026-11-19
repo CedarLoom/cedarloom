@@ -98,7 +98,7 @@ The review of record of a head is the verdict that a reviewer or re-reviewer you
 ```text
 Review of record
 Head: <head>
-Round: <rounds with findings so far, this review included>
+Round: <the round this review ends: 0 for the first review, n for the re-review of round n>
 Kind: <review or re-review>, level <level>, model <model>, security pass <yes or no>
 Verdict: <clean or findings>, Blocking <count>, Important <count>, Minor <count>
 ```
@@ -127,7 +127,7 @@ The reviewer's working directory is not the clone, so neither built-in command f
 
 ## Rounds
 
-- Sensitive change, first round with findings (trial): a fresh `cl-workflow:verify` subagent (another agent: a general subagent briefed with its steps) on `opus` at `high` whatever the reviewer ran on, briefed like the reviewer, marks each Blocking and Important finding confirmed or disputed with evidence. A disputed finding is not sent: it goes with its evidence to the re-review, which keeps or drops it. With nothing to send, that re-review runs at once on the reviewed head.
+- Sensitive change, first round (trial): before its fix, a fresh `cl-workflow:verify` subagent (another agent: a general subagent briefed with its steps) on `opus` at `high` whatever the reviewer ran on, briefed like the reviewer, marks each Blocking and Important finding confirmed or disputed with evidence. A disputed finding is not sent: it goes with its evidence to the re-review, which keeps or drops it. With nothing to send, that re-review runs at once on the reviewed head.
 - Send a round's Blocking and Important findings in one follow-up to the owning worker, in your own words, each with file and line and the id of the review thread it covers, and the threads file of `<head>` ([Threads](#threads)), by the follow-up of [Start the run](orca.md#start-the-run). List Minor findings in the report: no round fixes them. The worker answers once its fix is pushed, or with its evidence where nothing changed: read `<head>` then, and never type the commit id of a message into a command.
 - Every fix, and every finding the worker answers with evidence instead of a change, gets a scoped re-review by a fresh `cl-workflow:recheck` subagent (another agent: a general subagent briefed with its steps), started and briefed like the reviewer, on the scratch clone at the new head.
   - It runs on the model of the review it checks, at `high`. After a review on `fable` it runs on `opus`, or on `fable` when the fix changes security or safety logic.
@@ -137,8 +137,8 @@ The reviewer's working directory is not the clone, so neither built-in command f
   - Any push to the branch after a review is such a fix, whoever made it, except a head whose verdict's `pin` is `clean-merges` ([Merge](#merge), step 2).
   - The head that re-review accepts is the new reviewed head.
 - A review or re-review that reports itself void counts as no review and no round: split its scope into parts that together cover all of it, and start a fresh one on each part. They count as one review: void while one part is void, and clean only when every part is.
-- A review with a Blocking or Important finding is a round. After the second round with findings, the follow-up tells the worker to rerun the phase the findings come from on a stronger model or a higher effort (by default `sonnet` to `opus`, `opus` to `fable`, or an effort below `high` to `high`; `xhigh` only as [policy.md](policy.md) says). With no step left, the question goes to the owner at once.
-- A third round with findings is a question for the owner ([SKILL.md](SKILL.md#owner-decisions)): the pull request stays a draft and is named in the report. There is no fourth round.
+- A round is one fix and its re-review; a review or re-review with a Blocking or Important finding starts the next round. A push made while no Blocking or Important finding is open (a conflict resolution, say) gets its re-review but is no round; that re-review, the new review of a change that became sensitive ([Sensitive or routine](#sensitive-or-routine)) and the review of a late bot thread on the same head ([Threads](#threads)) put the number of the last round in their review of record (0 before the first), and findings in them start the next round. When the re-review of round 2 still has such findings, the follow-up for round 3 tells the worker to make the fix on a stronger model or a higher effort (by default `sonnet` to `opus`, `opus` to `fable`, or an effort below `high` to `high`; `xhigh` only as [policy.md](policy.md) says). With no step left, the findings go to the owner at once, as the next bullet says.
+- When the re-review of round 3 still has such findings, it is a question for the owner ([SKILL.md](SKILL.md#owner-decisions)): the pull request stays a draft and is named in the report. There is no fourth round.
 
 ## Ready
 
