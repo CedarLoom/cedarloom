@@ -62,7 +62,7 @@ function refusals(def) {
   // Checks the fields of `value` by `table`; false when it is no object.
   const fields = (value, path, table) => {
     if (!object[0](value)) return refuse(path, 'must be an object'), false;
-    for (const key of Object.keys(value)) if (!(key in table)) refuse(at(path, key), 'unknown field');
+    for (const key of Object.keys(value)) if (!Object.hasOwn(table, key)) refuse(at(path, key), 'unknown field');
     for (const [key, [test, rule, required]] of Object.entries(table)) {
       if (value[key] === undefined) required && refuse(at(path, key), 'required');
       else if (!test(value[key])) refuse(at(path, key), rule);

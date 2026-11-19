@@ -71,6 +71,9 @@ test('generator: each refusal names the file, the field and the rule, and exits 
   const cases = [
     [(d) => (d.schemaVersion = 1), 'schemaVersion', 'must be 2'],
     [(d) => (d.extra = true), 'extra', 'unknown field'],
+    // Inherited object keys are unknown fields too.
+    [(d) => (d.constructor = true), 'constructor', 'unknown field'],
+    [(d) => (d.stages[1].phases[1].loop.toString = 'x'), 'stages[1].phases[1].loop.toString', 'unknown field'],
     [(d) => (d.stages[1].phases[1].loop.maxRounds = 3), 'stages[1].phases[1].loop.maxRounds', 'an integer from 1 to 2'],
     [(d) => (d.stages[0].phases[2].loop.maxRounds = 2), 'stages[0].phases[2].loop.maxRounds', 'at most 1 where fix is a plan phase'],
     [(d) => Object.assign(d, { script: true, depth: 'standard' }), 'script', 'a script needs work "software" and depth "deep"'],
