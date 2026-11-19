@@ -135,6 +135,34 @@ node plugins/cl-workflow/generator/generate.mjs <definition>... [--prefix <plugi
 - A refusal names the file, the field and the rule, and exits 1; the generator then writes nothing. The field is the path to the value: keys joined by `.`, array positions from 0 in brackets, such as `stages[1].phases[3].loop.maxRounds`; an empty field means the whole file. `--json` prints the refusals to standard output as an array of `{ "file", "field", "rule" }` (an empty array when none).
 - A project's own workflow: keep the definition in `.cedarloom/workflows/<name>.json` and run the installed plugin's generator from the project's root with `--prefix '' --out .claude` (`--prefix ''` needs `--out`). With the plugin installed from this marketplace, the generator is `~/.claude/plugins/cache/cedarloom/cl-workflow/<version>/generator/generate.mjs` (under `CLAUDE_CODE_PLUGIN_CACHE_DIR` instead of `~/.claude/plugins` when that is set); `installed_plugins.json` in that folder records each install's `installPath` ([Find plugins on disk](https://code.claude.com/docs/en/plugins/loading)). The entry is then `/<name>`, a script runs as `/<name>-run`, and its header names `.cedarloom/workflows/<name>.json` wherever the generator read the file from. The entry needs `cl-workflow` installed and says so when it is not.
 
+### Switch off per project
+
+Every switch except one environment variable is a Claude Code setting. In the project's `.claude/settings.json` it holds for everyone in the project, in `.claude/settings.local.json` for you alone, and managed settings override both ([Settings files](https://code.claude.com/docs/en/settings)). A rule denied at one level cannot be allowed at another ([Permissions](https://code.claude.com/docs/en/permissions)).
+
+```json
+{
+  "enabledPlugins": { "cl-workflow@cedarloom": false },
+  "permissions": {
+    "deny": [
+      "Skill(cl-workflow:workflow)",
+      "Agent(cl-workflow:review)",
+      "Workflow(cl-workflow:full-run)"
+    ]
+  },
+  "disableWorkflows": true
+}
+```
+
+The example shows every switch; a project sets only the one it needs.
+
+- The plugin: `"cl-workflow@cedarloom": false` under `enabledPlugins` removes all `cl-workflow` skills and agents in the project ([`enabledPlugins`](https://code.claude.com/docs/en/settings-reference)). The plugins that depend on it, `cl-orchestration` and the bundle `cedarloom`, then do not load either and report the dependency as disabled; `cl-repo` keeps working ([Dependencies](https://code.claude.com/docs/en/plugins/dependencies)).
+- A copy loaded with `--plugin-dir` has its own key, `cl-workflow@inline`, and the `@cedarloom` key does not reach it. With only `"cl-workflow@inline": false`, the installed copy loads instead; set both keys to `false` to remove the plugin from such a session ([CLI reference](https://code.claude.com/docs/en/plugins/cli-reference)).
+- The `workflow` skill: `Skill(cl-workflow:workflow)` blocks the skill by its plugin name, `Skill(skill:workflow)` by any of its names ([Restrict Claude's skill access](https://code.claude.com/docs/en/skills)). It is the only `cl-workflow` skill the model can call on its own. `/cl-workflow:dev`, `/cl-workflow:full` and `/cl-workflow:research` load it as their first step and stop when that load is refused, so the rule stops them too.
+- The typed entries: `ask`, `dev`, `full`, `plan`, `questions` and `research` set `disable-model-invocation: true`, so the model cannot call them through the Skill tool. You still start each by typing its slash command, and a `Skill` deny rule does not stop a typed command. To switch them off, use `enabledPlugins`; the `workflow` skill deny stops `dev`, `full` and `research`, but not `ask`, `plan` and `questions`.
+- One phase agent: `Agent(cl-workflow:<agent>)`, for example `Agent(cl-workflow:review)`, with the agents `gather`, `implement`, `plan`, `recheck`, `research`, `review`, `test` and `verify` ([Subagents](https://code.claude.com/docs/en/sub-agents)). A denied call comes back to the model as a tool error naming the rule; a headless run does not list it in `permission_denials`, so a check that reads only that list misses it.
+- One workflow script: `Workflow(cl-workflow:full-run)` blocks the script, also where the Workflow tool is allowed by an allow rule or `--allowedTools Workflow` ([Workflows](https://code.claude.com/docs/en/workflows)). Until the workspace is trusted, the project file's allow rules are ignored and its deny rules apply ([Project allow rules and workspace trust](https://code.claude.com/docs/en/permissions#project-allow-rules-and-workspace-trust)).
+- Every workflow script: `"disableWorkflows": true` removes the Workflow tool and the plugin's scripts in any settings file, the project's included ([`disableWorkflows`](https://code.claude.com/docs/en/settings-reference#disableworkflows)); the environment variable `CLAUDE_CODE_DISABLE_WORKFLOWS=1` does the same for one session ([Turn workflows off](https://code.claude.com/docs/en/workflows#turn-workflows-off)). `/cl-workflow:full` then runs its phases as prose.
+
 ## Code Mode (optional)
 
 [Code Mode](https://code.claude.com/docs/en/code-mode) is an experimental Claude Code feature in which Claude writes JavaScript that makes several tool calls in one step. It is off by default and may change or be removed in any release.
