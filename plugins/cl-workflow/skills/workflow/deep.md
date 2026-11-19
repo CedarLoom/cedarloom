@@ -27,7 +27,7 @@ A round is one remediation and its re-review. A review or re-review with a Block
 
 1. The review has findings: round 1.
 2. The re-review of round 1 has findings: round 2, on the same models.
-3. The re-review of round 2 has findings: round 3, whose remediation runs on a stronger model or a higher effort (`xhigh` only where the spec or the user asks for it), as [software.md](software.md#phases) says for a stuck implement phase. With no step left, the findings go to the user at once.
+3. The re-review of round 2 has findings: round 3, whose remediation runs on a stronger model or a higher effort than the phase's own (`xhigh` only where the spec or the user asks for it), as [software.md](software.md#phases) says for a stuck implement phase. With no step left, the findings go to the user at once.
 4. The re-review of round 3 has findings: a question for the user (replan or split the work), never a fourth round.
 
 An independent reviewer on another agent (Codex `codex exec --sandbox read-only`, or Claude Code for a Codex session) is an option; default off.
