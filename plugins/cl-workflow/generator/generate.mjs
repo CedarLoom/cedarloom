@@ -1,4 +1,4 @@
-// Validates workflow definitions and writes the entry skill of each; the only validator of the definition format (docs/plugins.md, Workflows).
+// Validates workflow definitions and writes the entry skill of each, and the workflow script of a scripted one; the only validator of the definition format (docs/plugins.md, Workflows).
 // Usage: node generator/generate.mjs <definition>... [--prefix <plugin name>|--prefix ''] [--out <folder>] [--check] [--json]   (--prefix '' needs --out)
 // Exit 0 written or no difference, 1 a refusal or (with --check) a difference, 2 a usage error.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -16,6 +16,18 @@ const MAX_PLAN_ROUNDS = 1;
 // The end of every generated file's header; a file without it is never replaced.
 const MARK = ': edit the definition, not this file.';
 const KIND = { software: 'software change', docs: 'docs pass', research: 'research' };
+// What a workflow script reads from each agent it may start: a plan, an implement status, a test status or findings.
+const ROLES = {
+  'cl-workflow:plan': 'plan',
+  'cl-workflow:implement': 'change',
+  'cl-workflow:test': 'test',
+  'cl-workflow:verify': 'findings',
+  'cl-workflow:review': 'findings',
+  'cl-workflow:recheck': 'findings',
+};
+// The verifier of a risky change's findings before the first fix (deep.md, Review rounds).
+const TRIAL = { agent: 'cl-workflow:verify', model: 'opus' };
+const RUNNER = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'runner.js'), 'utf8');
 
 const text = [(v) => typeof v === 'string' && v.trim() !== '', 'a non-empty string'];
 const bool = [(v) => typeof v === 'boolean', 'true or false'];
@@ -71,7 +83,6 @@ function refusals(def) {
   };
   if (!fields(def, '', TOP)) return found;
   if (def.script === true && (def.work !== 'software' || def.depth !== 'deep')) refuse('script', 'a script needs work "software" and depth "deep"');
-  else if (def.script === true) refuse('script', 'this generator writes no workflow script yet: set script to false');
   if (!list[0](def.stages)) return found;
   const phaseIds = new Set();
   const stageIds = new Set();
@@ -94,6 +105,10 @@ function refusals(def) {
         if (phase.questions !== undefined && phase.step !== 'settle') refuse(`${here}.questions`, 'only for step "settle"');
         return;
       }
+      if (def.script === true) {
+        if (!Object.hasOwn(ROLES, phase.agent)) refuse(`${here}.agent`, `a script starts only ${Object.keys(ROLES).join(', ')}`);
+        else if ((phase.loop !== undefined || phase.with !== undefined) && ROLES[phase.agent] !== 'findings') refuse(`${here}.agent`, 'a phase with a loop or "with" returns findings: cl-workflow:verify, review or recheck');
+      }
       if (phase.with !== undefined) {
         const target = phases.find((other) => other.id === phase.with && other !== phase);
         if (!target || !object[0](target.loop)) refuse(`${here}.with`, 'names a phase of the same stage that has a loop');
@@ -101,9 +116,11 @@ function refusals(def) {
       }
       if (!object[0](phase.loop) || !fields(phase.loop, `${here}.loop`, LOOP)) return;
       const fix = stage.phases.slice(0, p).find((other) => object[0](other) && other.run === 'agent' && other.id === phase.loop.fix);
+      if (def.script === true && phase.loop.recheck !== undefined && ROLES[phase.loop.recheck] !== 'findings') refuse(`${here}.loop.recheck`, 'in a script names cl-workflow:verify, review or recheck');
       if (!fix) refuse(`${here}.loop.fix`, 'names an earlier agent phase of the same stage');
       else if (fix.agent === PLAN_AGENT && Number.isInteger(phase.loop.maxRounds) && phase.loop.maxRounds > MAX_PLAN_ROUNDS)
         refuse(`${here}.loop.maxRounds`, `at most ${MAX_PLAN_ROUNDS} where fix is a plan phase`);
+      else if (def.script === true && !['plan', 'change'].includes(ROLES[fix.agent])) refuse(`${here}.loop.fix`, 'in a script names a cl-workflow:plan or cl-workflow:implement phase');
     });
   });
   return found;
@@ -126,6 +143,7 @@ function outputs(def, prefix) {
   const lines = def.work === 'software' ? 'the `Depth:` and `Risk:` lines' : 'the `Depth:` line';
   const depth = def.depth === 'classify' ? 'The depth comes from its rules.' : `The depth is at least ${def.depth}; its rules may raise it.`;
   const title = def.name[0].toUpperCase() + def.name.slice(1).replaceAll('-', ' ');
+  const scope = prefix ? `${prefix}:` : '';
   const skill = [
     '---',
     ...front,
@@ -134,16 +152,77 @@ function outputs(def, prefix) {
     '',
     `# ${title}`,
     '',
-    `Typed as \`/${prefix ? `${prefix}:` : ''}${def.name} <task>\`. No task given and none open in the conversation: ask for it, or without terminal questions stop and say it is missing.`,
+    `Typed as \`/${scope}${def.name} <task>\`. No task given and none open in the conversation: ask for it, or without terminal questions stop and say it is missing.`,
     '',
     '1. Where the skill `cl-workflow:workflow` is not installed or its load is refused, say so and stop.',
     `2. Load the skill \`cl-workflow:workflow\` and run its step 1 with the kind fixed: ${kind}. ${depth} Write ${lines} before the first edit or command.`,
-    `3. Follow the rest of that skill and its ${kind} playbook at that depth; an item of another kind in the task runs by its own playbook.`,
+    ...(def.script ? scripted(def, scope) : [`3. Follow the rest of that skill and its ${kind} playbook at that depth; an item of another kind in the task runs by its own playbook.`]),
   ];
   return {
     [`skills/${def.name}/SKILL.md`]: `${skill.join('\n')}\n`,
     [`skills/${def.name}/agents/openai.yaml`]: `# ${note}\npolicy:\n  allow_implicit_invocation: false\n`,
+    ...(def.script && { [`workflows/${def.name}.js`]: script(def, scope, note) }),
   };
+}
+
+// The entry's steps for a scripted workflow and its phase table.
+function scripted(def, scope) {
+  const run = `${scope}${def.name}-run`;
+  const cell = (value) => value.replaceAll('|', '\\|').replace(/\s*\n\s*/g, ' ');
+  const step = {
+    settle: (phase) => `session: step 2 (Settle) of \`cl-workflow:workflow\`${phase.questions === false ? ', its questions by that skill\'s questions line' : ''}`,
+    'pull-request': () => 'session: the pull request by step 3 of `cl-workflow:workflow`, with the Minor findings of the runs, then its checks watched as step 5 says',
+  };
+  const rule = (phase, stage) => {
+    if (phase.loop) {
+      const { fix, maxRounds, escalate, recheck } = phase.loop;
+      return `fixed by \`${fix}\`, ${maxRounds} round${maxRounds > 1 ? 's' : ''}${escalate ? ' and one more on the stronger step' : ''}, re-checked by \`${recheck ?? phase.agent}\``;
+    }
+    if (phase.with) return `once, beside the first \`${phase.with}\`; its Blocking and Important findings join that loop`;
+    const loop = stage.phases.find((other) => other.loop?.fix === phase.id);
+    return loop ? `fixes the findings of \`${loop.id}\`` : '';
+  };
+  const rows = def.stages.flatMap((stage) =>
+    stage.phases.map((phase) => {
+      const runs = phase.run === 'session' ? step[phase.step](phase) : `\`${phase.agent}\``;
+      const notes = [rule(phase, stage), phase.brief && `Brief: ${phase.brief}`].filter(Boolean).join('. ');
+      return `| ${stage.id} | ${phase.id} | ${cell(runs)} | ${phase.model ?? ''} | ${phase.effort ?? (phase.run === 'agent' ? 'the agent file\'s' : '')} | ${cell(notes)} |`;
+    }),
+  );
+  return [
+    "3. Resolve the run's `args` by that skill's software change and deep playbooks: `task`, the task in one paragraph with the issue or spec reference when one exists; `overrides`, phase id to `{ model, effort, recheckModel }`, only where the rules for risky changes, a spec's Flow line, the user or the recheck rule differ from the table below (a phase run beside another and a plan check take the override of the phase they follow unless they have their own); `trial`, true for a risky change.",
+    `4. Run the stages below in order: each session phase here, and the agent phases of each stage as one start of the workflow \`${run}\` through the Workflow tool, with those \`args\` and \`stage\` set to the stage's id.`,
+    "   - A plan the task brought: pass its path as `planPath`; the stage that plans then only checks it, and its findings go to the plan's author as the plan check step of the playbook says. Where it carries `Plan check: passed` or names another independent check, skip that stage. After that stage, save its `plan` outside the repository, add `Plan check: passed (cl-workflow:verify)` when it is done, settle its questions, and pass the plan's path as `planPath` from then on.",
+    "   - A stage that stops for failed tests: fix them by the playbook, then start the stage again with `from` set to the phase its reason names. Any other stop: run the rest of that stage as prose by the playbooks, counting the rounds the run returned; findings left after the last round are a question for the user.",
+    '   - Where the Workflow tool is missing, turned off, or denied in a run without a user: run the same phases as prose by the playbooks and say so. Where the user answers No when asked to approve the run: stop.',
+    '',
+    '| Stage | Phase | Runs | Model | Effort | Rule |',
+    '|---|---|---|---|---|---|',
+    ...rows,
+  ];
+}
+
+// The workflow script: the definition's constants, then the runner.
+function script(def, scope, note) {
+  const agents = def.stages.flatMap((stage) => stage.phases.filter((phase) => phase.run === 'agent'));
+  const meta = { name: `${def.name}-run`, description: def.description, phases: agents.map((phase) => ({ title: phase.id })) };
+  const flow = {
+    name: def.name,
+    entry: `/${scope}${def.name}`,
+    trial: TRIAL,
+    stages: def.stages.map((stage) => ({
+      id: stage.id,
+      phases: stage.phases
+        .filter((phase) => phase.run === 'agent')
+        .map(({ run, ...phase }) => {
+          const fix = phase.loop && stage.phases.find((other) => other.id === phase.loop.fix);
+          // A phase run beside another, and a check of a plan, run on the overrides of the phase they follow.
+          const overrideOf = phase.with ?? (fix && ROLES[fix.agent] === 'plan' ? fix.id : undefined);
+          return { ...phase, role: ROLES[phase.agent], ...(overrideOf && { overrideOf }) };
+        }),
+    })),
+  };
+  return `// ${note}\nexport const meta = ${JSON.stringify(meta, null, 2)};\n\nconst FLOW = ${JSON.stringify(flow, null, 2)};\n\n${RUNNER}`;
 }
 
 // Reads and validates each file; refusals carry the file as given.
