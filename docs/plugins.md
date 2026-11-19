@@ -1,6 +1,6 @@
 # The plugins
 
-What the CedarLoom plugins add to a Claude Code session besides their skills: hooks and their settings, Code Mode, and how the coordinator filters untrusted issue and pull request text. Install, update and uninstall steps are in the [README](../README.md); the skills are in [Skills](skills.md).
+What the CedarLoom plugins add to a Claude Code session besides their skills: hooks and their settings, workflow definitions, Code Mode, and how the coordinator filters untrusted issue and pull request text. Install, update and uninstall steps are in the [README](../README.md); the skills are in [Skills](skills.md).
 
 | Plugin | Hooks | Settings |
 |---|---|---|
@@ -104,6 +104,34 @@ What it does:
 - A `/clear` and resume prompt that have not finished after 15 minutes are given up: the plugin says so in the transcript, submits no resume prompt, and clears again at a later idle stop.
 
 The hooks write only the handoff file. They read it, run `git` in its project folder (`ls-files`, `status`, `rev-parse`, `log`), read the modification times of the changed files git lists, and make no network request of their own; the resume prompt they submit goes to the model as any prompt does.
+
+## Workflows
+
+A typed entry such as `/cl-workflow:dev` is generated from one JSON definition in `plugins/cl-workflow/definitions/<name>.json`; edit the definition, then run the generator. The generator is the only validator of the format and imports Node.js built-ins only.
+
+| Field | Value |
+|---|---|
+| `schemaVersion` | `2` |
+| `name` | kebab-case, not ending in `-run`: the command `/<prefix>:<name>` |
+| `description` | at most 250 characters, ending in a period |
+| `when`, `writes` | optional strings for the skill's front matter and [Skills](skills.md) |
+| `work` | `software`, `docs` or `research`: the playbook |
+| `depth` | `quick`, `standard` or `deep` as a floor, or `classify` for the depth rules alone |
+| `script` | `false` (this generator writes no workflow script yet) |
+| `stages` | `[{ id, phases }]`; a phase has `id`, `run` (`session` or `agent`) and an optional `brief` |
+
+- A session phase has `step` (`settle` or `pull-request`; `settle` may set `questions`) and stands first or last in its stage.
+- An agent phase has `agent` (a name such as `cl-workflow:review`, never a path), `model` (`haiku`, `sonnet`, `opus`, `fable` or `inherit`), and optionally `effort` (`low` to `max`), `loop` and `with` (a phase of the same stage that has a loop, run beside it once).
+- A `loop` has `fix` (an earlier agent phase of the same stage), `maxRounds` (1 or 2; 1 where `fix` is the `cl-workflow:plan` agent), `escalate` (boolean) and an optional `recheck` agent.
+
+```sh
+node plugins/cl-workflow/generator/generate.mjs <definition>... [--prefix <plugin name>|--prefix ''] [--out <folder>] [--check] [--json]
+```
+
+- Defaults: prefix `cl-workflow`, out the plugin folder. It writes `skills/<name>/SKILL.md` and `skills/<name>/agents/openai.yaml` under the out folder.
+- `--check` writes nothing and exits 1 when a generated file differs; the plugin tests run it over the shipped definitions.
+- A refusal names the file, the field and the rule, and exits 1; the generator then writes nothing. The field is the path to the value: keys joined by `.`, array positions from 0 in brackets, such as `stages[1].phases[3].loop.maxRounds`; an empty field means the whole file. `--json` prints the refusals to standard output as an array of `{ "file", "field", "rule" }` (an empty array when none).
+- A project's own workflow: keep the definition in `.cedarloom/workflows/<name>.json` and run `--prefix '' --out .claude` from the project's root. The entry is then `/<name>`, and its header names `.cedarloom/workflows/<name>.json` wherever the generator read the file from. The entry needs `cl-workflow` installed and says so when it is not.
 
 ## Code Mode (optional)
 
