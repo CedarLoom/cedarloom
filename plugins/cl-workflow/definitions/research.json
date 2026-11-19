@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "name": "research",
+  "description": "Runs one task as research through the workflow skill, at the depth its rules pick.",
+  "when": "On request, for a question or a list of items you want researched without the agent guessing the task's kind.",
+  "writes": "The depth line before the first command; notes outside the repository, or a named note file in it for a result a later task builds on.",
+  "work": "research",
+  "depth": "classify",
+  "script": false,
+  "stages": [
+    {
+      "id": "research",
+      "phases": [
+        { "id": "research", "run": "agent", "agent": "cl-workflow:research", "model": "inherit" },
+        { "id": "verify", "run": "agent", "agent": "cl-workflow:verify", "model": "opus" }
+      ]
+    }
+  ]
+}

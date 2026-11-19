@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "name": "dev",
+  "description": "Runs one task as a software change through the workflow skill, at the depth its rules pick.",
+  "when": "On request, for a task you want run as a software change without the agent guessing its kind.",
+  "writes": "The depth and risk lines before the first edit; through the workflow skill's playbooks commits and a pull request in the project's convention.",
+  "work": "software",
+  "depth": "classify",
+  "script": false,
+  "stages": [
+    {
+      "id": "change",
+      "phases": [
+        { "id": "settle", "run": "session", "step": "settle", "questions": true },
+        { "id": "pull-request", "run": "session", "step": "pull-request" }
+      ]
+    }
+  ]
+}
