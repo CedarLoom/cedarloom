@@ -10,8 +10,8 @@ writes: "The depth and risk lines before the first edit; through the workflow sk
 
 # Dev
 
-Typed as `/cl-workflow:dev <task>`. No task given: ask for it, or without terminal questions stop and say it is missing.
+Typed as `/cl-workflow:dev <task>`. No task given and none open in the conversation: ask for it, or without terminal questions stop and say it is missing.
 
-1. Where the skill `cl-workflow:workflow` is not installed, say so and stop.
+1. Where the skill `cl-workflow:workflow` is not installed or its load is refused, say so and stop.
 2. Load the skill `cl-workflow:workflow` and run its step 1 with the kind fixed: software change. The depth comes from its rules. Write the `Depth:` and `Risk:` lines before the first edit or command.
-3. Follow the rest of that skill and its software change playbook at that depth.
+3. Follow the rest of that skill and its software change playbook at that depth; an item of another kind in the task runs by its own playbook.
