@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -49,11 +49,21 @@ function refusedWith(change) {
 
 test('generator: --check passes on the shipped definitions and fails after a one-character edit', () => {
   const copy = mkdtempSync(join(tmpdir(), 'plugin-'));
-  for (const folder of ['generator', 'definitions', 'skills/dev', 'skills/research']) cpSync(join(plugin, folder), join(copy, folder), { recursive: true });
-  const check = () => spawnSync(process.execPath, [join(copy, 'generator/generate.mjs'), join(copy, 'definitions/dev.json'), join(copy, 'definitions/research.json'), '--check']).status;
+  const names = readdirSync(join(plugin, 'definitions')).map((file) => file.replace(/\.json$/, ''));
+  for (const folder of ['generator', 'definitions', ...names.map((name) => `skills/${name}`)]) cpSync(join(plugin, folder), join(copy, folder), { recursive: true });
+  const check = () => spawnSync(process.execPath, [join(copy, 'generator/generate.mjs'), ...names.map((name) => join(copy, `definitions/${name}.json`)), '--check']).status;
   assert.equal(check(), 0);
   appendFileSync(join(copy, 'skills/research/agents/openai.yaml'), ' ');
   assert.equal(check(), 1);
+});
+
+test('generator: a skill it did not write is never replaced', () => {
+  const out = mkdtempSync(join(tmpdir(), 'project-'));
+  mkdirSync(join(out, 'skills/dev'), { recursive: true });
+  writeFileSync(join(out, 'skills/dev/SKILL.md'), 'own skill\n');
+  const run = generate([join(plugin, 'definitions/dev.json'), '--prefix', '', '--out', out]);
+  assert.equal(run.status, 1);
+  assert.equal(readFileSync(join(out, 'skills/dev/SKILL.md'), 'utf8'), 'own skill\n');
 });
 
 test('generator: each refusal names the file, the field and the rule, and exits 1', () => {

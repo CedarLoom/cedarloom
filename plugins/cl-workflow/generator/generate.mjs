@@ -1,5 +1,5 @@
 // Validates workflow definitions and writes the entry skill of each; the only validator of the definition format (docs/plugins.md, Workflows).
-// Usage: node generator/generate.mjs <definition>... [--prefix <plugin name>|--prefix ''] [--out <folder>] [--check] [--json]
+// Usage: node generator/generate.mjs <definition>... [--prefix <plugin name>|--prefix ''] [--out <folder>] [--check] [--json]   (--prefix '' needs --out)
 // Exit 0 written or no difference, 1 a refusal or (with --check) a difference, 2 a usage error.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -13,6 +13,8 @@ const PLAN_AGENT = 'cl-workflow:plan';
 // Round caps of the playbooks: two rounds on the default models (deep.md), one plan check fix round (software.md).
 const MAX_ROUNDS = 2;
 const MAX_PLAN_ROUNDS = 1;
+// The end of every generated file's header; a file without it is never replaced.
+const MARK = ': edit the definition, not this file.';
 const KIND = { software: 'software change', docs: 'docs pass', research: 'research' };
 
 const text = [(v) => typeof v === 'string' && v.trim() !== '', 'a non-empty string'];
@@ -26,7 +28,7 @@ const agent = [(v) => typeof v === 'string' && AGENT.test(v), 'an agent name suc
 const TOP = {
   schemaVersion: [(v) => v === 2, 'must be 2', true],
   name: [(v) => typeof v === 'string' && NAME.test(v) && !v.endsWith('-run'), 'kebab-case, not ending in -run', true],
-  description: [(v) => typeof v === 'string' && v.length <= 250 && /\S\.$/.test(v), 'a string of at most 250 characters that ends in a period', true],
+  description: [(v) => typeof v === 'string' && [...v].length <= 250 && /\S\.$/.test(v), 'a string of at most 250 characters that ends in a period', true],
   when: [...text, false],
   writes: [...text, false],
   work: [...oneOf('software', 'docs', 'research'), true],
@@ -76,7 +78,7 @@ function refusals(def) {
   def.stages.forEach((stage, s) => {
     const path = `stages[${s}]`;
     if (!fields(stage, path, STAGE)) return;
-    if (stageIds.has(stage.id)) refuse(`${path}.id`, 'used by an earlier stage');
+    if (text[0](stage.id) && stageIds.has(stage.id)) refuse(`${path}.id`, 'used by an earlier stage');
     stageIds.add(stage.id);
     if (!list[0](stage.phases)) return;
     const phases = stage.phases.filter((phase) => object[0](phase));
@@ -85,7 +87,7 @@ function refusals(def) {
       if (!object[0](phase)) return refuse(here, 'must be an object');
       if (!PHASE.run[0](phase.run)) return refuse(`${here}.run`, phase.run === undefined ? 'required' : PHASE.run[1]);
       fields(phase, here, phase.run === 'session' ? SESSION : AGENT_PHASE);
-      if (phaseIds.has(phase.id)) refuse(`${here}.id`, 'used by an earlier phase');
+      if (text[0](phase.id) && phaseIds.has(phase.id)) refuse(`${here}.id`, 'used by an earlier phase');
       phaseIds.add(phase.id);
       if (phase.run === 'session') {
         if (p !== 0 && p !== stage.phases.length - 1) refuse(`${here}.run`, 'a session phase stands only first or last in its stage');
@@ -111,7 +113,7 @@ function refusals(def) {
 function outputs(def, prefix) {
   // A project's own definition lives in .cedarloom/workflows/; the header names it wherever the generator read it from.
   const source = prefix ? `definitions/${def.name}.json by generator/generate.mjs` : `.cedarloom/workflows/${def.name}.json by cl-workflow's generator/generate.mjs`;
-  const note = `Generated from ${source}: edit the definition, not this file.`;
+  const note = `Generated from ${source}${MARK}`;
   const front = [
     `name: ${def.name}`,
     `description: ${JSON.stringify(def.description)}`,
@@ -159,7 +161,7 @@ function load(files) {
     }
     const own = refusals(def).map((r) => ({ file, ...r }));
     if (!own.length && names.has(def.name)) own.push({ file, field: 'name', rule: 'another definition given has the same name' });
-    if (!own.length) names.add(def.name), defs.push(def);
+    if (!own.length) names.add(def.name), defs.push({ file, def });
     found.push(...own);
   }
   return { defs, found };
@@ -177,34 +179,39 @@ function main() {
     return 2;
   }
   const { values, positionals } = args;
-  if (!positionals.length || (values.prefix !== '' && !NAME.test(values.prefix))) {
-    console.error("usage: node generator/generate.mjs <definition>... [--prefix <plugin name>|--prefix ''] [--out <folder>] [--check] [--json]");
+  // A project's entry needs its own folder: written into the plugin folder it would replace the plugin's entry.
+  if (!positionals.length || (values.prefix === '' ? values.out === undefined : !NAME.test(values.prefix))) {
+    console.error("usage: node generator/generate.mjs <definition>... [--prefix <plugin name>|--prefix ''] [--out <folder>] [--check] [--json]   (--prefix '' needs --out)");
     return 2;
   }
+  const out = resolve(values.out ?? join(dirname(fileURLToPath(import.meta.url)), '..'));
   const { defs, found } = load(positionals);
+  const files = defs.flatMap(({ file, def }) =>
+    Object.entries(outputs(def, values.prefix)).map(([path, content]) => ({ file, path, content, current: existing(join(out, path)) })),
+  );
+  for (const { file, path, current } of files) if (current !== undefined && !current.includes(MARK)) found.push({ file, field: 'name', rule: `${path} exists and was not generated: pick another name` });
   if (values.json) console.log(JSON.stringify(found));
   else for (const r of found) console.error(`${r.file}: ${r.field || '(file)'}: ${r.rule}`);
   if (found.length) return 1;
-  const out = resolve(values.out ?? join(dirname(fileURLToPath(import.meta.url)), '..'));
-  let differs = 0;
-  for (const def of defs) {
-    for (const [path, content] of Object.entries(outputs(def, values.prefix))) {
-      const target = join(out, path);
-      if (!values.check) {
-        mkdirSync(dirname(target), { recursive: true });
-        writeFileSync(target, content);
-        continue;
-      }
-      let current;
-      try {
-        current = readFileSync(target, 'utf8');
-      } catch (error) {
-        if (error.code !== 'ENOENT') throw error;
-      }
-      if (current !== content) differs++, console.error(`${path} differs from its definition: run the generator without --check`);
-    }
+  if (values.check) {
+    const differ = files.filter((f) => f.current !== f.content);
+    for (const { path } of differ) console.error(`${path} differs from its definition: run the generator without --check`);
+    return differ.length ? 1 : 0;
   }
-  return differs ? 1 : 0;
+  for (const { path, content } of files) {
+    mkdirSync(dirname(join(out, path)), { recursive: true });
+    writeFileSync(join(out, path), content);
+  }
+  return 0;
+}
+
+// A file's text, undefined when it does not exist.
+function existing(path) {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
 }
 
 process.exitCode = main();
