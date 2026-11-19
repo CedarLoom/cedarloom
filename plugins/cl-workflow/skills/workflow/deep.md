@@ -20,14 +20,14 @@ Findings carry a class:
 - **Important**: a likely defect, a missing test the [test rule](SKILL.md#verify) calls for, or code the code rules in the repository's instructions (the CedarLoom block or an `AGENTS.md` Code section) reject: a guard for a case that cannot happen, a layer or option for one user that the task does not call for, a parallel copy of existing logic, code under a new test that reaches for time, randomness or I/O directly.
 - **Minor**: style, naming. Minor findings are listed in the pull request, not fixed in a round.
 
-A review with a Blocking or Important finding is a round:
+A round is one remediation and its re-review. A review or re-review with a Blocking or Important finding starts the next round:
 - Risky change, first round (trial): before the fix, a fresh verifier on `opus` at `high` that did not write the code or the review (Claude Code: `cl-workflow:verify`) marks each Blocking and Important finding confirmed or disputed with evidence. A disputed finding goes with its evidence to the re-review unfixed.
 - One remediation pass checks each finding first, fixes the ones that hold, and answers one it disproves with evidence instead of a change.
 - A scoped re-review by a fresh subagent (Claude Code: `cl-workflow:recheck`) reads only the changed lines and the findings, and keeps or drops each disputed one. It runs on the review's model at `high`; after a review on `fable`, on `opus`, unless the fix changes security or safety logic.
 
-1. First round with findings: remediation, then re-review.
-2. Second round with findings: remediation, then re-review.
-3. After the second round with findings, the phase they come from reruns on a stronger model or a higher effort (`xhigh` only where the spec or the user asks for it), as [software.md](software.md#phases) says for a stuck implement phase. With no step left, the question goes to the user at once.
-4. A third round with findings is a question for the user (replan or split the work), never a fourth round.
+1. The review has findings: round 1.
+2. The re-review of round 1 has findings: round 2, on the same models.
+3. The re-review of round 2 has findings: round 3, whose remediation runs on a stronger model or a higher effort (`xhigh` only where the spec or the user asks for it), as [software.md](software.md#phases) says for a stuck implement phase. With no step left, the findings go to the user at once.
+4. The re-review of round 3 has findings: a question for the user (replan or split the work), never a fourth round.
 
 An independent reviewer on another agent (Codex `codex exec --sandbox read-only`, or Claude Code for a Codex session) is an option; default off.

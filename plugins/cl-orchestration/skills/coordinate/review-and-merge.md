@@ -137,8 +137,8 @@ The reviewer's working directory is not the clone, so neither built-in command f
   - Any push to the branch after a review is such a fix, whoever made it, except a head whose verdict's `pin` is `clean-merges` ([Merge](#merge), step 2).
   - The head that re-review accepts is the new reviewed head.
 - A review or re-review that reports itself void counts as no review and no round: split its scope into parts that together cover all of it, and start a fresh one on each part. They count as one review: void while one part is void, and clean only when every part is.
-- A review with a Blocking or Important finding is a round. After the second round with findings, the follow-up tells the worker to rerun the phase the findings come from on a stronger model or a higher effort (by default `sonnet` to `opus`, `opus` to `fable`, or an effort below `high` to `high`; `xhigh` only as [policy.md](policy.md) says). With no step left, the question goes to the owner at once.
-- A third round with findings is a question for the owner ([SKILL.md](SKILL.md#owner-decisions)): the pull request stays a draft and is named in the report. There is no fourth round.
+- A round is one fix and its re-review; a review or re-review with a Blocking or Important finding starts the next round. When the re-review of round 2 still has such findings, the follow-up for round 3 tells the worker to make the fix on a stronger model or a higher effort (by default `sonnet` to `opus`, `opus` to `fable`, or an effort below `high` to `high`; `xhigh` only as [policy.md](policy.md) says). With no step left, the question goes to the owner at once.
+- When the re-review of round 3 still has such findings, it is a question for the owner ([SKILL.md](SKILL.md#owner-decisions)): the pull request stays a draft and is named in the report. There is no fourth round.
 
 ## Ready
 
