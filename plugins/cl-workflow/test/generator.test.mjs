@@ -50,10 +50,10 @@ function refusedWith(change) {
 test('generator: --check passes on the shipped definitions and fails after a one-character edit', () => {
   const copy = mkdtempSync(join(tmpdir(), 'plugin-'));
   const names = readdirSync(join(plugin, 'definitions')).map((file) => file.replace(/\.json$/, ''));
-  for (const folder of ['generator', 'definitions', ...names.map((name) => `skills/${name}`)]) cpSync(join(plugin, folder), join(copy, folder), { recursive: true });
+  for (const folder of ['generator', 'definitions', 'workflows', ...names.map((name) => `skills/${name}`)]) cpSync(join(plugin, folder), join(copy, folder), { recursive: true });
   const check = () => spawnSync(process.execPath, [join(copy, 'generator/generate.mjs'), ...names.map((name) => join(copy, `definitions/${name}.json`)), '--check']).status;
   assert.equal(check(), 0);
-  appendFileSync(join(copy, 'skills/research/agents/openai.yaml'), ' ');
+  appendFileSync(join(copy, 'workflows/full.js'), ' ');
   assert.equal(check(), 1);
 });
 
@@ -68,16 +68,27 @@ test('generator: a skill it did not write is never replaced', () => {
 
 test('generator: each refusal names the file, the field and the rule, and exits 1', () => {
   assert.deepEqual(refusedWith(() => {}).refusals, []);
+  assert.deepEqual(refusedWith((d) => (d.script = true)).refusals, []);
+  const script = (change) => (d) => ((d.script = true), change(d));
   const cases = [
     [(d) => (d.schemaVersion = 1), 'schemaVersion', 'must be 2'],
     [(d) => (d.extra = true), 'extra', 'unknown field'],
     // Inherited object keys are unknown fields too.
     [(d) => (d.constructor = true), 'constructor', 'unknown field'],
     [(d) => (d.stages[1].phases[1].loop.toString = 'x'), 'stages[1].phases[1].loop.toString', 'unknown field'],
+    [(d) => (d.stages[1].phases[1].loop.fix = 'nope'), 'stages[1].phases[1].loop.fix', 'names an earlier agent phase of the same stage'],
     [(d) => (d.stages[1].phases[1].loop.maxRounds = 3), 'stages[1].phases[1].loop.maxRounds', 'an integer from 1 to 2'],
     [(d) => (d.stages[0].phases[2].loop.maxRounds = 2), 'stages[0].phases[2].loop.maxRounds', 'at most 1 where fix is a plan phase'],
     [(d) => Object.assign(d, { script: true, depth: 'standard' }), 'script', 'a script needs work "software" and depth "deep"'],
     [(d) => d.stages[1].phases.splice(1, 0, { id: 'check-in', run: 'session', step: 'settle' }), 'stages[1].phases[1].run', 'a session phase stands only first or last in its stage'],
+    [
+      script((d) => (d.stages[1].phases[2].agent = 'cl-workflow:gather')),
+      'stages[1].phases[2].agent',
+      'a script starts only cl-workflow:plan, cl-workflow:implement, cl-workflow:test, cl-workflow:verify, cl-workflow:review, cl-workflow:recheck',
+    ],
+    [script((d) => (d.stages[1].phases[2].agent = 'cl-workflow:test')), 'stages[1].phases[2].agent', 'a phase with a loop or "with" returns findings: cl-workflow:verify, review or recheck'],
+    [script((d) => (d.stages[1].phases[0].agent = 'cl-workflow:test')), 'stages[1].phases[1].loop.fix', 'in a script names a cl-workflow:plan or cl-workflow:implement phase'],
+    [script((d) => (d.stages[1].phases[1].loop.recheck = 'cl-workflow:implement')), 'stages[1].phases[1].loop.recheck', 'in a script names cl-workflow:verify, review or recheck'],
   ];
   for (const [change, field, rule] of cases) {
     const { file, status, refusals } = refusedWith(change);

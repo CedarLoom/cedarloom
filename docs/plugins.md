@@ -117,21 +117,23 @@ A typed entry such as `/cl-workflow:dev` is generated from one JSON definition i
 | `when`, `writes` | optional strings for the skill's front matter and [Skills](skills.md) |
 | `work` | `software`, `docs` or `research`: the playbook |
 | `depth` | `quick`, `standard` or `deep` as a floor, or `classify` for the depth rules alone |
-| `script` | `false` (this generator writes no workflow script yet) |
+| `script` | `true` writes a workflow script too; it needs `work` `software` and `depth` `deep` |
 | `stages` | `[{ id, phases }]`; a phase has `id`, `run` (`session` or `agent`) and an optional `brief` |
 
 - A session phase has `step` (`settle` or `pull-request`; `settle` may set `questions`) and stands first or last in its stage.
 - An agent phase has `agent` (a name such as `cl-workflow:review`, never a path), `model` (`haiku`, `sonnet`, `opus`, `fable` or `inherit`), and optionally `effort` (`low` to `max`), `loop` and `with` (a phase of the same stage that has a loop, run beside it once).
 - A `loop` has `fix` (an earlier agent phase of the same stage), `maxRounds` (1 or 2; 1 where `fix` is the `cl-workflow:plan` agent), `escalate` (boolean) and an optional `recheck` agent.
+- A scripted definition starts only the agents `cl-workflow:plan`, `implement`, `test`, `verify`, `review` and `recheck`; a phase with `loop` or `with` and a `recheck` are `verify`, `review` or `recheck`, and `fix` is a `plan` or `implement` phase.
 
 ```sh
 node plugins/cl-workflow/generator/generate.mjs <definition>... [--prefix <plugin name>|--prefix ''] [--out <folder>] [--check] [--json]
 ```
 
-- Defaults: prefix `cl-workflow`, out the plugin folder. It writes `skills/<name>/SKILL.md` and `skills/<name>/agents/openai.yaml` under the out folder, and refuses to replace such a file that it did not generate. For `script: false` the entry names the playbook; the stages are validated, not written into it.
+- Defaults: prefix `cl-workflow`, out the plugin folder. It writes `skills/<name>/SKILL.md` and `skills/<name>/agents/openai.yaml` under the out folder, for `script: true` also `workflows/<name>.js`, and refuses to replace such a file that it did not generate. For `script: false` the entry names the playbook; the stages are validated, not written into it.
+- A script runs one stage per start, as the workflow `<prefix>:<name>-run`, and holds the stage's order, review rounds, trial and stuck reruns in code. The entry starts it and runs the session phases itself; where workflows are off or not allowed, the entry runs the same phases as prose by the playbooks.
 - `--check` writes nothing and exits 1 when a generated file differs; the plugin tests run it over the shipped definitions.
 - A refusal names the file, the field and the rule, and exits 1; the generator then writes nothing. The field is the path to the value: keys joined by `.`, array positions from 0 in brackets, such as `stages[1].phases[3].loop.maxRounds`; an empty field means the whole file. `--json` prints the refusals to standard output as an array of `{ "file", "field", "rule" }` (an empty array when none).
-- A project's own workflow: keep the definition in `.cedarloom/workflows/<name>.json` and run `--prefix '' --out .claude` from the project's root (`--prefix ''` needs `--out`). The entry is then `/<name>`, and its header names `.cedarloom/workflows/<name>.json` wherever the generator read the file from. The entry needs `cl-workflow` installed and says so when it is not.
+- A project's own workflow: keep the definition in `.cedarloom/workflows/<name>.json` and run the installed plugin's generator from the project's root with `--prefix '' --out .claude` (`--prefix ''` needs `--out`). With the plugin installed from this marketplace, the generator is `~/.claude/plugins/cache/cedarloom/cl-workflow/<version>/generator/generate.mjs` (under `CLAUDE_CODE_PLUGIN_CACHE_DIR` instead of `~/.claude/plugins` when that is set); `installed_plugins.json` in that folder records each install's `installPath` ([Find plugins on disk](https://code.claude.com/docs/en/plugins/loading)). The entry is then `/<name>`, a script runs as `/<name>-run`, and its header names `.cedarloom/workflows/<name>.json` wherever the generator read the file from. The entry needs `cl-workflow` installed and says so when it is not.
 
 ## Code Mode (optional)
 
