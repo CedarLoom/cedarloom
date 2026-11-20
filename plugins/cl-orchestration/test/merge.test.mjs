@@ -192,6 +192,20 @@ test('merge: a run of another event on the tip is red, and one that runs holds t
   assert.equal(replaced.call().outcome, 'merged');
 });
 
+test('merge: a run that has not completed holds the merge past 30 minutes in place of the cancelled push run it replaces, and only a newer run of the same workflow replaces one', () => {
+  const cancelled = [run(TIP, 'completed', 'cancelled', 10, '2026-11-20T11:49:00Z'), ...GREEN.slice(1)];
+  const running = bot({ world: { runs: cancelled, otherRuns: [run(TIP, 'in_progress', null, 10, '2026-11-20T11:55:00Z')] } });
+  writeFileSync(join(running.state, 'tip.json'), JSON.stringify({ sha: TIP, firstSeen: minutesAgo(31), passed: null }));
+  assert.deepEqual(running.call(), { outcome: 'wait', reason: `a run on the tip ${TIP} has not completed` });
+  assert.equal(running.read('tip.json').passed, null);
+
+  const otherWorkflow = bot({ world: { runs: cancelled, otherRuns: [run(TIP, 'completed', 'success', 12, '2026-11-20T11:55:00Z')] } });
+  assert.deepEqual(otherWorkflow.call(), { outcome: 'redMain', reason: `the default branch is red at ${TIP}` });
+  const older = bot({ world: { runs: cancelled, otherRuns: [run(TIP, 'completed', 'success', 10, '2026-11-20T11:45:00Z')] } });
+  assert.deepEqual(older.call(), { outcome: 'redMain', reason: `the default branch is red at ${TIP}` });
+  assert.deepEqual([running, otherWorkflow, older].flatMap((b) => merges(b.calls())), []);
+});
+
 test('merge: a last passed tip that is no commit stops with an error', () => {
   const b = bot();
   writeFileSync(join(b.state, 'tip.json'), JSON.stringify({ sha: TIP, firstSeen: minutesAgo(11), passed: 'main?x=1' }));

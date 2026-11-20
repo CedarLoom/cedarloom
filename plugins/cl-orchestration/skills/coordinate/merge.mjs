@@ -70,7 +70,8 @@ function watch({ gh, repo, n, branch, state, now }) {
   const since = seen.passed && seen.passed !== tip ? JSON.parse(gh('api', `repos/${repo}/compare/${seen.passed}...${tip}`)).commits.map((c) => c.sha).reverse() : [];
   const isRed = (r) => r.status === 'completed' && !GREEN.includes(r.conclusion);
   // On the tip every red run counts, whatever came after it; a cancelled one is replaced by a newer run of its workflow (steps 6.6 and 6.7).
-  const replaced = (r) => r.conclusion === 'cancelled' && onTipAll.some((x) => x.workflowDatabaseId === r.workflowDatabaseId && x.createdAt > r.createdAt);
+  const replaces = (x, r) => r.conclusion === 'cancelled' && x.workflowDatabaseId === r.workflowDatabaseId && x.createdAt > r.createdAt;
+  const replaced = (r) => onTipAll.some((x) => replaces(x, r));
   const red = [
     ...onTipAll.filter((r) => isRed(r) && !replaced(r)),
     ...latestRuns(runs, [tip, ...since.filter((sha) => sha !== tip)]).filter((r) => r.headSha !== tip && isRed(r)),
@@ -82,8 +83,9 @@ function watch({ gh, repo, n, branch, state, now }) {
   const age = ageOf(now, seen.firstSeen);
   if (age < WATCH_MIN) return { answer: wait(`the tip ${tip} is younger than 10 minutes`) };
   const onTip = runs.filter((r) => r.headSha === tip);
-  // A run of another event (a schedule, workflow_run) holds the merge as long as an expected workflow without a run does, no longer.
-  if (onTip.some((r) => r.status !== 'completed') || (age < WAIT_MAX && onTipAll.some((r) => r.status !== 'completed'))) return { answer: wait(`a run on the tip ${tip} has not completed`) };
+  // A run of another event (a schedule, workflow_run) holds the merge as long as an expected workflow without a run does, no longer; one that replaces a cancelled push run holds it as a push run does (step 6.6).
+  const open = (r) => r.status !== 'completed';
+  if (onTip.some(open) || onTipAll.some((x) => open(x) && (age < WAIT_MAX || onTip.some((r) => replaces(x, r))))) return { answer: wait(`a run on the tip ${tip} has not completed`) };
   // The expected workflows are those of the commit with runs before the tip, its first parent as a rule (step 6.3).
   const before = runs.find((r) => r.headSha !== tip)?.headSha;
   const missing = new Set(runs.filter((r) => r.headSha === before).map((r) => r.workflowDatabaseId).filter((id) => !onTip.some((r) => r.workflowDatabaseId === id)));
