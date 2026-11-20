@@ -179,7 +179,7 @@ A headless job is a session without a terminal (`claude -p`), such as a consult 
 
 ## Reconciliation
 
-Once a day while a run is open, and when it closes, compare GitHub against the merge log ([review-and-merge.md](review-and-merge.md#merge-log)) for each project. Steps 1 to 5 find a breach after the fact and change nothing. Each project starts with a baseline, taken before its first worker starts in the run: steps 2 to 5 once, with nothing to compare against, so that the first daily or closing check has its base. A change made after the baseline is a finding.
+Once a day while a run is open, and when it closes, compare GitHub against the merge log ([review-and-merge.md](review-and-merge.md#merge-log)) for each project. Steps 1 to 5 find a breach after the fact and change nothing. Reconcile each project once before its first worker starts in the run. Its first reconciliation ever takes the baseline: steps 2 to 5 with nothing to compare against. Every later one, also the first of a later run, compares against the last recorded value, so a change made between runs is a finding too. A change made after the baseline is a finding.
 
 1. Merges: each pull request that `gh pr list -R <owner/repo> --state merged --base <default branch> --search "merged:>=<date of the last reconciliation>" --limit 100 --json number,mergeCommit,mergedAt,mergedBy` prints needs a merge log line with its merge commit. A result of exactly 100 may be cut off: report it to the owner as a finding and reconcile the interval again in smaller date ranges.
 2. Tags: `gh api repos/<owner/repo>/tags --paginate --jq '.[].name'` against the list of the last reconciliation.

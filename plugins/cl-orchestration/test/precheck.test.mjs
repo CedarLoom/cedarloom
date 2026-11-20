@@ -39,7 +39,7 @@ test('precheck: an issue that waits for the owner, that a worker holds or that t
 
 test('precheck: the command line takes project paths only, so an option of an old schedule fails instead of being read as a path', () => {
   assert.deepEqual(projectsOf(['/a', '/b']), ['/a', '/b']);
-  for (const argv of [['--hub=owner/tracker', '/a'], ['--issues-in', 'repo', '/a']]) assert.throws(() => projectsOf(argv), /--hub|--issues-in/);
+  for (const argv of [['--extra=owner/project', '/a'], ['--issues-in', 'repo', '/a']]) assert.throws(() => projectsOf(argv), /--extra|--issues-in/);
 });
 
 test('precheck: an issue that several projects list starts in none of them', () => {

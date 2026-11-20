@@ -77,8 +77,8 @@ test('policy: a file that names another repository is refused and keeps the proj
   assert.deepEqual(named.policy.issues, { labels: ['project-a'] });
   assert.deepEqual(rules(named.warnings), [['refused', 'issues.repository']]);
   assert.match(named.warnings[0].message, /names no other repository; the tracker is the project repository/);
-  // A file that chooses another tracker is still named.
-  assert.deepEqual(rules(effective({ issues: { repository: 'owner/tracker', tracker: 'hub' } }, '0.1.0').errors), [['unknown-key', 'issues.tracker']]);
+  // An unknown key beside it is still named.
+  assert.deepEqual(rules(effective({ issues: { repository: 'owner/tracker', extra: 'value' } }, '0.1.0').errors), [['unknown-key', 'issues.extra']]);
 });
 
 test('policy: mode is supervised unless the file sets automatic, which takes its hosts from sandbox.allowedDomains', () => {
