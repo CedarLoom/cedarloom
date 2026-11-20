@@ -14,7 +14,6 @@ const HOLDER = 'holder.json';
 // A merge holds the lock for seconds to a few minutes; one older than this was left behind.
 export const LOCK_LIMIT = 15 * 60_000;
 
-export const prFile = (state, n) => join(state, `pr-${n}.json`);
 export const isPrFile = (name) => /^pr-[1-9]\d*\.json$/.test(name);
 
 const text = (path) => { try { return readFileSync(path, 'utf8'); } catch { return null; } };

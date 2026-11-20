@@ -18,18 +18,20 @@ const [BEFORE, MERGE_COMMIT, OTHER] = ['e', 'c', 'f'].map((c) => c.repeat(40));
 // The origin: main holds the policy, feat/1-x a plain change and feat/2-owner a change of an owner-only file. The bot's project checkout and its scratch clone come from it.
 const origin = folder('cl-origin-');
 const git = initRepo(origin);
-const head = (branch, files) => {
-  git('checkout', '-q', '-b', branch, 'main');
+const head = (branch, files, from = 'main') => {
+  git('checkout', '-q', '-b', branch, from);
   for (const [path, text] of Object.entries(files)) { mkdirSync(join(origin, path, '..'), { recursive: true }); writeFileSync(join(origin, path), text); }
   git('add', '-A');
   git('commit', '-qm', branch);
   return git('rev-parse', 'HEAD').toString().trim();
 };
-head('policy', { 'docs/agents/orchestration.json': '{ "merge": { "allowed": true } }' });
+head('policy', { 'docs/agents/orchestration.json': '{ "merge": { "allowed": true, "mode": "disjoint" } }' });
 git('checkout', '-q', 'main');
 git('merge', '-q', '--ff-only', 'policy');
 const HEAD = head('feat/1-x', { 'src/x.txt': 'x\n' });
 const OWNER_HEAD = head('feat/2-owner', { 'AGENTS.md': '# Agents\n' });
+// Behind main and touching none of its files: the verdict is trial.
+const TRIAL_HEAD = head('feat/3-trial', { 'src/t.txt': 't\n' }, 'main~1');
 git('checkout', '-q', 'main');
 // The tip GitHub reports is the origin's main, which the scratch clone fetches.
 const TIP = git('rev-parse', 'main').toString().trim();
@@ -49,14 +51,16 @@ if (a === 'repo' && b === 'view') say({ defaultBranchRef: { name: 'main' } });
 else if (a === 'api' && b === 'graphql') say([{ data: { repository: { pullRequest: { reviewThreads: { nodes: w.threads } } } } }]);
 else if (a === 'api' && b.includes('/branches/')) say({ commit: { sha: w.tip } });
 else if (a === 'api' && b.includes('/compare/')) say({ commits: w.compare.map((sha) => ({ sha })) });
-else if (a === 'run' && b === 'list') say(w.runs);
+// Push runs answer a list by event; the list of one commit holds its runs of every event.
+else if (a === 'run' && b === 'list') say(args.includes('--event') ? w.runs : [...w.runs, ...w.otherRuns].filter((r) => r.headSha === args[args.indexOf('--commit') + 1]));
 else if (a === 'pr' && b === 'view' && args[args.indexOf('--json') + 1].includes('autoMergeRequest')) {
   const pr = w.prs[c];
   if (w.merge === 'unreadable') { process.stderr.write('HTTP 502\\n'); process.exit(1); }
-  say(merged ? { state: 'MERGED', mergeCommit: { oid: '${MERGE_COMMIT}' }, mergedAt: '2026-11-20T12:00:30Z', headRefOid: pr.headRefOid, autoMergeRequest: null }
-    : { state: 'OPEN', mergeCommit: null, mergedAt: null, headRefOid: pr.headRefOid, autoMergeRequest: w.merge === 'auto' ? { enabledAt: '2026-11-20T12:00:01Z' } : null });
+  say(merged ? { state: 'MERGED', mergeCommit: { oid: '${MERGE_COMMIT}' }, mergedAt: '2026-11-20T12:00:30Z', headRefOid: w.mergedHead ?? pr.headRefOid, autoMergeRequest: null }
+    : { state: 'OPEN', mergeCommit: null, mergedAt: null, headRefOid: w.mergedHead ?? pr.headRefOid, autoMergeRequest: w.merge === 'auto' ? { enabledAt: '2026-11-20T12:00:01Z' } : null });
 } else if (a === 'pr' && b === 'view') say(w.prs[c]);
 else if (a === 'pr' && b === 'merge' && !args.includes('--disable-auto')) {
+  if (w.clobber) fs.writeFileSync(w.clobber, '{');
   if (w.merge === 'fail') { process.stderr.write('GraphQL: Head branch was modified\\n'); process.exit(1); }
   if (w.merge === 'merged') fs.writeFileSync(path.join(dir, 'merged'), '');
 } else if (!(a === 'pr' && b === 'merge')) { process.stderr.write('unexpected: ' + args.join(' ') + '\\n'); process.exit(1); }
@@ -68,21 +72,21 @@ const run = (sha, status, conclusion, workflow, createdAt) => ({ databaseId: Dat
 const GREEN = [run(TIP, 'completed', 'success', 10, '2026-11-20T11:49:00Z'), run(BEFORE, 'completed', 'success', 10, '2026-11-20T11:00:00Z')];
 
 // A bot home whose state folder holds pr-<n>.json with an accepted head and verdict, the commit's subject and body files and a tip first seen 11 minutes ago.
-function bot({ n = 1, oid = HEAD, branch = 'feat/1-x', action = 'merge', world = {}, files = {} } = {}) {
+function bot({ n = 1, oid = HEAD, branch = 'feat/1-x', action = 'merge', world = {}, files = {}, fields = {}, subject = `feat: add x (#${n})\n`, body = 'Adds x.\n' } = {}) {
   const home = folder('cl-bot-'), state = join(home, 'state'), gh = join(home, 'gh');
   mkdirSync(state);
   mkdirSync(gh);
   const file = join(state, `pr-${n}.json`);
-  writeFileSync(file, JSON.stringify({ repo: REPO, pr: n, branch, project, clones: [scratch], reviewedHead: oid, reviewUrl: `https://github.com/${REPO}/pull/${n}#pullrequestreview-1`, riskClass: 'low', updatedAt: minutesAgo(60), handled: { head: oid, action } }));
+  writeFileSync(file, JSON.stringify({ repo: REPO, pr: n, branch, project, clones: [scratch], reviewedHead: oid, reviewUrl: `https://github.com/${REPO}/pull/${n}#pullrequestreview-1`, riskClass: 'low', updatedAt: minutesAgo(60), handled: { head: oid, action }, ...fields }));
   writeFileSync(join(state, 'tip.json'), JSON.stringify({ sha: TIP, firstSeen: minutesAgo(11), passed: null }));
-  writeFileSync(join(state, `pr-${n}-subject.txt`), `feat: add x (#${n})\n`);
-  writeFileSync(join(state, `pr-${n}-body.md`), 'Adds x.\n');
+  writeFileSync(join(state, `pr-${n}-subject.txt`), subject);
+  if (body !== null) writeFileSync(join(state, `pr-${n}-body.md`), body);
   for (const [name, text] of Object.entries(files)) writeFileSync(join(home, name), text);
-  writeFileSync(join(gh, 'world.json'), JSON.stringify({ tip: TIP, runs: GREEN, compare: [], threads: [], merge: 'merged', ...world, prs: { [n]: openPr(n, oid, branch), ...world.prs } }));
+  writeFileSync(join(gh, 'world.json'), JSON.stringify({ tip: TIP, runs: GREEN, otherRuns: [], compare: [], threads: [], merge: 'merged', ...world, clobber: world.clobber ? file : null, prs: { [n]: openPr(n, oid, branch), ...world.prs } }));
   let t = NOW.getTime();
   const call = (method = 'squash') => {
     process.env.FAKE_GH = gh;
-    const result = merge(file, method, { now: () => new Date(t), sleep: (ms) => { t += ms; } });
+    const result = merge(file, { method, runId: 'run-1' }, { now: () => new Date(t), sleep: (ms) => { t += ms; } });
     // Released on every path: no lock and no renamed one is left.
     assert.deepEqual(readdirSync(state).filter((name) => name.startsWith('lock')), []);
     return result;
@@ -97,7 +101,7 @@ test('merge: a pull request whose checks pass merges with one gh pr merge pinned
   const b = bot();
   assert.deepEqual(b.call(), { outcome: 'merged', reason: `merged ${HEAD} as ${MERGE_COMMIT}` });
   assert.deepEqual(merges(b.calls()), [['pr', 'merge', '1', '-R', REPO, '--squash', '--match-head-commit', HEAD, '--subject', 'feat: add x (#1)', '--body-file', join(b.state, 'pr-1-body.md')]]);
-  assert.equal(readFileSync(join(b.state, 'merge-log.md'), 'utf8'), `- 2026-11-20T12:00:30Z ${REPO} #1 reviewed ${HEAD} merged ${HEAD} commit ${MERGE_COMMIT} review https://github.com/${REPO}/pull/1#pullrequestreview-1\n`);
+  assert.equal(readFileSync(join(b.state, 'merge-log.md'), 'utf8'), `- 2026-11-20T12:00:30Z ${REPO} #1 reviewed ${HEAD} merged ${HEAD} commit ${MERGE_COMMIT} review https://github.com/${REPO}/pull/1#pullrequestreview-1 run run-1\n`);
   const s = b.read('pr-1.json');
   assert.deepEqual([s.mergeCommandAt, s.mergedAt, s.held], ['2026-11-20T12:00:00.000Z', '2026-11-20T12:00:30Z', undefined]);
   assert.deepEqual(b.read('tip.json'), { sha: MERGE_COMMIT, firstSeen: '2026-11-20T12:00:30Z', passed: TIP });
@@ -116,7 +120,7 @@ test('merge: a lock another run holds answers wait and stays, and nothing is rea
   const holder = JSON.stringify({ pid: process.pid, start: null, pr: 2, head: OTHER, takenAt: new Date().toISOString() });
   writeFileSync(join(b.state, 'lock', 'holder.json'), holder);
   process.env.FAKE_GH = join(b.home, 'gh');
-  const r = spawnSync(process.execPath, [SCRIPT, b.file], { encoding: 'utf8' });
+  const r = spawnSync(process.execPath, [SCRIPT, b.file, '--run', 'run-1'], { encoding: 'utf8' });
   assert.deepEqual([r.status, JSON.parse(r.stdout)], [0, { outcome: 'wait', reason: 'the merge lock is held' }]);
   assert.equal(readFileSync(join(b.state, 'lock', 'holder.json'), 'utf8'), holder);
   assert.deepEqual(b.calls(), []);
@@ -152,6 +156,35 @@ test('merge: the watch waits for a young tip, a run on the tip, an expected work
   writeFileSync(join(unconfirmed.state, 'pr-3.json'), JSON.stringify({ repo: REPO, pr: 3, mergeCommandAt: minutesAgo(20) }));
   assert.deepEqual(unconfirmed.call(), { outcome: 'wait', reason: 'the merge of #3 is not confirmed' });
   assert.deepEqual(merges(running.calls()).concat(merges(young.calls()), merges(unconfirmed.calls())), []);
+});
+
+test('merge: an unreadable state file or a held merge command that has its log line keeps the watch waiting', () => {
+  const unreadable = bot();
+  writeFileSync(join(unreadable.state, 'pr-3.json'), '{');
+  assert.deepEqual(unreadable.call(), { outcome: 'wait', reason: 'pr-3.json is unreadable' });
+
+  const held = bot();
+  writeFileSync(join(held.state, 'pr-3.json'), JSON.stringify({ repo: REPO, pr: 3, mergeCommandAt: minutesAgo(20), held: 'the merge is not confirmed' }));
+  writeFileSync(join(held.state, 'merge-log.md'), `- 2026-11-20T11:40:00Z ${REPO} #3 reviewed ${OTHER} merged ${OTHER} commit ${BEFORE} review none run run-0\n`);
+  assert.deepEqual(held.call(), { outcome: 'wait', reason: 'the merge of #3 is not confirmed' });
+});
+
+test('merge: a run of another event on the tip is red, and one that runs holds the merge for at most 30 minutes', () => {
+  const scheduled = (status, conclusion) => run(TIP, status, conclusion, 12, '2026-11-20T11:55:00Z');
+  const failed = bot({ world: { otherRuns: [scheduled('completed', 'failure')] } });
+  assert.deepEqual(failed.call(), { outcome: 'redMain', reason: `the default branch is red at ${TIP}` });
+
+  const running = bot({ world: { otherRuns: [scheduled('in_progress', null)] } });
+  assert.deepEqual(running.call(), { outcome: 'wait', reason: `a run on the tip ${TIP} has not completed` });
+  writeFileSync(join(running.state, 'tip.json'), JSON.stringify({ sha: TIP, firstSeen: minutesAgo(31), passed: null }));
+  assert.equal(running.call().outcome, 'merged');
+  assert.deepEqual(merges(failed.calls()), []);
+});
+
+test('merge: a last passed tip that is no commit stops with an error', () => {
+  const b = bot();
+  writeFileSync(join(b.state, 'tip.json'), JSON.stringify({ sha: TIP, firstSeen: minutesAgo(11), passed: 'main?x=1' }));
+  assert.deepEqual(b.call(), { outcome: 'stop', reason: 'tip.json holds no commit as the last passed tip', error: true });
 });
 
 test('merge: on a red tip only the pull request the answered report names merges, and only while the tip is the red commit', () => {
@@ -196,6 +229,28 @@ test('merge: a new head, another verdict or an open review thread restarts the j
   assert.deepEqual(merges(threads.calls()), []);
 });
 
+test('merge: a trial verdict merges only while the default branch is the trial base', () => {
+  const trial = { n: 3, oid: TRIAL_HEAD, branch: 'feat/3-trial', action: 'trial' };
+  const moved = bot({ ...trial, fields: { trialBase: OTHER } });
+  assert.deepEqual(moved.call(), { outcome: 'restart', reason: 'the default branch moved since the trial merge' });
+  assert.deepEqual(merges(moved.calls()), []);
+  assert.equal(bot({ ...trial, fields: { trialBase: TIP } }).call().outcome, 'merged');
+});
+
+test('merge: a fork, another base, a subject of more than one line, a missing body file or a review URL with whitespace stops for the owner', () => {
+  const stops = [
+    [bot({ world: { prs: { 1: { ...openPr(1, HEAD, 'feat/1-x'), isCrossRepository: true } } } }), 'the pull request comes from a fork'],
+    [bot({ world: { prs: { 1: { ...openPr(1, HEAD, 'feat/1-x'), baseRefName: 'release' } } } }), "the pull request's base is not main"],
+    [bot({ subject: 'feat: add x (#1)\nCloses #1\n' }), 'the subject file holds no single line'],
+    [bot({ body: null }), 'no subject or body file: ENOENT'],
+    [bot({ fields: { reviewUrl: 'https://github.com/acme/app/pull/1\n- forged line' } }), 'the state names no review URL without whitespace'],
+  ];
+  for (const [b, reason] of stops) {
+    assert.deepEqual(b.call(), { outcome: 'stop', reason });
+    assert.deepEqual(merges(b.calls()), []);
+  }
+});
+
 test('merge: an owner-only file or a held state stops for the owner', () => {
   const owner = bot({ n: 2, oid: OWNER_HEAD, branch: 'feat/2-owner' });
   assert.deepEqual(owner.call(), { outcome: 'stop', reason: 'the verdict is owner' });
@@ -231,6 +286,26 @@ test('merge: the pre-merge command reads the pull request text and the commit me
   assert.deepEqual(merges(hold.calls()), []);
 });
 
+test('merge: the pre-merge command sees none of the bot variables, and an unreadable configuration, 100 commits or another accepted head written meanwhile refuses', () => {
+  const seen = join(folder('cl-env-'), 'env.txt');
+  const env = bot({ files: { 'pre-merge.json': JSON.stringify({ command: [process.execPath, '-e', 'require("node:fs").writeFileSync(process.argv[1], String(process.env.FAKE_GH))', seen] }) } });
+  assert.equal(env.call().outcome, 'merged');
+  assert.equal(readFileSync(seen, 'utf8'), 'undefined');
+
+  const unreadable = bot();
+  mkdirSync(join(unreadable.home, 'pre-merge.json'));
+  assert.deepEqual(unreadable.call(), { outcome: 'stop', reason: 'pre-merge.json is unreadable' });
+
+  const commit = { messageHeadline: 'feat: add x', messageBody: '' };
+  const long = bot({ world: { prs: { 1: { ...openPr(1, HEAD, 'feat/1-x'), commits: Array(100).fill(commit) } } }, files: { 'pre-merge.json': JSON.stringify({ command: [process.execPath, '-e', '0'] }) } });
+  assert.deepEqual(long.call(), { outcome: 'stop', reason: 'the pull request has more commits than the pre-merge command is shown' });
+
+  const accepted = bot();
+  writeFileSync(join(accepted.home, 'pre-merge.json'), JSON.stringify({ command: [process.execPath, '-e', 'const fs = require("node:fs"); const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); fs.writeFileSync(process.argv[1], JSON.stringify({ ...s, handled: { ...s.handled, head: process.argv[2] } }))', accepted.file, OTHER] }));
+  assert.deepEqual(accepted.call(), { outcome: 'restart', reason: 'the state changed during the checks' });
+  assert.deepEqual([unreadable, long, accepted].flatMap((b) => merges(b.calls())), []);
+});
+
 test('merge: a merge GitHub does not confirm within two minutes, a failed command or auto-merge holds the pull request for the owner', () => {
   const open = bot({ world: { merge: 'open' } });
   assert.deepEqual(open.call(), { outcome: 'stop', reason: 'the merge is not confirmed' });
@@ -249,9 +324,27 @@ test('merge: a merge GitHub does not confirm within two minutes, a failed comman
   assert.deepEqual(merges(auto.calls()).at(-1), ['pr', 'merge', '1', '-R', REPO, '--disable-auto']);
 });
 
-test('merge: an error stops with exit 1 after releasing the lock, and a bad argument exits 2', () => {
+test('merge: a state file unreadable after the command keeps its merge command time, a refused command whose read shows another head restarts, and a merged head nobody reviewed is logged and held', () => {
+  const clobbered = bot({ world: { merge: 'fail', clobber: true } });
+  assert.equal(clobbered.call().outcome, 'stop');
+  assert.deepEqual([clobbered.read('pr-1.json').mergeCommandAt, clobbered.read('pr-1.json').held], ['2026-11-20T12:00:00.000Z', 'the merge is not confirmed: GraphQL: Head branch was modified']);
+
+  const refused = bot({ world: { merge: 'fail', mergedHead: OTHER } });
+  assert.deepEqual(refused.call(), { outcome: 'restart', reason: `the head moved to ${OTHER} and GitHub refused the merge: GraphQL: Head branch was modified` });
+  const s = refused.read('pr-1.json');
+  assert.deepEqual([s.mergeCommandAt, s.held], [undefined, undefined]);
+
+  const unreviewed = bot({ world: { mergedHead: OTHER } });
+  assert.deepEqual(unreviewed.call(), { outcome: 'stop', reason: `a head nobody reviewed merged: ${OTHER}` });
+  assert.equal(readFileSync(join(unreviewed.state, 'merge-log.md'), 'utf8'), `- 2026-11-20T12:00:30Z ${REPO} #1 reviewed ${HEAD} merged ${OTHER} commit ${MERGE_COMMIT} review https://github.com/${REPO}/pull/1#pullrequestreview-1 run run-1 unreviewed head\n`);
+  assert.equal(unreviewed.read('pr-1.json').held, 'unreviewed head');
+});
+
+test('merge: an error stops with exit 1 after releasing the lock, and a bad argument or no run id exits 2', () => {
   const b = bot({ world: { tip: 'not a commit' } });
   assert.deepEqual(b.call(), { outcome: 'stop', reason: 'GitHub gave no commit for the default branch', error: true });
-  const r = spawnSync(process.execPath, [SCRIPT, b.file, '--method', 'fast'], { encoding: 'utf8' });
-  assert.deepEqual([r.status, JSON.parse(r.stdout).outcome], [2, 'stop']);
+  for (const args of [['--run', 'run-1', '--method', 'fast'], [], ['--run', 'run 1']]) {
+    const r = spawnSync(process.execPath, [SCRIPT, b.file, ...args], { encoding: 'utf8' });
+    assert.deepEqual([r.status, JSON.parse(r.stdout).outcome], [2, 'stop']);
+  }
 });

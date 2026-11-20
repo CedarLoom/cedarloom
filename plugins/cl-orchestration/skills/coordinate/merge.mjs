@@ -1,4 +1,4 @@
-// Usage: node merge.mjs <state file> [--method squash|merge|rebase]. The only place a project bot runs gh pr merge. The bot first takes the judgment steps of Merge (review-and-merge.md, steps 1 to 5.2) and records the head and verdict it accepted in the state file's handled; this script then merges that pull request or says why not, in one JSON line { outcome, reason }:
+// Usage: node merge.mjs <state file> --run <run id> [--method squash|merge|rebase]. The only place a project bot runs gh pr merge. The bot first takes the judgment steps of Merge (review-and-merge.md, steps 1 to 5.2) and records the head and verdict it accepted in the state file's handled; this script then merges that pull request or says why not, in one JSON line { outcome, reason }:
 // merged; wait (the lock is busy, the watch of the default branch runs, or another pull request waits for its checks after an update: a later sweep retries); redMain (the default branch is red and the answered report names another pull request or none); restart (the head, the verdict, the trial base or the threads changed: the judgment steps run again); stop (the owner's, exit 1 when an error stopped it, exit 2 for a bad argument).
 // <state file> is <bot home>/state/pr-<n>.json (state.mjs). The squash or merge commit's subject and body come from pr-<n>-subject.txt and pr-<n>-body.md beside it (step 5.1). <bot home>/pre-merge.json, if present, names a command that gets the pull request's text on stdin and must exit 0: { "command": [<program>, <args>...] }.
 import { readdirSync, readFileSync } from 'node:fs';
@@ -23,6 +23,8 @@ const ACTIONS = ['merge', 'trial'];
 const GREEN = ['success', 'skipped', 'neutral'];
 const COMMIT = /^[0-9a-f]{40}$/;
 const BRANCH = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+$/;
+const REVIEW_URL = /^https:\/\/\S+$/;
+const RUN_ID =/^[A-Za-z0-9._:-]{1,128}$/;
 const CHECKS = fileURLToPath(new URL('./merge-checks.mjs', import.meta.url));
 
 const firstLine = (text) => escaped(String(text ?? '').trim().split('\n')[0] ?? '');
@@ -54,14 +56,19 @@ function watch({ gh, repo, n, branch, state, now }) {
   const tip = JSON.parse(gh('api', `repos/${repo}/branches/${branch}`)).commit.sha;
   if (!COMMIT.test(tip)) throw new Error('GitHub gave no commit for the default branch');
   let seen = readState(join(state, TIP));
+  // The last passed tip goes into an API path.
+  if ((seen?.passed ?? null) !== null && !COMMIT.test(seen.passed)) throw new Error(`${TIP} holds no commit as the last passed tip`);
   if (seen?.sha !== tip || Number.isNaN(Date.parse(seen.firstSeen))) {
     seen = { sha: tip, firstSeen: now.toISOString(), passed: seen?.passed ?? null };
     writeState(join(state, TIP), seen);
   }
-  const runs = JSON.parse(gh('run', 'list', '-R', repo, '--branch', branch, '--event', 'push', '--limit', '100', '--json', 'databaseId,headSha,status,conclusion,workflowDatabaseId,createdAt'))
+  const list = (...filter) => JSON.parse(gh('run', 'list', '-R', repo, '--branch', branch, ...filter, '--limit', '100', '--json', 'databaseId,headSha,status,conclusion,workflowDatabaseId,createdAt'))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // Push runs give the expected workflows (step 6.3) and the commits since the last passed tip; the tip's own runs of every event give red and not completed (steps 6.4 to 6.7).
+  const runs = list('--event', 'push');
+  const onTipAll = list('--commit', tip);
   const since = seen.passed && seen.passed !== tip ? JSON.parse(gh('api', `repos/${repo}/compare/${seen.passed}...${tip}`)).commits.map((c) => c.sha).reverse() : [];
-  const red = latestRuns(runs, [tip, ...since.filter((sha) => sha !== tip)]).filter((r) => r.status === 'completed' && !GREEN.includes(r.conclusion));
+  const red = latestRuns([...onTipAll, ...runs.filter((r) => r.headSha !== tip)], [tip, ...since.filter((sha) => sha !== tip)]).filter((r) => r.status === 'completed' && !GREEN.includes(r.conclusion));
   if (red.length) {
     const report = readState(join(state, RED_MAIN));
     if (report?.sha !== tip || report?.pr !== n) return { answer: redMain(`the default branch is red at ${tip}${report?.sha === tip ? `; its report names #${report.pr ?? 'none'}` : ''}`) };
@@ -69,7 +76,8 @@ function watch({ gh, repo, n, branch, state, now }) {
   const age = ageOf(now, seen.firstSeen);
   if (age < WATCH_MIN) return { answer: wait(`the tip ${tip} is younger than 10 minutes`) };
   const onTip = runs.filter((r) => r.headSha === tip);
-  if (onTip.some((r) => r.status !== 'completed')) return { answer: wait(`a run on the tip ${tip} has not completed`) };
+  // A run of another event (a schedule, workflow_run) holds the merge as long as an expected workflow without a run does, no longer.
+  if (onTip.some((r) => r.status !== 'completed') || (age < WAIT_MAX && onTipAll.some((r) => r.status !== 'completed'))) return { answer: wait(`a run on the tip ${tip} has not completed`) };
   // The expected workflows are those of the commit with runs before the tip, its first parent as a rule (step 6.3).
   const before = runs.find((r) => r.headSha !== tip)?.headSha;
   const missing = new Set(runs.filter((r) => r.headSha === before).map((r) => r.workflowDatabaseId).filter((id) => !onTip.some((r) => r.workflowDatabaseId === id)));
@@ -111,7 +119,7 @@ function premerge(home, pr, subject, body) {
   return r.status === 0 ? null : `the pre-merge command refused the merge (exit ${r.status ?? r.signal})`;
 }
 
-function locked({ stateFile, method, run, now, sleep }) {
+function locked({ stateFile, method, runId, run, now, sleep }) {
   const state = dirname(stateFile), home = dirname(state);
   const s = readState(stateFile);
   const n = s?.pr, repo = s?.repo;
@@ -121,6 +129,8 @@ function locked({ stateFile, method, run, now, sleep }) {
   if (!COMMIT.test(accepted ?? '') || !ACTIONS.includes(s.handled?.action) || !COMMIT.test(s.reviewedHead ?? '')) return stop('the state holds no accepted head with a merge or trial verdict');
   const scratch = s.clones?.at(-1);
   if (typeof scratch !== 'string' || typeof s.project !== 'string') return stop('the state names no project or scratch clone');
+  // The merge log keeps one line per merge.
+  if ((s.reviewUrl ?? null) !== null && !REVIEW_URL.test(s.reviewUrl)) return stop('the state names no review URL without whitespace');
   const gh = (...args) => run(home, 'gh', args);
   const git = (...args) => run(scratch, 'git', ['-c', 'core.fsmonitor=false', ...args]);
 
@@ -174,14 +184,17 @@ function locked({ stateFile, method, run, now, sleep }) {
   const fresh = readState(stateFile);
   if (fresh?.held) return stop(`held: ${fresh.held}`);
   if (fresh?.handled?.head !== accepted || fresh?.handled?.action !== s.handled.action) return restart('the state changed during the checks');
-  writeState(stateFile, { ...fresh, mergeCommandAt: now().toISOString() });
+  const commanded = { ...fresh, mergeCommandAt: now().toISOString() };
+  writeState(stateFile, commanded);
   // Pinned to the accepted head; never --admin, which passes branch protection, nor --auto, which would merge a later push.
   const args = ['pr', 'merge', String(n), '-R', repo, `--${method}`, '--match-head-commit', accepted];
   if (bodyFile) args.push('--subject', subject, '--body-file', bodyFile);
   let failed = null;
   try { gh(...args); } catch (e) { failed = firstLine(e.stderr || e.message); }
 
-  const held = (why) => { writeState(stateFile, { ...readState(stateFile), held: why }); return stop(why); };
+  // A state that became unreadable keeps the merge command time, so later merges still pause.
+  const current = () => readState(stateFile) ?? commanded;
+  const held = (why) => { writeState(stateFile, { ...current(), held: why }); return stop(why); };
   let merged;
   try {
     const deadline = now().getTime() + CONFIRM_MAX;
@@ -192,6 +205,12 @@ function locked({ stateFile, method, run, now, sleep }) {
         gh('pr', 'merge', String(n), '-R', repo, '--disable-auto');
         return held('the merge command turned on auto-merge');
       }
+      // GitHub refused the command because the head moved: that push gets its re-review (step 5), and nothing is left to confirm.
+      if (failed && merged.state === 'OPEN' && COMMIT.test(merged.headRefOid ?? '') && merged.headRefOid !== accepted) {
+        const { mergeCommandAt, ...rest } = current();
+        writeState(stateFile, rest);
+        return restart(`the head moved to ${merged.headRefOid} and GitHub refused the merge: ${failed}`);
+      }
       if (failed || merged.state !== 'OPEN' || now().getTime() >= deadline) return held(`the merge is not confirmed${failed ? `: ${failed}` : ''}`);
       sleep(POLL);
     }
@@ -200,14 +219,15 @@ function locked({ stateFile, method, run, now, sleep }) {
     return held(`the merge is not confirmed: ${firstLine(e.stderr || e.message)}`);
   }
   const unreviewed = merged.headRefOid !== accepted;
-  appendLog(state, `- ${merged.mergedAt} ${repo} #${n} reviewed ${s.reviewedHead} merged ${merged.headRefOid} commit ${merged.mergeCommit?.oid} review ${s.reviewUrl ?? 'none'}${unreviewed ? ' unreviewed head' : ''}`);
-  writeState(stateFile, { ...readState(stateFile), mergedAt: merged.mergedAt, ...(unreviewed ? { held: 'unreviewed head' } : {}) });
+  appendLog(state, `- ${merged.mergedAt} ${repo} #${n} reviewed ${s.reviewedHead} merged ${merged.headRefOid} commit ${merged.mergeCommit?.oid} review ${s.reviewUrl ?? 'none'} run ${runId}${unreviewed ? ' unreviewed head' : ''}`);
+  writeState(stateFile, { ...current(), mergedAt: merged.mergedAt, ...(unreviewed ? { held: 'unreviewed head' } : {}) });
   if (COMMIT.test(merged.mergeCommit?.oid ?? '')) writeState(join(state, TIP), { sha: merged.mergeCommit.oid, firstSeen: merged.mergedAt, passed: watched.passed });
   return unreviewed ? stop(`a head nobody reviewed merged: ${merged.headRefOid}`) : { outcome: 'merged', reason: `merged ${accepted} as ${merged.mergeCommit?.oid}` };
 }
 
-// The answer for the pull request of stateFile. run(cwd, cmd, args) gives stdout or throws; now() and sleep(ms) are the clock.
-export function merge(stateFile, method = 'squash', { run = sh, now = () => new Date(), sleep = pause } = {}) {
+// The answer for the pull request of stateFile; runId names the bot's run in the merge log. run(cwd, cmd, args) gives stdout or throws; now() and sleep(ms) are the clock.
+export function merge(stateFile, { method = 'squash', runId }, { run = sh, now = () => new Date(), sleep = pause } = {}) {
+  if (!RUN_ID.test(runId ?? '')) return stop('no run id: letters, digits, . _ : and -');
   const file = resolve(stateFile), state = dirname(file);
   const s = readState(file);
   if (!isPrFile(basename(file)) || s?.pr !== Number(basename(file).slice(3, -5))) return stop(`${basename(file)} is no readable pull request state`);
@@ -223,27 +243,33 @@ export function merge(stateFile, method = 'squash', { run = sh, now = () => new 
   }
   let result;
   try {
-    result = locked({ stateFile: file, method, run, now, sleep });
+    result = locked({ stateFile: file, method, runId, run, now, sleep });
   } catch (e) {
     result = { ...stop(firstLine(e.stderr || e.message)), error: true };
   }
-  if (!removeLock(state, holder)) result = { ...result, reason: `${result.reason}; the lock was no longer this run's` };
+  // A failed release never hides what happened before it, a merge least of all.
+  try {
+    if (!removeLock(state, holder)) result = { ...result, reason: `${result.reason}; the lock was no longer this run's` };
+  } catch (e) {
+    result = { ...result, reason: `${result.reason}; the lock was not released: ${firstLine(e.message)}` };
+  }
   return result;
 }
 
 if (isMain(import.meta.url)) {
-  let file, method;
+  const usage = 'usage: node merge.mjs <state file> --run <run id> [--method squash|merge|rebase]';
+  let file, method, runId;
   try {
-    const { values, positionals } = parseArgs({ args: process.argv.slice(2), options: { method: { type: 'string', default: 'squash' } }, allowPositionals: true });
-    if (positionals.length !== 1 || !METHODS.includes(values.method)) throw new Error('usage: node merge.mjs <state file> [--method squash|merge|rebase]');
+    const { values, positionals } = parseArgs({ args: process.argv.slice(2), options: { method: { type: 'string', default: 'squash' }, run: { type: 'string' } }, allowPositionals: true });
+    if (positionals.length !== 1 || !METHODS.includes(values.method) || !RUN_ID.test(values.run ?? '')) throw new Error(usage);
     [file] = positionals;
-    method = values.method;
+    ({ method, run: runId } = values);
   } catch (e) {
     console.log(json(stop(firstLine(e.message))));
     process.exit(2);
   }
   try {
-    const { error, ...result } = merge(file, method);
+    const { error, ...result } = merge(file, { method, runId });
     console.log(json(result));
     if (error) process.exitCode = 1;
   } catch (e) {
