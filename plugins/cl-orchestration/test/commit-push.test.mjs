@@ -287,6 +287,22 @@ test('commit-push: supervised refuses a submodule commit outside the owned paths
   assert.deepEqual(s.pushed(), ['refs/heads/main']);
 });
 
+test('commit-push: supervised refuses a submodule commit that a merge took back to the branch\'s side, also when the worker\'s .gitmodules ignores it', () => {
+  const s = setup();
+  const link = (sha) => { s.git('update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib`); s.git('commit', '-qm', 'lib'); };
+  link(s.base);
+  s.inW('merge', '-q', '--ff-only', 'main');
+  s.inW('commit', '-qm', 'add a');
+  // Main moves vendor/lib after the fork, and the branch's merge keeps its own side: the merge equals its first parent there, so log --cc omits the path and only the diff lists it.
+  link(s.git('rev-parse', 'HEAD').toString().trim());
+  s.git('push', '-q', 'origin', 'main');
+  s.inW('merge', '-q', '--no-edit', '-s', 'ours', 'main');
+  writeFileSync(join(s.worktree, '.gitmodules'), '[submodule "vendor/lib"]\n\tpath = vendor/lib\n\turl = https://example.com/lib.git\n\tignore = all\n');
+  const flags = ['--project', s.project, '--worktree', s.worktree, '--repo', 'owner/project', '--branch', BRANCH, '--default-branch', 'main', '--owned', 'src'];
+  refused(s.run('supervised', ...flags, '--commit', s.inW('rev-parse', 'HEAD')), /^supervised: vendor\/lib is in no owned path$/);
+  assert.deepEqual(s.pushed(), ['refs/heads/main']);
+});
+
 test('commit-push: nothing staged is refused', () => {
   const s = setup();
   s.inW('rm', '-q', '--cached', 'src/a.txt');
@@ -377,14 +393,21 @@ test('commit-push: supervised refuses a branch that is not the reported commit, 
 
 test('commit-push: options that are relative paths, no plain branch name or the default branch as --branch are refused', () => {
   const sha = 'a'.repeat(40);
-  const flags = (branch, project = '/p') => ['supervised', '--project', project, '--worktree', '/w', '--repo', 'o/r', '--branch', branch, '--default-branch', 'main', '--commit', sha, '--owned', 'src'];
+  const flags = (branch, project = '/p', worktree = '/w') => ['supervised', '--project', project, '--worktree', worktree, '--repo', 'o/r', '--branch', branch, '--default-branch', 'main', '--commit', sha, '--owned', 'src'];
   assert.equal(optionsOf(flags('feat/1')).mode, 'supervised');
   const usage = (argv, message) => assert.throws(() => optionsOf(argv), (e) => e.step === 'usage' && e.message === message);
   usage(flags('feat/1', 'p'), '--project must be an absolute path');
   usage(flags('a..b'), '--branch is no plain branch name');
   usage(flags('main'), '--branch is the default branch main, which supervised never pushes to');
-  usage(['commit', '--project', '/p', '--worktree', '/w', '--repo', 'o/r', '--branch', 'main', '--default-branch', 'main', '--message', '/m', '--file', 'a', '--owned', 'src'], '--branch is the default branch main, which commit never pushes to');
-  // gh runs in the folder of --body, else --message: never the worktree.
-  usage(['commit', '--project', '/p', '--worktree', '/w', '--repo', 'o/r', '--branch', 'feat/1', '--default-branch', 'main', '--message', '/w/m', '--file', 'a', '--owned', 'src'], '--message is under --worktree');
-  usage([...flags('feat/1'), '--title', 't', '--body', '/w/sub/b.md'], '--body is under --worktree');
+  // The folders of --message and --body are resolved, so they and the worktree exist here.
+  const dir = mkdtempSync(join(tmpdir(), 'commit-push-'));
+  const w = join(dir, 'w');
+  mkdirSync(join(w, 'sub'), { recursive: true });
+  const commitFlags = (branch, message) => ['commit', '--project', '/p', '--worktree', w, '--repo', 'o/r', '--branch', branch, '--default-branch', 'main', '--message', message, '--file', 'a', '--owned', 'src'];
+  usage(commitFlags('main', join(dir, 'm')), '--branch is the default branch main, which commit never pushes to');
+  // gh runs in the folder of --body, else --message: never the worktree, also when a link names it.
+  usage(commitFlags('feat/1', join(w, 'm')), '--message is under --worktree');
+  symlinkSync(w, join(dir, 'link'));
+  usage(commitFlags('feat/1', join(dir, 'link/m')), '--message is under --worktree');
+  usage([...flags('feat/1', '/p', w), '--title', 't', '--body', join(w, 'sub/b.md')], '--body is under --worktree');
 });

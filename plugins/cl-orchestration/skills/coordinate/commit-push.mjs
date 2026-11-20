@@ -4,7 +4,7 @@
 //   node commit-push.mjs supervised --project <path> --worktree <path> --repo <owner/name> --branch <name> --default-branch <name> --commit <sha> --owned <path> (repeated) [--title <text> --body <file>]
 // Commit and push of modes.md for a worker's worktree. sync is steps 4 and 5: it merges origin's branch (with --merge, origin's default branch, without a commit) into the worktree and prints { merged, conflicts }. commit is steps 1 to 3 for an automatic worker: it checks the base and the staged files, commits from the message file, checks that commit, pushes it, opens the draft pull request when --title and --body are given (the first round) and prints { commit, pullRequest }; --merged names the sha sync merged, for a merge round. supervised checks a supervised worker's reported commit and every file it publishes, then pushes and opens the pull request the same way.
 // Every refusal, and every failed command, prints one line naming its step and exits 1; nothing is pushed before every check passed.
-import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync } from 'node:fs';
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync } from 'node:fs';
 import { devNull } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -210,8 +210,8 @@ export function optionsOf(argv) {
   if (missing) usage(`${mode} needs --${missing}`);
   if ((values.title === undefined) !== (values.body === undefined)) usage('--title and --body go together');
   for (const k of PATHS) if (values[k] !== undefined && !isAbsolute(values[k])) usage(`--${k} must be an absolute path`);
-  // gh runs in the folder of --body, else --message (ghOutside), and reads the git config there.
-  for (const k of ['message', 'body']) if (values[k] !== undefined && under(values[k], values.worktree)) usage(`--${k} is under --worktree`);
+  // gh runs in the folder of --body, else --message (ghOutside), and reads the git config there. Resolved folders: `..`, a link, another letter case or a trailing slash can name the worktree too.
+  for (const k of ['message', 'body']) if (values[k] !== undefined && under(realpathSync.native(dirname(values[k])), realpathSync.native(values.worktree))) usage(`--${k} is under --worktree`);
   if (values.repo !== undefined && !REPO.test(values.repo)) usage('--repo must be owner/name');
   for (const k of ['branch', 'default-branch']) if (values[k] !== undefined && !BRANCH.test(values[k])) usage(`--${k} is no plain branch name`);
   // sync --merge takes the default branch as --branch; commit and supervised push to --branch.
