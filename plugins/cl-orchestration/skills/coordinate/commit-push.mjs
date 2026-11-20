@@ -4,7 +4,7 @@
 //   node commit-push.mjs supervised --project <path> --worktree <path> --repo <owner/name> --branch <name> --default-branch <name> --commit <sha> --owned <path> (repeated) [--title <text> --body <file>]
 // Commit and push of modes.md for a worker's worktree. sync is steps 4 and 5: it merges origin's branch (with --merge, origin's default branch, without a commit) into the worktree and prints { merged, conflicts }. commit is steps 1 to 3 for an automatic worker: it checks the base and the staged files, commits from the message file, checks that commit, pushes it, opens the draft pull request when --title and --body are given (the first round) and prints { commit, pullRequest }; --merged names the sha sync merged, for a merge round. supervised checks a supervised worker's reported commit and every file it publishes, then pushes and opens the pull request the same way.
 // Every refusal, and every failed command, prints one line naming its step and exits 1; nothing is pushed before every check passed.
-import { lstatSync, readFileSync, realpathSync } from 'node:fs';
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync } from 'node:fs';
 import { devNull } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -29,12 +29,18 @@ const refuse = (step, message) => { throw new Refused(step, message); };
 const failure = (e) => (e.stderr?.toString().trim() || e.message).split('\n')[0];
 const during = (step, fn) => { try { return fn(); } catch (e) { if (e instanceof Refused) throw e; return refuse(step, failure(e)); } };
 
-// Missing gives undefined; a link, a FIFO or a folder is refused, so the read neither follows nor waits.
+// Missing gives undefined; a link, a FIFO or a folder is refused, so the read neither follows nor waits. One descriptor for the check and the read: the worker can swap the path between two calls.
 const plainFile = (step, path) => {
-  const stat = lstatSync(path, { throwIfNoEntry: false });
-  if (!stat) return undefined;
-  if (!stat.isFile()) refuse(step, `${path} is not a regular file`);
-  return readFileSync(path, 'utf8');
+  let fd;
+  try { fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); } catch (e) {
+    if (e.code === 'ENOENT') return undefined;
+    if (e.code === 'ELOOP') refuse(step, `${path} is not a regular file`);
+    throw e;
+  }
+  try {
+    if (!fstatSync(fd).isFile()) refuse(step, `${path} is not a regular file`);
+    return readFileSync(fd, 'utf8');
+  } finally { closeSync(fd); }
 };
 
 // The worktree's folder in the shared .git, after the reads of modes.md: git would otherwise load configuration, and so commands, that the worker wrote.
