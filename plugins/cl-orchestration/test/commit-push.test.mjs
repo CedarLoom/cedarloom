@@ -233,6 +233,16 @@ test('commit-push: no hook runs, neither one in the shared .git nor one the user
   assert.equal(existsSync(defined), false);
 });
 
+test('commit-push: a hook whose name holds =, which -c cannot turn off, is refused before the commit', () => {
+  const s = setup();
+  const ran = join(s.dir, 'hook-ran');
+  const user = join(s.dir, 'user.gitconfig');
+  writeFileSync(user, `[hook "a=b"]\n\tcommand = touch '${ran}'\n\tevent = pre-commit\n`);
+  refused(s.runWith({ GIT_CONFIG_GLOBAL: user }, 'commit', ...s.flags, '--file', 'src/a.txt'), /^config: git config defines a hook whose name holds =, which -c cannot turn off$/);
+  assert.equal(existsSync(ran), false);
+  assert.deepEqual(s.pushed(), ['refs/heads/main']);
+});
+
 test('commit-push: an ext:: origin that the repository\'s config allows runs nothing', () => {
   const s = setup();
   const ran = join(s.dir, 'ext-ran');
@@ -260,6 +270,20 @@ test('commit-push: a submodule commit outside the owned paths is refused, also w
   s.inW('update-index', '--add', '--cacheinfo', `160000,${s.base},vendor/lib`);
   writeFileSync(join(s.worktree, '.gitmodules'), '[submodule "vendor/lib"]\n\tpath = vendor/lib\n\turl = https://example.com/lib.git\n\tignore = all\n');
   refused(s.run('commit', ...s.flags, '--file', 'src/a.txt'), /^step 2: vendor\/lib is in no owned path$/);
+  assert.deepEqual(s.pushed(), ['refs/heads/main']);
+});
+
+test('commit-push: supervised refuses a submodule commit outside the owned paths, also when the worker\'s .gitmodules ignores it', () => {
+  const s = setup();
+  s.inW('update-index', '--add', '--cacheinfo', `160000,${s.base},vendor/lib`);
+  s.inW('commit', '-qm', 'add a and lib');
+  writeFileSync(join(s.worktree, '.gitmodules'), '[submodule "vendor/lib"]\n\tpath = vendor/lib\n\turl = https://example.com/lib.git\n\tignore = all\n');
+  const flags = ['--project', s.project, '--worktree', s.worktree, '--repo', 'owner/project', '--branch', BRANCH, '--default-branch', 'main', '--owned', 'src'];
+  refused(s.run('supervised', ...flags, '--commit', s.inW('rev-parse', 'HEAD')), /^supervised: vendor\/lib is in no owned path$/);
+  // Removed again by a later commit: the diff no longer shows it, the log does.
+  s.inW('update-index', '--force-remove', 'vendor/lib');
+  s.inW('commit', '-qm', 'drop lib');
+  refused(s.run('supervised', ...flags, '--commit', s.inW('rev-parse', 'HEAD')), /^supervised: vendor\/lib is in no owned path$/);
   assert.deepEqual(s.pushed(), ['refs/heads/main']);
 });
 
@@ -360,4 +384,7 @@ test('commit-push: options that are relative paths, no plain branch name or the 
   usage(flags('a..b'), '--branch is no plain branch name');
   usage(flags('main'), '--branch is the default branch main, which supervised never pushes to');
   usage(['commit', '--project', '/p', '--worktree', '/w', '--repo', 'o/r', '--branch', 'main', '--default-branch', 'main', '--message', '/m', '--file', 'a', '--owned', 'src'], '--branch is the default branch main, which commit never pushes to');
+  // gh runs in the folder of --body, else --message: never the worktree.
+  usage(['commit', '--project', '/p', '--worktree', '/w', '--repo', 'o/r', '--branch', 'feat/1', '--default-branch', 'main', '--message', '/w/m', '--file', 'a', '--owned', 'src'], '--message is under --worktree');
+  usage([...flags('feat/1'), '--title', 't', '--body', '/w/sub/b.md'], '--body is under --worktree');
 });

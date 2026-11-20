@@ -210,6 +210,8 @@ export function optionsOf(argv) {
   if (missing) usage(`${mode} needs --${missing}`);
   if ((values.title === undefined) !== (values.body === undefined)) usage('--title and --body go together');
   for (const k of PATHS) if (values[k] !== undefined && !isAbsolute(values[k])) usage(`--${k} must be an absolute path`);
+  // gh runs in the folder of --body, else --message (ghOutside), and reads the git config there.
+  for (const k of ['message', 'body']) if (values[k] !== undefined && under(values[k], values.worktree)) usage(`--${k} is under --worktree`);
   if (values.repo !== undefined && !REPO.test(values.repo)) usage('--repo must be owner/name');
   for (const k of ['branch', 'default-branch']) if (values[k] !== undefined && !BRANCH.test(values[k])) usage(`--${k} is no plain branch name`);
   // sync --merge takes the default branch as --branch; commit and supervised push to --branch.
