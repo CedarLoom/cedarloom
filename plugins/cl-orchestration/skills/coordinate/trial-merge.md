@@ -35,7 +35,7 @@ The trial passes when `merge` exits 0 and the project's changed-files check pass
 A file of the pull request can define the trial's container when it passes one of three tests, and each compares without case:
 
 - By path: a segment of its path is `.devcontainer` or `.devcontainer.json`.
-- By name, in any folder: its name starts with `.env`, contains `dockerfile` or `containerfile`, or contains `compose` and ends in `.yml` or `.yaml`.
+- By name, in any folder: decided before the trial. The verdict's `ownerOnly` lists such a file (the `CONTAINER` pattern of [merge-checks.mjs](merge-checks.mjs)), and its pull request is the owner's.
 - By the list of what the default branch's container definition loads or runs: its path is on that list.
 
 Make the list from `<default-branch commit>`, never from `<head>`, whose copy lacks what the default branch named since:
