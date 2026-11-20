@@ -161,11 +161,11 @@ const unreadable = (message) => ({ policy: null, errors: [{ rule: 'unreadable', 
 const REDIRECTS = /^(url\..*\.(insteadof|pushinsteadof)|remote\.origin\.(uploadpack|receivepack|proxy)|core\.sshcommand|credential\..*|include(if)?\..*)$/i;
 const BOOLEAN = /^(true|false|yes|no|on|off|1|0)?$/i;
 // -z prints the scope, then the key, a line break and the value of each setting: [scope, key, value] each.
-const settings = (output) => output.split('\0').flatMap((entry, i, all) => (i % 2 ? [[all[i - 1], ...entry.split(/\n(.*)/s)]] : []));
-const OWN = ['local', 'worktree'];
+export const settings = (output) => output.split('\0').flatMap((entry, i, all) => (i % 2 ? [[all[i - 1], ...entry.split(/\n(.*)/s)]] : []));
+export const OWN = ['local', 'worktree'];
 // A subsection can hold a URL with a token in it, so only the section and the name are shown.
-const redacted = (key) => escaped(key.replace(/^([^.]+)\..+\.([^.]+)$/s, '$1.*.$2'));
-const redirecting = (found) => [...new Set(found.filter(([scope, key, value = '']) => OWN.includes(scope) && (REDIRECTS.test(key) || (/^core\.fsmonitor$/i.test(key) && !BOOLEAN.test(value)))).map(([, key]) => redacted(key)))];
+export const redacted = (key) => escaped(key.replace(/^([^.]+)\..+\.([^.]+)$/s, '$1.*.$2'));
+export const redirecting = (found) => [...new Set(found.filter(([scope, key, value = '']) => OWN.includes(scope) && (REDIRECTS.test(key) || (/^core\.fsmonitor$/i.test(key) && !BOOLEAN.test(value)))).map(([, key]) => redacted(key)))];
 // Set again for the two calls that reach the remote, as a worker could write the config between the check and the call: no hook (the fetch writes a ref, which runs reference-transaction), no ext:: command as the remote, and git's own monitor. core.sshCommand keeps the user's or system's value, else GIT_SSH, which git ranks below any core.sshCommand, quoted for the shell git runs it with.
 const pinned = (found) => {
   const ssh = found.filter(([scope, key]) => !OWN.includes(scope) && /^core\.sshcommand$/i.test(key)).at(-1)?.[2] ?? (process.env.GIT_SSH ? `'${process.env.GIT_SSH.replaceAll("'", String.raw`'\''`)}'` : 'ssh');

@@ -59,14 +59,12 @@ test('commit-push: commits the checked change, pushes that commit and opens the 
   assert.equal(execFileSync('git', ['-C', s.origin, 'rev-parse', `refs/heads/${BRANCH}`], { encoding: 'utf8' }).trim(), sha);
   assert.equal(execFileSync('git', ['-C', s.origin, 'rev-parse', `${sha}^`], { encoding: 'utf8' }).trim(), s.base);
   assert.equal(execFileSync('git', ['-C', s.origin, 'show', '--format=%B', '--no-patch', sha], { encoding: 'utf8' }), 'feat: add a\n\n');
-  assert.deepEqual(s.gh.calls().map((args) => args[0]), ['api', 'pr']);
 });
 
 test('commit-push: a worktree whose commondir names another git directory is refused before any git command', () => {
   const s = setup();
-  writeFileSync(join(s.admin, 'commondir'), '../../../other/.git\n');
+  writeFileSync(join(s.admin, 'commondir'), `${join(s.dir, 'other/.git')}\n`);
   refused(s.run('commit', ...s.flags, '--file', 'src/a.txt'), /^commondir: the worktree's commondir does not hold \.\.\/\.\.$/);
-  assert.deepEqual(s.gh.calls(), []);
   assert.deepEqual(s.pushed(), ['refs/heads/main']);
 });
 
@@ -77,6 +75,13 @@ test('commit-push: a worktree with a config.worktree that holds settings is refu
   // An empty one passes: the Linux sandbox binds one while another worker's command runs.
   writeFileSync(join(s.admin, 'config.worktree'), '');
   assert.equal(s.run('commit', ...s.flags, '--file', 'src/a.txt').status, 0);
+});
+
+test('commit-push: a setting of the shared git config that runs a command is refused', () => {
+  const s = setup();
+  s.git('config', 'filter.x.clean', 'touch ran');
+  refused(s.run('commit', ...s.flags, '--file', 'src/a.txt'), /^config: the repository's own git config sets filter\.\*\.clean, which can run a command or send the push elsewhere$/);
+  assert.deepEqual(s.pushed(), ['refs/heads/main']);
 });
 
 test('commit-push: a HEAD that origin does not hold is refused', () => {

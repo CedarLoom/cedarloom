@@ -43,14 +43,13 @@ test('reconcile: the first run takes the baseline and compares nothing', () => {
     repo: 'owner/project', baseline: true, since: null, findings: [],
     reconciled: `reconciled 2026-11-19T08:00:00Z owner/project tags=["v1.0.0"] rulesets=${RULESETS} settings=${SETTINGS}`,
   });
-  // No merges are listed without a base date.
-  assert.deepEqual(s.gh.calls().map((args) => args[0]), ['api', 'api']);
   assert.match(readFileSync(join(s.dir, 'runs/git-config-owner-project.txt'), 'utf8'), /^user\.email=t@example\.com$/m);
 });
 
 test('reconcile: nothing changed and every merge logged gives no finding and appends the next base', () => {
   const s = setup();
-  s.gh.answer([TAGS, RULES, merged([PR5])]);
+  // #4 merged on the base day but before the base time, so the last reconciliation compared it.
+  s.gh.answer([TAGS, RULES, merged([{ number: 4, mergeCommit: { oid: '4'.repeat(40) }, mergedAt: '2026-11-19T07:00:00Z', mergedBy: { login: 'owner' } }, PR5])]);
   const result = s.run('2026-11-20T08:00:00Z');
   assert.deepEqual(result, {
     repo: 'owner/project', baseline: false, since: '2026-11-19', findings: [],

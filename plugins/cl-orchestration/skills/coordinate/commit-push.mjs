@@ -10,7 +10,7 @@ import { isAbsolute, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { gitProgram } from '../../hooks/git-program.mjs';
 import { REPO } from './approval.mjs';
-import { escaped, isMain, json, sh } from './policy.mjs';
+import { escaped, isMain, json, OWN, redacted, redirecting, settings, sh } from './policy.mjs';
 import { gitCommonDir } from './worker-settings.mjs';
 
 const BRANCH = /^(?!-)(?!.*\.\.)(?!.*\/\.)(?!.*\.lock$)(?!HEAD$)[A-Za-z0-9._/-]+$/;
@@ -57,6 +57,13 @@ export const gitIn = (worktree, program = gitProgram()) => {
   if (!program) refuse('git', 'git is in no absolute folder of PATH');
   return (...args) => sh(worktree, program, ['--no-replace-objects', '-C', worktree, '-c', `core.hooksPath=${devNull}`, '-c', 'core.fsmonitor=false', '-c', 'protocol.ext.allow=never', ...args]);
 };
+// Keys of the repository's own config, which the worker shares, that make a merge, commit or push run a command or send it elsewhere, beside those the policy reader refuses.
+const RUNS = /^(hook\..*|filter\..*|merge\..*\.driver|diff\.external|diff\..*\.(command|textconv)|gpg(\..*)?\.program|core\.(pager|editor|askpass)|remote\.origin\.(pushurl|push))$/i;
+function checkConfig(git) {
+  const found = settings(during('config', () => git('config', '--show-scope', '-z', '--list')));
+  const refused = [...new Set([...redirecting(found), ...found.filter(([scope, key]) => OWN.includes(scope) && RUNS.test(key)).map(([, key]) => redacted(key))])];
+  if (refused.length) refuse('config', `the repository's own git config sets ${refused.join(', ')}, which can run a command or send the push elsewhere`);
+}
 const names = (output) => output.split('\0').filter(Boolean);
 const sameSet = (a, b) => { const x = new Set(a), y = new Set(b); return x.size === y.size && [...x].every((v) => y.has(v)); };
 const under = (file, entry) => { const folder = entry.replace(/\/$/, ''); return file === folder || file.startsWith(`${folder}/`); };
@@ -80,12 +87,15 @@ export function sync({ project, worktree, branch, merge = false }) {
   checkWorktree(project, worktree);
   const step = merge ? 'step 5' : 'step 4';
   const git = gitIn(worktree);
+  checkConfig(git);
   const sha = during(step, () => remoteTip(git, branch)) ?? refuse(step, `origin has no branch ${branch}`);
-  during(step, () => git('fetch', '--quiet', '--no-tags', 'origin', `refs/heads/${branch}`));
+  during(step, () => git('fetch', '--quiet', '--no-tags', '--no-recurse-submodules', 'origin', `refs/heads/${branch}`));
   if (!merge) {
     during(step, () => git('merge', '--quiet', '--ff-only', sha));
     return { merged: sha, conflicts: false };
   }
+  // Already in HEAD: --no-ff would have nothing to merge, so there is no merge round.
+  try { git('merge-base', '--is-ancestor', sha, 'HEAD'); return { merged: null, conflicts: false }; } catch (e) { if (e.status !== 1) refuse(step, failure(e)); }
   // --no-ff: a fast-forward would leave no merge to commit, and step 3 checks two parents.
   let conflicts = false;
   // Exit 1 is a conflict for the worker to resolve; the MERGE_HEAD check below tells it from a merge that did not start.
@@ -99,7 +109,8 @@ export function sync({ project, worktree, branch, merge = false }) {
 function publish(git, exec, { repo, branch, defaultBranch, title, body }, sha) {
   during('push', () => git('push', '--quiet', 'origin', `${sha}:refs/heads/${branch}`));
   if (title === undefined) return { commit: sha, pullRequest: null };
-  const url = during('pull request', () => exec('gh', ['pr', 'create', '-R', repo, '--draft', '--base', defaultBranch, '--head', branch, '--title', title, '--body-file', body]).trim());
+  // The push is done by now, so the line names the pushed sha.
+  const url = during(`pull request after the push of ${sha}`, () => exec('gh', ['pr', 'create', '-R', repo, '--draft', '--base', defaultBranch, '--head', branch, '--title', title, '--body-file', body]).trim());
   return { commit: sha, pullRequest: url };
 }
 
@@ -107,6 +118,7 @@ function publish(git, exec, { repo, branch, defaultBranch, title, body }, sha) {
 export function commit(options, exec = (cmd, args) => sh(options.worktree, cmd, args), git = gitIn(options.worktree)) {
   const { project, worktree, repo, branch, defaultBranch, message, files, owned, merged } = options;
   checkWorktree(project, worktree);
+  checkConfig(git);
   const base = during('step 1', () => git('rev-parse', '--verify', 'HEAD^{commit}').trim());
   const ref = during('step 1', () => remoteTip(git, branch)) === undefined ? defaultBranch : branch;
   if (!during('step 1', () => onOrigin(exec, repo, base, ref))) refuse('step 1', `HEAD ${base} is no commit of origin's ${ref}`);
@@ -139,14 +151,16 @@ export function supervised(options, exec = (cmd, args) => sh(options.worktree, c
   const step = 'supervised';
   checkWorktree(project, worktree);
   const git = gitIn(worktree);
+  checkConfig(git);
   const sha = during(step, () => git('rev-parse', '--verify', `refs/heads/${branch}^{commit}`).trim());
   if (sha !== reported) refuse(step, `refs/heads/${branch} is ${sha}, not the reported ${reported}`);
-  const tracking = `refs/remotes/origin/${defaultBranch}`;
-  during(step, () => git('fetch', '--quiet', '--no-tags', 'origin', `+refs/heads/${defaultBranch}:${tracking}`));
-  // The diff covers a merge, for which the log lists no files; the log covers a file one commit adds and a later one removes.
+  // The sha ls-remote printed, not the tracking ref, which the worker can move.
+  const tip = during(step, () => remoteTip(git, defaultBranch)) ?? refuse(step, `origin has no branch ${defaultBranch}`);
+  during(step, () => git('fetch', '--quiet', '--no-tags', '--no-recurse-submodules', 'origin', `refs/heads/${defaultBranch}`));
+  // The diff covers the branch as a whole; the log covers a file one commit adds and a later one removes, and with --cc the files a merge's resolution changed.
   const files = [...new Set([
-    ...names(during(step, () => git('diff', '--no-renames', '--name-only', '-z', `${tracking}...${sha}`))),
-    ...names(during(step, () => git('log', '--format=', '--name-only', '--no-renames', '-z', `${tracking}..${sha}`))),
+    ...names(during(step, () => git('diff', '--no-renames', '--name-only', '-z', `${tip}...${sha}`))),
+    ...names(during(step, () => git('log', '--format=', '--name-only', '--cc', '--no-renames', '-z', `${tip}..${sha}`))),
   ])];
   if (!files.length) refuse(step, `${sha} changes no file against origin's ${defaultBranch}`);
   ownedOnly(step, files, owned);

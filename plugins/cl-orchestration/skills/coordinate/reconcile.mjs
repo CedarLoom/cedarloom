@@ -11,8 +11,8 @@ import { REPO } from './approval.mjs';
 import { escaped, isMain, json, sh } from './policy.mjs';
 
 const BRANCH = /^(?!-)(?!.*\.\.)(?!HEAD$)[A-Za-z0-9._/-]+$/;
-// The base of the next reconciliation of that repository: tag names as a JSON array, which no space splits (a ref name holds none), and two SHA-256 hashes.
-const LINE = /^reconciled (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (\S+) tags=(\[\S*\]) rulesets=([0-9a-f]{64}) settings=([0-9a-f]{64}|none)$/;
+// The base of the next reconciliation of that repository: tag names as a JSON array, which no ASCII space splits (a ref name holds none), and two SHA-256 hashes.
+const LINE = /^reconciled (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (\S+) tags=(\[.*\]) rulesets=([0-9a-f]{64}) settings=([0-9a-f]{64}|none)$/;
 // Without the last reconciliation the merges are not compared; a result of this size may be cut off.
 const LIMIT = 100;
 
@@ -67,7 +67,8 @@ export function reconcile({ project, repo, defaultBranch, log, settings, now, ex
   if (known) {
     const merged = JSON.parse(exec('gh', ['pr', 'list', '-R', repo, '--state', 'merged', '--base', defaultBranch, '--search', `merged:>=${since}`, '--limit', String(LIMIT), '--json', 'number,mergeCommit,mergedAt,mergedBy']));
     if (merged.length === LIMIT) findings.push({ kind: 'possibly-cut-off', since });
-    for (const pr of merged) {
+    // The search is by day: a merge before the base time was compared by the last reconciliation.
+    for (const pr of merged.filter((p) => !(p.mergedAt < known.at))) {
       const oid = pr.mergeCommit?.oid;
       if (!oid || !logged(text, repo, oid)) findings.push({ kind: 'unlogged-merge', number: pr.number, mergeCommit: oid ?? null, mergedAt: pr.mergedAt, mergedBy: pr.mergedBy?.login ?? null });
     }
@@ -77,8 +78,11 @@ export function reconcile({ project, repo, defaultBranch, log, settings, now, ex
   const rulesets = sha256(exec('gh', ['api', `repos/${repo}/rulesets`, '--paginate']));
   const program = gitProgram();
   if (!program) throw new Error('git is in no absolute folder of PATH');
-  const config = sh(project, program, ['-C', project, 'config', '--local', '--list']).split('\n').filter((line) => line && !line.startsWith('branch.'));
-  const [owner, name] = repo.split('/');
+  // -z: a value can hold a line break, which the listing writes as \n (and a backslash as \\), one setting per line.
+  const config = sh(project, program, ['-C', project, 'config', '--local', '--list', '-z']).split('\0').filter((entry) => entry && !entry.startsWith('branch.'))
+    .map((entry) => { const at = entry.indexOf('\n'); return at < 0 ? entry : `${entry.slice(0, at)}=${entry.slice(at + 1).replaceAll('\\', '\\\\').replaceAll('\n', '\\n')}`; });
+  // Lower case, as GitHub matches owner and name: one repository, one listing.
+  const [owner, name] = repo.toLowerCase().split('/');
   const listing = join(dirname(log), `git-config-${owner}-${name}.txt`);
   const before = readOrNone(listing);
   const settingsFile = readOrNone(settings);
@@ -94,8 +98,9 @@ export function reconcile({ project, repo, defaultBranch, log, settings, now, ex
   }
 
   const line = `reconciled ${stamp(now)} ${repo} tags=${json(tags)} rulesets=${rulesets} settings=${settingsHash}`;
-  writeFileSync(listing, config.map((l) => `${l}\n`).join(''));
+  // The line first: a new listing without its line would hide a config change from the next run, which an old listing still shows.
   appendFileSync(log, `${text && !text.endsWith('\n') ? '\n' : ''}${line}\n`);
+  writeFileSync(listing, config.map((l) => `${l}\n`).join(''));
   return { repo, baseline: !known, since, findings, reconciled: line };
 }
 
