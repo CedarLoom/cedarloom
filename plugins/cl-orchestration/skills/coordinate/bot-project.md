@@ -1,0 +1,53 @@
+# Project bot run
+
+The procedure of every project bot automation but the catch-up sweep: the pick sweep, the event rules of each pull request, worker and role bot mail, and the daily reconciliation. [SOUL.md](SOUL.md) holds first. `<state>` is `<bot home>/state/`, `<clone>` the bot's checkout of the repository (`project` of a state file), `<skill folder>` this file's folder, and `ORCA` the Orca executable as [orca.md](orca.md) says. The steps of [SKILL.md](SKILL.md), [review-and-merge.md](review-and-merge.md) and [orca.md](orca.md) that this file names apply with the changes below.
+
+## Every run
+
+1. **Run folder.** Take a new run id, the UTC start time as `YYYYMMDDTHHMMSSZ`, and make `.cedarloom/runs/<run id>/` in the bot home, the run's working folder: specs, thread files, approvals and prompts go there, since `thread.mjs` and `approval.mjs` write only there. Delete it when the run ends, but for a file a report names.
+2. **Count.** `state.mjs` has no command line: call its functions with `node --input-type=module -e "<code>"` that imports `<skill folder>/state.mjs`. First `count(<state>, new Date())` reads today's counts. At 320 runs or 120 worker starts, start nothing and end. For a run about pull request `<n>` that already has 12 runs today, set `held` to `12 runs on <day>` unless it is set, file that question to the owner once, count `{ runs: 1 }` and end: it gets no further run that UTC day. Otherwise record the start, `count(<state>, new Date(), { runs: 1, pr: <n> })` (no `pr` for a run about no pull request), and add `{ workerStarts: 1 }` right before each start of a worker or role bot run. A throw stops the run: report it, since a limit never resets unseen.
+3. **State.** Read `pr-<n>.json` with `readState` (rebuilt as [SOUL.md](SOUL.md) says when missing). End when `handled.head` is the event's head and no answer of the owner is new. A `held` pull request gets nothing but its owner's answer.
+4. **End.** Write the state with `writeState` after each decision. The report goes where the automation's `--results-to` sends it.
+
+The state files replace the coordinator's handoff file: what changed in a step is in `pr-<n>.json`, the pull request's comments and the merge log, and a decision taken on the owner's behalf is named with its source (file and line) in the comment or report that acts on it. Mark one `(owner)` only for the answer `approval.mjs answer` reads.
+
+## Pick
+
+The pick sweep runs every 30 minutes with `--precheck "node <skill folder>/precheck.mjs <clone>"`. Run the precheck again and take step 1 of the Loop ([SKILL.md](SKILL.md#loop)) on the issues it prints, oldest first, within `workersPerProject`, `hostWorkerLimit` and three starts per run. For each: thread file, outcome checks, depth and risk class; a deep or high issue gets its `design` approval and no start. Then the spec from [spec-template.md](spec-template.md), `cl:in-progress` on the issue right before the start, and the start below.
+
+Before a start of an automatic worker, check 2 of [Automatic start](modes.md#automatic-start) runs; the others are the daily probe of the catch-up run ([bot-catch-up.md](bot-catch-up.md)). Without a passed probe for the UTC day in `<state>/probe-<day>.json`, start the project supervised that day where [orca.md](orca.md#fallback-to-supervised) offers it, else start nothing.
+
+## Start
+
+- **Host limit.** Before each start, count the working workers machine-wide as [Host limit](orca.md#host-limit) says, and add each role bot run of this repository that has no `result` in a state file's `runs`.
+- **Role bot run.** A one-time automation on that bot: `ORCA automations create --bot <role bot> --name '<owner/repo>#<n> <role> <round>' --model <model> --effort <effort> --runs-in new --once --by <UTC now plus one minute> --prompt <prompt> --json`. The prompt's first line names the role's procedure file; then the filled spec (worker), the reviewer brief of [Review](review-and-merge.md#review) (reviewer) or the follow-up (fixer), and the command its report goes back with. Orca deletes the automation after its run.
+- **Fresh worker.** Where the repository has no role bots, start an Orca worker in its project's mode as [Start the run](orca.md#start-the-run) says, with its launch line, `--permission-mode` and settings file.
+- **Record** `{ startedAt, resultFile, result: null }` in the state's `runs` (a role bot run) or `dispatches` (an Orca worker), and the automation ids in `rules`.
+
+## Reports and mail
+
+- A worker's first report with a pushed branch. A worker bot's branch: check its files as the end of [bot-worker.md](bot-worker.md) says, then `gh pr create -R <owner/repo> --draft --base <default branch> --head <branch> --title <title> --body-file <file>`, the body as step 3 of [Commit and push](modes.md#commit-and-push) says. An Orca worker's change: `node <skill folder>/commit-push.mjs commit` for an automatic worker, `commit-push.mjs supervised` for a supervised Claude Code worker. Then write `pr-<n>.json` (repo, pr, issue, branch, project, round 1) and the event rules, each `--runs-in new` with this file in its prompt: `<owner/repo>#<n> ci_passed` on `github.ci_passed subject=<owner/repo>#<n>`, and the same for `ci_failed` and `pr_conflicted`.
+- Each result goes into its `runs` or `dispatches` entry. A fixer's report: reply on each review thread it names with its fix commit or evidence. A worker's question is answered from written sources only, naming the source; an owner-only one is filed as an approval, and the answer goes to a new run.
+- Release and clean up a finished Orca worker as [Clean up](orca.md#clean-up) says. A role bot run deletes its own clone; one its report names as left is deleted with the pull request's clones.
+
+## Pull request events
+
+- **Green head, not reviewed.** Claim it: `mkdir <state>/claim-<n>-<head>` (an existing folder means another run has it: end), then the claim comment, then a reviewer run at the level of [Sensitive or routine](review-and-merge.md#sensitive-or-routine): a first review, or the re-review of [Rounds](review-and-merge.md#rounds) where `reviewedHead` is set. Its verdict becomes the review of record ([Review of record](review-and-merge.md#review-of-record)): post it, and record `reviewedHead`, `reviewUrl` and `round`. Findings go to a fixer run ([Rounds](review-and-merge.md#rounds)).
+- **Red head or conflict** that `handled` does not name: one fixer run for that head; record `handled` `{ head, action: "fix" }`.
+- **Green accepted head:** Ready ([Ready](review-and-merge.md#ready)), then Merge below. Verdict `update`: `gh pr update-branch <n> -R <owner/repo>`, record `updatedAt` and `handled` `{ head, action: "update" }`, end; the new head's event takes it on.
+
+## Merge
+
+Take steps 1 to 5.2 of [Merge](review-and-merge.md#merge) in the PR's newest clone, writing the subject and body files as `<state>/pr-<n>-subject.txt` and `pr-<n>-body.md`, a trial's base as `trialBase`. Record the accepted head and the verdict's `next` (`merge` or `trial`) in `handled`, then run `node <skill folder>/merge.mjs <state>/pr-<n>.json --run <run id>` once (`--method` only for a method `AGENTS.md` names). Its answer:
+
+- `merged`: delete the PR's event rules and clones, and its branch as [Clean up](SKILL.md#clean-up) says; with `closeIssue`, check its issue closed ([Outcomes](SKILL.md#outcomes)). A `held` the script set (an unreviewed head merged) goes to the owner once.
+- `wait`: end; a later event or sweep retries.
+- `redMain`: end; the catch-up run reports the red tip.
+- `restart`: steps 1 to 5.2 once more in this run; a second `restart` ends it.
+- `stop`: file the reason once to the owner, as `held` where the script did not set it. Exit 1 goes in the report too.
+
+A held merge, or a merge command with no merge log line (`mergeCommandAt` set), pauses every merge of the repository until the owner's answer; the run that reads that answer clears `held` and `mergeCommandAt` together, in one `writeState`.
+
+## Reconciliation
+
+The daily automation takes the [Reconciliation](SKILL.md#reconciliation) with `node <skill folder>/reconcile.mjs --project <clone> --repo <owner/repo> --default-branch <default branch> --log <state>/merge-log.md`. Also report each event rule of a closed pull request (`ORCA automations list --json`) and each UTC day without a catch-up run (no `counts-<day>.json` with `catchUp` above 0). It changes nothing.
