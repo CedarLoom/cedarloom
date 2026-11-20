@@ -38,11 +38,16 @@ const QUERY = 'query($owner: String!, $name: String!, $n: Int!, $endCursor: Stri
 // A GraphQL comment in the REST shape trusts() reads: GraphQL gives a bot's login without the [bot] suffix that REST and trustedAuthors carry.
 const rest = (c) => ({ user: { login: c.author && (c.author.__typename === 'Bot' ? `${c.author.login}[bot]` : c.author.login) }, author_association: c.authorAssociation, body: c.body, created_at: c.createdAt, html_url: c.url });
 
-export function reviewThreads(dir, number, run = sh, env = process.env) {
-  const { repo, trusted } = setup(dir, number, run, env);
+// The pull request's unresolved review threads, whoever opened them.
+export function unresolvedThreads(dir, repo, number, run = sh) {
   const [owner, name] = repo.split('/');
   const pages = JSON.parse(run(dir, 'gh', ['api', 'graphql', '--paginate', '--slurp', '-f', `query=${QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `n=${number}`]));
-  const open = pages.flatMap((page) => page.data.repository.pullRequest.reviewThreads.nodes).filter((t) => !t.isResolved);
+  return pages.flatMap((page) => page.data.repository.pullRequest.reviewThreads.nodes).filter((t) => !t.isResolved);
+}
+
+export function reviewThreads(dir, number, run = sh, env = process.env) {
+  const { repo, trusted } = setup(dir, number, run, env);
+  const open = unresolvedThreads(dir, repo, number, run);
   // A comment past the first 100 of a thread is never read: such a thread gives no file rather than one that looks whole.
   const long = open.find((t) => t.comments.totalCount > t.comments.nodes.length);
   if (long) throw new Error(`review thread ${long.id} has more comments than one page holds`);
