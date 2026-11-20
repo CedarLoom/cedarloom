@@ -2,7 +2,7 @@
 // pr-<n>.json: repo, pr, issue, branch, project (the bot's checkout of the repository), dispatches, reviewedHead, reviewUrl, riskClass, round, claim, trialBase, updatedAt (the bot's last update of the branch), mergeCommandAt, mergedAt, held (why it waits for the owner), cappedOn (the UTC day the pull request reached its run limit), rules, clones (scratch clones, the newest last), runs and handled ({ head, action }: the last head the bot judged and its verdict's next).
 // Each entry of dispatches and runs: { startedAt, resultFile, result }, resultFile naming a headless job's result file, result set once the bot read the result.
 // tip.json: { sha, firstSeen, passed }, the default branch's tip, when the bot first saw it, and the last tip whose watch passed. red-main.json: { sha, report, pr }, the red tip, its report and the pull request the answered report named.
-// answered.json: ["<file> <at>"...], the answered local questions (approval.mjs queue) the bot acted on. claim-<n>-<head>: the folder a review claim makes. counts-<day>.json: count() below.
+// answered.json: ["<file> <at>"...], the answered local questions (approval.mjs queue) the bot acted on. claim-<n>-<head>: the folder a review claim makes. counts-<day>.json: count() below. probe-<day>.json and failed-<day>.json: the catch-up run's daily probe and reported precheck failure.
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { appendFileSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
