@@ -8,7 +8,7 @@ Every 15 minutes, `--runs-in new`, working folder the bot home, with `--precheck
 
 ## The run
 
-1. Steps 1 and 2 of [Every run](bot-project.md#every-run), counting `{ runs: 1, catchUp: 1 }`, and `pr` for a condition that names a pull request. Then run the precheck once more, as written above: the first line that holds now is the run's task, one per run. A start for nothing (`start: false`) ends the run.
+1. Step 1 of [Every run](bot-project.md#every-run). Then, before counting, run the precheck once more as written above: its line is the run's task, one per run, and its `probe` holds for step 2. A start for nothing (`start: false`) counts `{ runs: 1 }` and ends the run. Otherwise step 2 of Every run, counting `{ runs: 1, catchUp: 1 }`, and `pr` for a condition that names a pull request.
 2. **`probe: true`**, the first catch-up run of the UTC day, where the project's `mode` is `automatic`: the daily automatic-start probe is the run's task, and the condition waits for the next sweep. Run checks 1, 3 and 4 and the probe (check 5) of [Automatic start](modes.md#automatic-start), the probe's start counted as a worker start, and write `<state>/probe-<day>.json` `{ day, passed, failed }` with `writeState`, `failed` naming the first check or step that failed. A failure starts the project supervised for the rest of the UTC day where [orca.md](orca.md#fallback-to-supervised) offers it, else starts no worker there; the report names the check. A supervised project skips the probe.
 3. The condition:
    - **`failed`:** report the reason. A state file named unreadable is rebuilt as [SOUL.md](SOUL.md) says.
