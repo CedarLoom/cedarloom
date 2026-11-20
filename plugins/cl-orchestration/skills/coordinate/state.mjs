@@ -22,12 +22,13 @@ const text = (path) => { try { return readFileSync(path, 'utf8'); } catch { retu
 export const readState = (path) => { try { return JSON.parse(text(path) ?? 'null'); } catch { return null; } };
 
 const unique = () => `${process.pid}-${randomBytes(6).toString('hex')}`;
-// A temporary file in the same folder, then a rename: a reader finds the old file or the new one, never a part of either.
+// A temporary file in the same folder, then a rename: a reader finds the old file or the new one, never a part of either. Gives the text written.
 export function writeState(path, value) {
-  const tmp = join(dirname(path), `.${basename(path)}.${unique()}.tmp`);
+  const tmp = join(dirname(path), `.${basename(path)}.${unique()}.tmp`), body = `${JSON.stringify(value, null, 2)}\n`;
   try {
-    writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx' });
+    writeFileSync(tmp, body, { flag: 'wx' });
     renameSync(tmp, path);
+    return body;
   } catch (e) {
     rmSync(tmp, { force: true });
     throw e;
@@ -81,8 +82,7 @@ export function takeLock(state, { pr, head }, now = new Date()) {
   const dir = join(state, LOCK);
   try { mkdirSync(dir); } catch (e) { if (e.code === 'EEXIST') return null; throw e; }
   try {
-    writeState(join(dir, HOLDER), holder);
-    return text(join(dir, HOLDER));
+    return writeState(join(dir, HOLDER), holder);
   } catch (e) {
     rmSync(dir, { recursive: true, force: true });
     throw e;

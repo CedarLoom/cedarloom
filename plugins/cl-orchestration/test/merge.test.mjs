@@ -13,7 +13,7 @@ const folder = (prefix) => mkdtempSync(join(tmpdir(), prefix));
 const NOW = new Date('2026-11-20T12:00:00Z');
 const minutesAgo = (m) => new Date(NOW.getTime() - m * 60_000).toISOString();
 const REPO = 'acme/app';
-const [TIP, BEFORE, MERGE_COMMIT, OTHER] = ['d', 'e', 'c', 'f'].map((c) => c.repeat(40));
+const [BEFORE, MERGE_COMMIT, OTHER] = ['e', 'c', 'f'].map((c) => c.repeat(40));
 
 // The origin: main holds the policy, feat/1-x a plain change and feat/2-owner a change of an owner-only file. The bot's project checkout and its scratch clone come from it.
 const origin = folder('cl-origin-');
@@ -31,7 +31,9 @@ git('merge', '-q', '--ff-only', 'policy');
 const HEAD = head('feat/1-x', { 'src/x.txt': 'x\n' });
 const OWNER_HEAD = head('feat/2-owner', { 'AGENTS.md': '# Agents\n' });
 git('checkout', '-q', 'main');
-const project = join(folder('cl-project-'), 'project'), scratch = join(folder('cl-scratch-'), 'scratch');
+// The tip GitHub reports is the origin's main, which the scratch clone fetches.
+const TIP = git('rev-parse', 'main').toString().trim();
+const project =join(folder('cl-project-'), 'project'), scratch = join(folder('cl-scratch-'), 'scratch');
 git('clone', '-q', origin, project);
 git('clone', '-q', '--no-checkout', origin, scratch);
 
@@ -50,6 +52,7 @@ else if (a === 'api' && b.includes('/compare/')) say({ commits: w.compare.map((s
 else if (a === 'run' && b === 'list') say(w.runs);
 else if (a === 'pr' && b === 'view' && args[args.indexOf('--json') + 1].includes('autoMergeRequest')) {
   const pr = w.prs[c];
+  if (w.merge === 'unreadable') { process.stderr.write('HTTP 502\\n'); process.exit(1); }
   say(merged ? { state: 'MERGED', mergeCommit: { oid: '${MERGE_COMMIT}' }, mergedAt: '2026-11-20T12:00:30Z', headRefOid: pr.headRefOid, autoMergeRequest: null }
     : { state: 'OPEN', mergeCommit: null, mergedAt: null, headRefOid: pr.headRefOid, autoMergeRequest: w.merge === 'auto' ? { enabledAt: '2026-11-20T12:00:01Z' } : null });
 } else if (a === 'pr' && b === 'view') say(w.prs[c]);
@@ -119,6 +122,13 @@ test('merge: a lock another run holds answers wait and stays, and nothing is rea
   assert.deepEqual(b.calls(), []);
 });
 
+test('merge: a lock over 15 minutes old is removed and taken', () => {
+  const b = bot();
+  mkdirSync(join(b.state, 'lock'));
+  writeFileSync(join(b.state, 'lock', 'holder.json'), JSON.stringify({ pid: process.pid, start: null, pr: 2, head: OTHER, takenAt: minutesAgo(16) }));
+  assert.equal(b.call().outcome, 'merged');
+});
+
 test('merge: the watch waits for a young tip, a run on the tip, an expected workflow and an unconfirmed merge command', () => {
   const young = bot();
   writeFileSync(join(young.state, 'tip.json'), JSON.stringify({ sha: TIP, firstSeen: minutesAgo(9), passed: null }));
@@ -132,6 +142,11 @@ test('merge: the watch waits for a young tip, a run on the tip, an expected work
   // After 30 minutes the workflow counts as not run.
   writeFileSync(join(expected.state, 'tip.json'), JSON.stringify({ sha: TIP, firstSeen: minutesAgo(31), passed: null }));
   assert.equal(expected.call().outcome, 'merged');
+
+  // GitHub's tip passed its watch, but the fetch finds another one.
+  const moved = bot({ world: { tip: OTHER, runs: [run(OTHER, 'completed', 'success', 10, '2026-11-20T11:49:00Z')] } });
+  writeFileSync(join(moved.state, 'tip.json'), JSON.stringify({ sha: OTHER, firstSeen: minutesAgo(11), passed: null }));
+  assert.deepEqual(moved.call(), { outcome: 'wait', reason: `the default branch moved to ${TIP} after its watch was read` });
 
   const unconfirmed = bot();
   writeFileSync(join(unconfirmed.state, 'pr-3.json'), JSON.stringify({ repo: REPO, pr: 3, mergeCommandAt: minutesAgo(20) }));
@@ -200,13 +215,20 @@ test('merge: the pre-merge command reads the pull request text and the commit me
     [JSON.stringify({ command: [process.execPath, '-e', 'process.exit(3)'] }), 'the pre-merge command refused the merge (exit 3)'],
     [JSON.stringify({ command: [join(bin, 'absent')] }), 'the pre-merge command did not run: ENOENT'],
     ['{ "command": ', 'pre-merge.json is no JSON'],
-    [JSON.stringify({ command: [] }), 'pre-merge.json names no command'],
+    [JSON.stringify({ command: [] }), 'pre-merge.json names no program by its absolute path'],
+    [JSON.stringify({ command: ['node', '-e', ''] }), 'pre-merge.json names no program by its absolute path'],
   ];
   for (const [config, reason] of refusals) {
     const b = bot({ files: { 'pre-merge.json': config } });
     assert.deepEqual(b.call(), { outcome: 'stop', reason });
     assert.deepEqual(merges(b.calls()), []);
   }
+
+  // A hold written while the checks ran, here by the pre-merge command, wins over the state read at the start.
+  const hold = bot();
+  writeFileSync(join(hold.home, 'pre-merge.json'), JSON.stringify({ command: [process.execPath, '-e', 'const fs = require("node:fs"); fs.writeFileSync(process.argv[1], JSON.stringify({ ...JSON.parse(fs.readFileSync(process.argv[1], "utf8")), held: "owner asked to wait" }))', hold.file] }));
+  assert.deepEqual(hold.call(), { outcome: 'stop', reason: 'held: owner asked to wait' });
+  assert.deepEqual(merges(hold.calls()), []);
 });
 
 test('merge: a merge GitHub does not confirm within two minutes, a failed command or auto-merge holds the pull request for the owner', () => {
@@ -217,6 +239,10 @@ test('merge: a merge GitHub does not confirm within two minutes, a failed comman
 
   const failed = bot({ world: { merge: 'fail' } });
   assert.deepEqual(failed.call(), { outcome: 'stop', reason: 'the merge is not confirmed: GraphQL: Head branch was modified' });
+
+  const unreadable = bot({ world: { merge: 'unreadable' } });
+  assert.deepEqual(unreadable.call(), { outcome: 'stop', reason: 'the merge is not confirmed: HTTP 502' });
+  assert.equal(unreadable.read('pr-1.json').held, 'the merge is not confirmed: HTTP 502');
 
   const auto = bot({ world: { merge: 'auto' } });
   assert.deepEqual(auto.call(), { outcome: 'stop', reason: 'the merge command turned on auto-merge' });

@@ -2,7 +2,7 @@
 // merged; wait (the lock is busy, the watch of the default branch runs, or another pull request waits for its checks after an update: a later sweep retries); redMain (the default branch is red and the answered report names another pull request or none); restart (the head, the verdict, the trial base or the threads changed: the judgment steps run again); stop (the owner's, exit 1 when an error stopped it, exit 2 for a bad argument).
 // <state file> is <bot home>/state/pr-<n>.json (state.mjs). The squash or merge commit's subject and body come from pr-<n>-subject.txt and pr-<n>-body.md beside it (step 5.1). <bot home>/pre-merge.json, if present, names a command that gets the pull request's text on stdin and must exit 0: { "command": [<program>, <args>...] }.
 import { readdirSync, readFileSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -93,14 +93,20 @@ function order({ gh, repo, n, state, now }) {
 // What the pre-merge command reads: the pull request's text, every commit message, then the commit the merge writes.
 const premergeInput = (pr, subject, body) => [pr.title, pr.body, pr.headRefName, `${pr.headRepositoryOwner?.login}/${pr.headRefName}`, ...(pr.commits ?? []).map((c) => `${c.messageHeadline}\n${c.messageBody}`), subject, body].join('\n\n');
 
+// The pre-merge command gets these variables only: it needs no token of the bot's.
+const premergeEnv = () => Object.fromEntries(['PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR'].filter((k) => process.env[k] !== undefined).map((k) => [k, process.env[k]]));
+
 // null when it passed or none is configured, else the reason. An unreadable or malformed configuration refuses: a check the owner set up never drops out unseen.
-function premerge(home, input) {
+function premerge(home, pr, subject, body) {
   let config;
   try { config = readFileSync(join(home, 'pre-merge.json'), 'utf8'); } catch (e) { if (e.code === 'ENOENT') return null; return 'pre-merge.json is unreadable'; }
   let command;
   try { ({ command } = JSON.parse(config)); } catch { return 'pre-merge.json is no JSON'; }
-  if (!Array.isArray(command) || !command.length || !command.every((a) => typeof a === 'string' && a)) return 'pre-merge.json names no command';
-  const r = spawnSync(command[0], command.slice(1), { cwd: home, input, encoding: 'utf8', stdio: ['pipe', 'ignore', 'ignore'], timeout: CONFIRM_MAX, killSignal: 'SIGKILL', windowsHide: true });
+  // By its file, never a bare name: Windows looks for one in the working folder first (docs/agents/git-and-processes.md).
+  if (!Array.isArray(command) || !command.length || !command.every((a) => typeof a === 'string' && a) || !isAbsolute(command[0])) return 'pre-merge.json names no program by its absolute path';
+  // gh pr view lists the last 100 commits only: a longer pull request could hide a message the command never reads.
+  if ((pr.commits?.length ?? 0) >= 100) return 'the pull request has more commits than the pre-merge command is shown';
+  const r = spawnSync(command[0], command.slice(1), { cwd: home, env: premergeEnv(), input: premergeInput(pr, subject, body), encoding: 'utf8', stdio: ['pipe', 'ignore', 'ignore'], timeout: CONFIRM_MAX, killSignal: 'SIGKILL', windowsHide: true });
   if (r.error) return `the pre-merge command did not run: ${r.error.code ?? r.error.message}`;
   return r.status === 0 ? null : `the pre-merge command refused the merge (exit ${r.status ?? r.signal})`;
 }
@@ -135,6 +141,9 @@ function locked({ stateFile, method, run, now, sleep }) {
   // In a folder that is no clone of its own, git answers from the repository above it.
   if (git('rev-parse', '--git-dir').trim() !== '.git') return stop('the scratch clone is not the top folder of a clone of its own');
   git('fetch', '--quiet', 'origin');
+  // The verdict judges the fetched default branch: a push since the watch read the tip has had no watch.
+  const base = git('rev-parse', '--verify', `refs/remotes/origin/${branch}`).trim();
+  if (base !== watched.tip) return wait(`the default branch moved to ${base} after its watch was read`);
   let verdict;
   try {
     verdict = JSON.parse(run(home, process.execPath, [CHECKS, s.project, scratch, branch, s.reviewedHead, accepted, s.riskClass]));
@@ -143,7 +152,7 @@ function locked({ stateFile, method, run, now, sleep }) {
   }
   if (verdict.next === 'owner' || verdict.next === 'ready') return stop(`the verdict is ${verdict.next}`);
   if (verdict.next !== s.handled.action) return restart(`the verdict is ${verdict.next}, not ${s.handled.action}`);
-  if (verdict.next === 'trial' && git('rev-parse', '--verify', `refs/remotes/origin/${branch}`).trim() !== s.trialBase) return restart('the default branch moved since the trial merge');
+  if (verdict.next === 'trial' && base !== s.trialBase) return restart('the default branch moved since the trial merge');
   const threads = unresolvedThreads(home, repo, n, run).length;
   if (threads) return restart(`${threads} review thread(s) are unresolved`);
 
@@ -158,10 +167,14 @@ function locked({ stateFile, method, run, now, sleep }) {
     }
     if (!subject || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(subject)) return stop('the subject file holds no single line');
   }
-  const refused = premerge(home, premergeInput(pr, subject, body));
+  const refused = premerge(home, pr, subject, body);
   if (refused) return stop(refused);
 
-  writeState(stateFile, { ...s, mergeCommandAt: now().toISOString() });
+  // The bot or the owner may have written the state during the checks: a hold or another accepted head written since wins.
+  const fresh = readState(stateFile);
+  if (fresh?.held) return stop(`held: ${fresh.held}`);
+  if (fresh?.handled?.head !== accepted || fresh?.handled?.action !== s.handled.action) return restart('the state changed during the checks');
+  writeState(stateFile, { ...fresh, mergeCommandAt: now().toISOString() });
   // Pinned to the accepted head; never --admin, which passes branch protection, nor --auto, which would merge a later push.
   const args = ['pr', 'merge', String(n), '-R', repo, `--${method}`, '--match-head-commit', accepted];
   if (bodyFile) args.push('--subject', subject, '--body-file', bodyFile);
@@ -169,17 +182,22 @@ function locked({ stateFile, method, run, now, sleep }) {
   try { gh(...args); } catch (e) { failed = firstLine(e.stderr || e.message); }
 
   const held = (why) => { writeState(stateFile, { ...readState(stateFile), held: why }); return stop(why); };
-  const deadline = now().getTime() + CONFIRM_MAX;
   let merged;
-  for (;;) {
-    merged = JSON.parse(gh('pr', 'view', String(n), '-R', repo, '--json', 'state,mergeCommit,mergedAt,headRefOid,autoMergeRequest'));
-    if (merged.state === 'MERGED') break;
-    if (merged.autoMergeRequest) {
-      gh('pr', 'merge', String(n), '-R', repo, '--disable-auto');
-      return held('the merge command turned on auto-merge');
+  try {
+    const deadline = now().getTime() + CONFIRM_MAX;
+    for (;;) {
+      merged = JSON.parse(gh('pr', 'view', String(n), '-R', repo, '--json', 'state,mergeCommit,mergedAt,headRefOid,autoMergeRequest'));
+      if (merged.state === 'MERGED') break;
+      if (merged.autoMergeRequest) {
+        gh('pr', 'merge', String(n), '-R', repo, '--disable-auto');
+        return held('the merge command turned on auto-merge');
+      }
+      if (failed || merged.state !== 'OPEN' || now().getTime() >= deadline) return held(`the merge is not confirmed${failed ? `: ${failed}` : ''}`);
+      sleep(POLL);
     }
-    if (failed || merged.state !== 'OPEN' || now().getTime() >= deadline) return held(`the merge is not confirmed${failed ? `: ${failed}` : ''}`);
-    sleep(POLL);
+  } catch (e) {
+    // After the command, any error leaves the merge unconfirmed: held, so the owner sees it and no later merge runs on a guess.
+    return held(`the merge is not confirmed: ${firstLine(e.stderr || e.message)}`);
   }
   const unreviewed = merged.headRefOid !== accepted;
   appendLog(state, `- ${merged.mergedAt} ${repo} #${n} reviewed ${s.reviewedHead} merged ${merged.headRefOid} commit ${merged.mergeCommit?.oid} review ${s.reviewUrl ?? 'none'}${unreviewed ? ' unreviewed head' : ''}`);
@@ -193,8 +211,16 @@ export function merge(stateFile, method = 'squash', { run = sh, now = () => new 
   const file = resolve(stateFile), state = dirname(file);
   const s = readState(file);
   if (!isPrFile(basename(file)) || s?.pr !== Number(basename(file).slice(3, -5))) return stop(`${basename(file)} is no readable pull request state`);
-  const holder = takeLock(state, { pr: s.pr, head: s.handled?.head ?? null }, now());
-  if (!holder) return wait(inspectLock(state, now())?.stale ? 'the merge lock is stale' : 'the merge lock is held');
+  const holding = { pr: s.pr, head: s.handled?.head ?? null };
+  let holder = takeLock(state, holding, now());
+  if (!holder) {
+    const lock = inspectLock(state, now());
+    if (lock && !lock.stale) return wait('the merge lock is held');
+    // A lock its run left behind is removed only while it is still the one read, then taken once more.
+    if (lock) removeLock(state, lock.raw);
+    holder = takeLock(state, holding, now());
+    if (!holder) return wait('the merge lock is held');
+  }
   let result;
   try {
     result = locked({ stateFile: file, method, run, now, sleep });
