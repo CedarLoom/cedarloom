@@ -1,6 +1,8 @@
 // A project bot's state folder, <bot home>/state/: per pull request pr-<n>.json, then tip.json, red-main.json, merge-log.md and the merge lock, which only merge.mjs takes.
 // pr-<n>.json: repo, pr, issue, branch, project (the bot's checkout of the repository), dispatches, reviewedHead, reviewUrl, riskClass, round, claim, trialBase, updatedAt (the bot's last update of the branch), mergeCommandAt, mergedAt, held (why it waits for the owner), rules, clones (scratch clones, the newest last), runs and handled ({ head, action }: the last head the bot judged and its verdict's next).
+// Each entry of dispatches and runs: { startedAt, resultFile, result }, resultFile naming a headless job's result file, result set once the bot read the result.
 // tip.json: { sha, firstSeen, passed }, the default branch's tip, when the bot first saw it, and the last tip whose watch passed. red-main.json: { sha, report, pr }, the red tip, its report and the pull request the answered report named.
+// answered.json: ["<file> <at>"...], the answered local questions (approval.mjs queue) the bot acted on. claim-<n>-<head>: the folder a review claim makes. counts-<day>.json: count() below.
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { appendFileSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -21,6 +23,27 @@ const text = (path) => { try { return readFileSync(path, 'utf8'); } catch { retu
 export const readState = (path) => { try { return JSON.parse(text(path) ?? 'null'); } catch { return null; } };
 
 const unique = () => `${process.pid}-${randomBytes(6).toString('hex')}`;
+// Per project and UTC day: runs of the project bot, worker starts (a role bot run counts as one), and runs per pull request, after which the catch-up counts that pull request for no condition until the UTC day ends.
+export const LIMITS = { runs: 320, workerStarts: 120, prRuns: 12 };
+const COUNTED = ['runs', 'workerStarts', 'catchUp'];
+const countable = (n) => Number.isInteger(n) && n >= 0;
+// The counts of now's UTC day, counts-<YYYY-MM-DD>.json: { runs, workerStarts, catchUp (catch-up runs), prs: { <n>: runs } }; a day without a file counts zero. add's counts, its runs also for add.pr, are added and written first; counts that are no non-negative integers, or a pr that is no positive one, throw and write nothing.
+// An unreadable or malformed file throws, so a limit never resets unseen.
+// shortcut: two runs that count at the same moment can lose one count (read, then rename); count under the lock if runs ever overlap often.
+export function count(state, now, add = {}) {
+  if (!COUNTED.every((k) => add[k] === undefined || countable(add[k])) || !(add.pr === undefined || (Number.isInteger(add.pr) && add.pr > 0))) throw new Error('count: add holds no counts');
+  const file = join(state, `counts-${now.toISOString().slice(0, 10)}.json`);
+  let counts = { runs: 0, workerStarts: 0, catchUp: 0, prs: {} };
+  try { counts = JSON.parse(readFileSync(file, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw new Error(`${basename(file)} is unreadable`); }
+  if (!COUNTED.every((k) => countable(counts?.[k])) || typeof counts.prs !== 'object' || !counts.prs || !Object.values(counts.prs).every(countable)) throw new Error(`${basename(file)} holds no counts`);
+  if (!Object.keys(add).length) return counts;
+  const added = { ...counts, prs: { ...counts.prs } };
+  for (const k of COUNTED) added[k] += add[k] ?? 0;
+  if (add.pr) added.prs[add.pr] = (added.prs[add.pr] ?? 0) + (add.runs ?? 0);
+  writeState(file, added);
+  return added;
+}
+
 // A temporary file in the same folder, then a rename: a reader finds the old file or the new one, never a part of either. Gives the text written.
 export function writeState(path, value) {
   const tmp = join(dirname(path), `.${basename(path)}.${unique()}.tmp`), body = `${JSON.stringify(value, null, 2)}\n`;

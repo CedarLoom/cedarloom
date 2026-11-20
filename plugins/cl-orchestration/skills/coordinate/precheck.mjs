@@ -1,8 +1,9 @@
 // Usage: node precheck.mjs <project paths...>. Sample precheck for a scheduled coordinator run: exit 0 when a project has an issue to pick, else 1. It starts and merges nothing.
+// node precheck.mjs --catch-up <clone> [--state <folder>]: the project bot's catch-up precheck (catch-up.mjs).
 // Pickable: open, carries startLabel and every issues.labels entry, not labeled cl:needs-human (an owner question), cl:in-progress (a worker holds it) or cl:deferred (the owner parked it), written by a trusted author (the repository owner, a trustedAuthors login, or a member or collaborator with write access), and no pull request for it: none merged or open in the repository with a head branch <type>/<number>-<slug> (an open one from a fork does not count, since anyone can open it).
 // An issue that several of the given projects list starts in none of them: it is printed once on stderr, as "several projects: <owner/repo>#<number> (<paths>)".
 import { parseArgs } from 'node:util';
-import { errorLine, escaped, isMain, read, sh } from './policy.mjs';
+import { errorLine, escaped, isMain, json, read, sh } from './policy.mjs';
 
 // MEMBER is any member of the owning organization and COLLABORATOR any invited collaborator: either may have only the Read role, so each counts only with write access.
 const ASSOCIATED = ['MEMBER', 'COLLABORATOR'];
@@ -116,7 +117,18 @@ export function report(dirs, pick) {
 // The project paths; an option fails, so an old schedule's arguments are not read as a path.
 export const projectsOf = (argv) => parseArgs({ args: argv, allowPositionals: true }).positionals;
 
-if (isMain(import.meta.url)) {
+if (isMain(import.meta.url) && process.argv.slice(2).includes('--catch-up')) {
+  // catch-up.mjs imports this file: an await here would wait on itself, so the import resolves after this file is done.
+  import('./catch-up.mjs').then(({ catchUpLine }) => {
+    const { line, code } = catchUpLine(process.argv.slice(2).filter((a) => a !== '--catch-up'));
+    console.log(line);
+    process.exit(code);
+  }, (e) => {
+    // A catch-up precheck that fails starts the run, which reports it.
+    console.log(json({ start: true, condition: 'failed', reason: e.message.split('\n')[0], probe: false }));
+    process.exit(0);
+  });
+} else if (isMain(import.meta.url)) {
   let dirs;
   try { dirs = projectsOf(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exit(1); }
   if (!dirs.length) { console.error('usage: node precheck.mjs <project paths...>'); process.exit(1); }

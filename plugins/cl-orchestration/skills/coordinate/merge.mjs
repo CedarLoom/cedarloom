@@ -42,8 +42,16 @@ function latestRuns(runs, newestFirst) {
   return [...latest.values()];
 }
 
+const isRed = (r) => r.status === 'completed' && !GREEN.includes(r.conclusion);
+const replaces = (x, r) => r.conclusion === 'cancelled' && x.workflowDatabaseId === r.workflowDatabaseId && x.createdAt > r.createdAt;
+// The red runs among the runs of one commit, of every event: each red run counts, whatever came after it; a cancelled one is replaced by a newer run of its workflow (steps 6.6 and 6.7).
+export const redRuns = (onCommit) => onCommit.filter((r) => isRed(r) && !onCommit.some((x) => replaces(x, r)));
+
 // A check that has not finished, or no check yet: the runs of a pushed update appear some time after the push.
 const pending = (rollup) => !rollup?.length || rollup.some((c) => (c.status !== undefined && c.status !== 'COMPLETED') || ['PENDING', 'EXPECTED'].includes(c.state));
+
+// A merge command the merge log does not confirm, or one held for the owner: it pauses every merge in the state folder.
+export const unconfirmed = (state, s) => Boolean(s.mergeCommandAt && (s.held || !logged(state, s.repo, s.pr)));
 
 // The watch of the default branch, read from GitHub (review-and-merge.md, step 6). null when it passed, else the answer.
 function watch({ gh, repo, n, branch, state, now }) {
@@ -51,7 +59,7 @@ function watch({ gh, repo, n, branch, state, now }) {
     const other = readState(join(state, file));
     // A state that cannot be read could hide a merge command nobody confirmed.
     if (!other) return { answer: wait(`${file} is unreadable`) };
-    if (other.mergeCommandAt && (other.held || !logged(state, other.repo, other.pr))) return { answer: wait(`the merge of #${other.pr} is not confirmed`) };
+    if (unconfirmed(state, other)) return { answer: wait(`the merge of #${other.pr} is not confirmed`) };
   }
   const tip = JSON.parse(gh('api', `repos/${repo}/branches/${branch}`)).commit.sha;
   if (!COMMIT.test(tip)) throw new Error('GitHub gave no commit for the default branch');
@@ -68,12 +76,8 @@ function watch({ gh, repo, n, branch, state, now }) {
   const runs = list('--event', 'push');
   const onTipAll = list('--commit', tip);
   const since = seen.passed && seen.passed !== tip ? JSON.parse(gh('api', `repos/${repo}/compare/${seen.passed}...${tip}`)).commits.map((c) => c.sha).reverse() : [];
-  const isRed = (r) => r.status === 'completed' && !GREEN.includes(r.conclusion);
-  // On the tip every red run counts, whatever came after it; a cancelled one is replaced by a newer run of its workflow (steps 6.6 and 6.7).
-  const replaces = (x, r) => r.conclusion === 'cancelled' && x.workflowDatabaseId === r.workflowDatabaseId && x.createdAt > r.createdAt;
-  const replaced = (r) => onTipAll.some((x) => replaces(x, r));
   const red = [
-    ...onTipAll.filter((r) => isRed(r) && !replaced(r)),
+    ...redRuns(onTipAll),
     ...latestRuns(runs, [tip, ...since.filter((sha) => sha !== tip)]).filter((r) => r.headSha !== tip && isRed(r)),
   ];
   if (red.length) {
