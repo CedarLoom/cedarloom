@@ -20,8 +20,8 @@ const realPath = (path) => {
   }
 };
 
-// A linked worktree's .git is a file that names its folder under the shared .git's worktrees: absolute, or relative to the worktree with worktree.useRelativePaths.
-export function gitCommonDir(worktree, project, read = (path) => readFileSync(path, 'utf8')) {
+// A linked worktree's .git is a file that names its folder under the shared .git's worktrees: absolute, or relative to the worktree with worktree.useRelativePaths. Returns { commonDir, folder }, the worktree's folder as git opens it.
+export function linkedWorktree(worktree, project, read = (path) => readFileSync(path, 'utf8')) {
   const named = /^gitdir: (.+)\n?$/.exec(read(`${worktree}/.git`))?.[1];
   // Git opens the named path as written, so the kernel follows each link before it applies a `..`.
   const folder = named && realPath(isAbsolute(named) ? named : `${worktree}/${named}`);
@@ -39,8 +39,9 @@ export function gitCommonDir(worktree, project, read = (path) => readFileSync(pa
   if (!anchor?.isDirectory() || !parent || parent.dev !== anchor.dev || parent.ino !== anchor.ino || !statSync(folder).isDirectory()) {
     throw new Error(`${escaped(worktree)}/.git names no folder under ${escaped(resolve(project, '.git'))}/worktrees: not a linked worktree of that project`);
   }
-  return commonDir;
+  return { commonDir, folder };
 }
+export const gitCommonDir = (...args) => linkedWorktree(...args).commonDir;
 
 // O_NOFOLLOW refuses a symbolic link only; a hard link shares the file with a name elsewhere.
 function refuseHardLink(fd, file) {

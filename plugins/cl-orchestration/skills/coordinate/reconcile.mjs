@@ -8,7 +8,7 @@ import { dirname, isAbsolute, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { gitProgram } from '../../hooks/git-program.mjs';
 import { REPO } from './approval.mjs';
-import { escaped, isMain, json, sh } from './policy.mjs';
+import { escaped, isMain, json, redacted, sh } from './policy.mjs';
 
 const BRANCH = /^(?!-)(?!.*\.\.)(?!HEAD$)[A-Za-z0-9._/-]+$/;
 // The base of the next reconciliation of that repository: tag names as a JSON array, which no ASCII space splits (a ref name holds none), and two SHA-256 hashes.
@@ -67,8 +67,7 @@ export function reconcile({ project, repo, defaultBranch, log, settings, now, ex
   if (known) {
     const merged = JSON.parse(exec('gh', ['pr', 'list', '-R', repo, '--state', 'merged', '--base', defaultBranch, '--search', `merged:>=${since}`, '--limit', String(LIMIT), '--json', 'number,mergeCommit,mergedAt,mergedBy']));
     if (merged.length === LIMIT) findings.push({ kind: 'possibly-cut-off', since });
-    // The search is by day: a merge before the base time was compared by the last reconciliation.
-    for (const pr of merged.filter((p) => !(p.mergedAt < known.at))) {
+    for (const pr of merged) {
       const oid = pr.mergeCommit?.oid;
       if (!oid || !logged(text, repo, oid)) findings.push({ kind: 'unlogged-merge', number: pr.number, mergeCommit: oid ?? null, mergedAt: pr.mergedAt, mergedBy: pr.mergedBy?.login ?? null });
     }
@@ -93,7 +92,8 @@ export function reconcile({ project, repo, defaultBranch, log, settings, now, ex
     for (const tag of known.tags.filter((t) => !tags.includes(t))) findings.push({ kind: 'removed-tag', name: tag });
     if (rulesets !== known.rulesets) findings.push({ kind: 'rulesets-changed' });
     if (before === undefined) findings.push({ kind: 'config-listing-missing' });
-    else for (const key of changedKeys(before.toString('utf8').split('\n').filter(Boolean), config)) findings.push({ kind: 'config-changed', key });
+    // Redacted: a subsection can hold a URL with a token in it.
+    else for (const key of changedKeys(before.toString('utf8').split('\n').filter(Boolean), config)) findings.push({ kind: 'config-changed', key: redacted(key) });
     if (settingsHash !== known.settings) findings.push({ kind: 'settings-changed' });
   }
 

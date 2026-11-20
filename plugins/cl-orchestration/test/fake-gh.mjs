@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// A gh program in dir/bin that answers each argv listed in answers ([[args, stdout, exit code]...]) and fails any other, logging every argv. Returns { bin, answer(answers), calls() }.
+// A gh program in dir/bin that answers each argv listed in answers ([[args, stdout, exit code]...]) and fails any other, logging every call's working folder and argv. Returns { bin, answer(answers), calls() }, calls() as [{ cwd, args }...].
 export function fakeGh(dir) {
   const bin = join(dir, 'bin');
   mkdirSync(bin, { recursive: true });
@@ -10,7 +10,7 @@ export function fakeGh(dir) {
   writeFileSync(join(bin, 'gh'), `#!${process.execPath}
 const { appendFileSync, readFileSync } = require('node:fs');
 const args = process.argv.slice(2);
-appendFileSync(${JSON.stringify(log)}, JSON.stringify(args) + '\\n');
+appendFileSync(${JSON.stringify(log)}, JSON.stringify({ cwd: process.cwd(), args }) + '\\n');
 const hit = JSON.parse(readFileSync(${JSON.stringify(answers)}, 'utf8')).find(([a]) => JSON.stringify(a) === JSON.stringify(args));
 if (!hit) { process.stderr.write('not faked: ' + args.join(' ') + '\\n'); process.exit(1); }
 process.stdout.write(hit[1]);

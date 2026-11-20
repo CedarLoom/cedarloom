@@ -48,8 +48,7 @@ test('reconcile: the first run takes the baseline and compares nothing', () => {
 
 test('reconcile: nothing changed and every merge logged gives no finding and appends the next base', () => {
   const s = setup();
-  // #4 merged on the base day but before the base time, so the last reconciliation compared it.
-  s.gh.answer([TAGS, RULES, merged([{ number: 4, mergeCommit: { oid: '4'.repeat(40) }, mergedAt: '2026-11-19T07:00:00Z', mergedBy: { login: 'owner' } }, PR5])]);
+  s.gh.answer([TAGS, RULES, merged([PR5])]);
   const result = s.run('2026-11-20T08:00:00Z');
   assert.deepEqual(result, {
     repo: 'owner/project', baseline: false, since: '2026-11-19', findings: [],
@@ -58,10 +57,50 @@ test('reconcile: nothing changed and every merge logged gives no finding and app
   assert.equal(readFileSync(s.log, 'utf8').trim().split('\n').at(-1), result.reconciled);
 });
 
-test('reconcile: a merged pull request without a merge log line is a finding', () => {
+test('reconcile: a merged pull request without a merge log line is a finding, also one GitHub dates before the last reconciliation', () => {
   const s = setup();
-  s.gh.answer([TAGS, RULES, merged([PR5, { number: 6, mergeCommit: { oid: OID6 }, mergedAt: '2026-11-19T12:00:00Z', mergedBy: { login: 'someone' } }])]);
-  assert.deepEqual(s.run('2026-11-20T08:00:00Z').findings, [{ kind: 'unlogged-merge', number: 6, mergeCommit: OID6, mergedAt: '2026-11-19T12:00:00Z', mergedBy: 'someone' }]);
+  const pr6 = { number: 6, mergeCommit: { oid: OID6 }, mergedAt: '2026-11-19T12:00:00Z', mergedBy: { login: 'someone' } };
+  // #4's merge time precedes the base time, as a clock ahead of GitHub's or a search index behind gives it.
+  const pr4 = { number: 4, mergeCommit: { oid: '4'.repeat(40) }, mergedAt: '2026-11-19T07:59:00Z', mergedBy: { login: 'someone' } };
+  s.gh.answer([TAGS, RULES, merged([pr4, PR5, pr6])]);
+  assert.deepEqual(s.run('2026-11-20T08:00:00Z').findings, [
+    { kind: 'unlogged-merge', number: 4, mergeCommit: '4'.repeat(40), mergedAt: '2026-11-19T07:59:00Z', mergedBy: 'someone' },
+    { kind: 'unlogged-merge', number: 6, mergeCommit: OID6, mergedAt: '2026-11-19T12:00:00Z', mergedBy: 'someone' },
+  ]);
+});
+
+test('reconcile: a result of the limit\'s size is reported as possibly cut off', () => {
+  const s = setup();
+  s.gh.answer([TAGS, RULES, merged(Array.from({ length: 100 }, () => PR5))]);
+  assert.deepEqual(s.run('2026-11-20T08:00:00Z').findings, [{ kind: 'possibly-cut-off', since: '2026-11-19' }]);
+});
+
+test('reconcile: a removed tag, a changed ruleset and a changed settings file are findings', () => {
+  const s = setup();
+  writeFileSync(s.settings, '{"x":1}\n');
+  s.gh.answer([[TAGS[0], ''], [RULES[0], '[{"id":1}]'], merged([PR5])]);
+  assert.deepEqual(s.run('2026-11-20T08:00:00Z').findings, [{ kind: 'removed-tag', name: 'v1.0.0' }, { kind: 'rulesets-changed' }, { kind: 'settings-changed' }]);
+});
+
+test('reconcile: a last line in another format and a missing config listing are findings', () => {
+  const s = setup();
+  appendFileSync(s.log, 'reconciled 2026-11-19 owner/project\n');
+  s.gh.answer([TAGS, RULES]);
+  assert.deepEqual(s.run('2026-11-20T08:00:00Z').findings, [{ kind: 'base-unreadable' }]);
+  // The baseline line in a folder without its config listing.
+  mkdirSync(join(s.dir, 'moved'));
+  const log = join(s.dir, 'moved/merge-log.md');
+  writeFileSync(log, `${s.baseline.reconciled}\n`);
+  s.gh.answer([TAGS, RULES, merged([])]);
+  const exec = (cmd, args) => execFileSync(join(s.gh.bin, 'gh'), args, { encoding: 'utf8' });
+  assert.deepEqual(reconcile({ project: s.project, repo: 'owner/project', defaultBranch: 'main', log, settings: s.settings, now: new Date('2026-11-20T08:00:00Z'), exec }).findings, [{ kind: 'config-listing-missing' }]);
+});
+
+test('reconcile: a changed config key that holds a URL is named without it', () => {
+  const s = setup();
+  s.git('config', 'url.https://x-access-token:secret@github.com/.insteadOf', 'https://github.com/');
+  s.gh.answer([TAGS, RULES, merged([PR5])]);
+  assert.deepEqual(s.run('2026-11-20T08:00:00Z').findings, [{ kind: 'config-changed', key: 'url.*.insteadof' }]);
 });
 
 test('reconcile: a new tag is a finding', () => {
