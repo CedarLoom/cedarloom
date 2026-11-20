@@ -68,7 +68,13 @@ function watch({ gh, repo, n, branch, state, now }) {
   const runs = list('--event', 'push');
   const onTipAll = list('--commit', tip);
   const since = seen.passed && seen.passed !== tip ? JSON.parse(gh('api', `repos/${repo}/compare/${seen.passed}...${tip}`)).commits.map((c) => c.sha).reverse() : [];
-  const red = latestRuns([...onTipAll, ...runs.filter((r) => r.headSha !== tip)], [tip, ...since.filter((sha) => sha !== tip)]).filter((r) => r.status === 'completed' && !GREEN.includes(r.conclusion));
+  const isRed = (r) => r.status === 'completed' && !GREEN.includes(r.conclusion);
+  // On the tip every red run counts, whatever came after it; a cancelled one is replaced by a newer run of its workflow (steps 6.6 and 6.7).
+  const replaced = (r) => r.conclusion === 'cancelled' && onTipAll.some((x) => x.workflowDatabaseId === r.workflowDatabaseId && x.createdAt > r.createdAt);
+  const red = [
+    ...onTipAll.filter((r) => isRed(r) && !replaced(r)),
+    ...latestRuns(runs, [tip, ...since.filter((sha) => sha !== tip)]).filter((r) => r.headSha !== tip && isRed(r)),
+  ];
   if (red.length) {
     const report = readState(join(state, RED_MAIN));
     if (report?.sha !== tip || report?.pr !== n) return { answer: redMain(`the default branch is red at ${tip}${report?.sha === tip ? `; its report names #${report.pr ?? 'none'}` : ''}`) };
@@ -227,7 +233,6 @@ function locked({ stateFile, method, runId, run, now, sleep }) {
 
 // The answer for the pull request of stateFile; runId names the bot's run in the merge log. run(cwd, cmd, args) gives stdout or throws; now() and sleep(ms) are the clock.
 export function merge(stateFile, { method = 'squash', runId }, { run = sh, now = () => new Date(), sleep = pause } = {}) {
-  if (!RUN_ID.test(runId ?? '')) return stop('no run id: letters, digits, . _ : and -');
   const file = resolve(stateFile), state = dirname(file);
   const s = readState(file);
   if (!isPrFile(basename(file)) || s?.pr !== Number(basename(file).slice(3, -5))) return stop(`${basename(file)} is no readable pull request state`);

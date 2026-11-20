@@ -178,7 +178,18 @@ test('merge: a run of another event on the tip is red, and one that runs holds t
   assert.deepEqual(running.call(), { outcome: 'wait', reason: `a run on the tip ${TIP} has not completed` });
   writeFileSync(join(running.state, 'tip.json'), JSON.stringify({ sha: TIP, firstSeen: minutesAgo(31), passed: null }));
   assert.equal(running.call().outcome, 'merged');
-  assert.deepEqual(merges(failed.calls()), []);
+
+  // A newer run of the same workflow from another event hides no failed push run; it replaces a cancelled one.
+  const pushRun = (conclusion) => [run(TIP, 'completed', conclusion, 10, '2026-11-20T11:49:00Z'), ...GREEN.slice(1)];
+  const runsLater = bot({ world: { runs: pushRun('failure'), otherRuns: [run(TIP, 'in_progress', null, 10, '2026-11-20T11:55:00Z')] } });
+  writeFileSync(join(runsLater.state, 'tip.json'), JSON.stringify({ sha: TIP, firstSeen: minutesAgo(31), passed: null }));
+  assert.deepEqual(runsLater.call(), { outcome: 'redMain', reason: `the default branch is red at ${TIP}` });
+  assert.equal(runsLater.read('tip.json').passed, null);
+  const passedLater = bot({ world: { runs: pushRun('failure'), otherRuns: [run(TIP, 'completed', 'success', 10, '2026-11-20T11:55:00Z')] } });
+  assert.deepEqual(passedLater.call(), { outcome: 'redMain', reason: `the default branch is red at ${TIP}` });
+  assert.deepEqual([failed, runsLater, passedLater].flatMap((b) => merges(b.calls())), []);
+  const replaced = bot({ world: { runs: pushRun('cancelled'), otherRuns: [run(TIP, 'completed', 'success', 10, '2026-11-20T11:55:00Z')] } });
+  assert.equal(replaced.call().outcome, 'merged');
 });
 
 test('merge: a last passed tip that is no commit stops with an error', () => {
@@ -324,7 +335,7 @@ test('merge: a merge GitHub does not confirm within two minutes, a failed comman
   assert.deepEqual(merges(auto.calls()).at(-1), ['pr', 'merge', '1', '-R', REPO, '--disable-auto']);
 });
 
-test('merge: a state file unreadable after the command keeps its merge command time, a refused command whose read shows another head restarts, and a merged head nobody reviewed is logged and held', () => {
+test('merge: a state file unreadable after the command keeps its merge command time, a refused command whose read shows another head restarts while one that exited 0 holds, and a merged head nobody reviewed is logged and held', () => {
   const clobbered = bot({ world: { merge: 'fail', clobber: true } });
   assert.equal(clobbered.call().outcome, 'stop');
   assert.deepEqual([clobbered.read('pr-1.json').mergeCommandAt, clobbered.read('pr-1.json').held], ['2026-11-20T12:00:00.000Z', 'the merge is not confirmed: GraphQL: Head branch was modified']);
@@ -333,6 +344,11 @@ test('merge: a state file unreadable after the command keeps its merge command t
   assert.deepEqual(refused.call(), { outcome: 'restart', reason: `the head moved to ${OTHER} and GitHub refused the merge: GraphQL: Head branch was modified` });
   const s = refused.read('pr-1.json');
   assert.deepEqual([s.mergeCommandAt, s.held], [undefined, undefined]);
+  // A command that exited 0 may still merge: another head in the read holds the pull request instead.
+  const accepted = bot({ world: { merge: 'open', mergedHead: OTHER } });
+  assert.deepEqual(accepted.call(), { outcome: 'stop', reason: 'the merge is not confirmed' });
+  const t = accepted.read('pr-1.json');
+  assert.deepEqual([t.mergeCommandAt, t.held], ['2026-11-20T12:00:00.000Z', 'the merge is not confirmed']);
 
   const unreviewed = bot({ world: { mergedHead: OTHER } });
   assert.deepEqual(unreviewed.call(), { outcome: 'stop', reason: `a head nobody reviewed merged: ${OTHER}` });
