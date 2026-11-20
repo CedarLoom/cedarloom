@@ -24,6 +24,7 @@ The changed-files check, for each area the change touches:
 
 ## Every change considers
 
+- Scope: CedarLoom ships only plugins for Claude Code and Codex (cl-workflow, cl-repo and cl-orchestration, plus the bundle cedarloom) and never requires an app of its own; this repository holds only the plugins. Prefer a per-plugin path or glob to a new hard-coded `plugins/cedarloom` path.
 - The plugins: Linux and macOS (the plugin tests run on both, on Node.js 22; when macOS runs: [Development](docs/development.md#workflows)), Windows untested.
 - Footguns, read before changing that area: [git and child processes](docs/agents/git-and-processes.md).
 

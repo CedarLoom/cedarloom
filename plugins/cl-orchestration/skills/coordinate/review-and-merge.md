@@ -164,9 +164,7 @@ That list does not cover the title or a commit message, so both keep the keyword
 
 ## Owner-only
 
-The verdict's `ownerOnly` lists the owner-only files: a file under a `merge.ownerOnlyPaths` entry, with a segment of its path equal to a `merge.ownerOnlyNames` entry, or with a name that can define a container (the by-name test of [Container files](trial-merge.md#container-files)) or a lefthook config (`lefthook.yml`, `.lefthook-local.toml` and the like), all compared as a file system that ignores case and Unicode form opens them. Its `unsafePaths` lists the files no command can name ([Scratch clone](#scratch-clone)).
-
-A pull request is the owner's when `ownerOnly` or `unsafePaths` lists a file or `risk` is high or above `merge.autoMergeMax` (`next` is then `owner`), when its head has several merge bases with the default branch (no verdict), or when its purpose is a release. Decide this, too, again for every new head and before every merge. Review it and mark it ready as above, then leave it open, whatever `merge.allowed` says: it is never merged by the steps below. Put it to the owner ([SKILL.md](SKILL.md#rules)) and name it and the reason in the report.
+A pull request is the owner's when its verdict's `next` is `owner` ([merge-checks.mjs](merge-checks.mjs) decides it from the owner-only files, the `unsafePaths` and the class), when its head has several merge bases with the default branch (no verdict), or when its purpose is a release. Decide this, too, again for every new head and before every merge. Review it and mark it ready as above, then leave it open, whatever `merge.allowed` says: it is never merged by the steps below. Put it to the owner ([SKILL.md](SKILL.md#rules)) and name it and the reason in the report.
 
 ## Merge
 
