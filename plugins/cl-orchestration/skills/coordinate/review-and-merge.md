@@ -164,7 +164,7 @@ That list does not cover the title or a commit message, so both keep the keyword
 
 ## Owner-only
 
-A pull request is the owner's when its verdict's `next` is `owner` ([merge-checks.mjs](merge-checks.mjs) decides it from the owner-only files, the `unsafePaths` and the class), when its head has several merge bases with the default branch (no verdict), or when its purpose is a release. Decide this, too, again for every new head and before every merge. Review it and mark it ready as above, then leave it open, whatever `merge.allowed` says: it is never merged by the steps below. Put it to the owner ([SKILL.md](SKILL.md#rules)) and name it and the reason in the report.
+A pull request is the owner's when its verdict's `next` is `owner` ([merge-checks.mjs](merge-checks.mjs) decides it from the verdict's `ownerOnly` (the owner-only files: [policy.md](policy.md), `merge.ownerOnlyPaths`), its `unsafePaths` and its `risk`), when its head has several merge bases with the default branch (no verdict), or when its purpose is a release. Decide this, too, again for every new head and before every merge. Review it and mark it ready as above, then leave it open, whatever `merge.allowed` says: it is never merged by the steps below. Put it to the owner ([SKILL.md](SKILL.md#rules)) and name it and the reason in the report.
 
 ## Merge
 

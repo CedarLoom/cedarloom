@@ -201,7 +201,7 @@ You decide the class of an issue and of a pull request's head by `risk.md` of th
 
 - **Hold.** An issue that is deep or high starts only after the owner's answer: file its `design` approval ([approvals.md](approvals.md)) with the issue as the design, and record it in the handoff file's `## Open` with its decision task and gate ([A hold before the start](orca.md#a-hold-before-the-start)). No timeout and no worker's word starts it. An issue whose worker reports a higher class (Needs replan) is held the same way before its new spec.
 - **Spec.** The class goes into the spec's `Risk:` line, and a high class makes its `Depth:` deep.
-- **Merge.** Pass the class to the verdict ([review-and-merge.md](review-and-merge.md)), which [merge-checks.mjs](merge-checks.mjs) applies.
+- **Merge.** Pass the class to [merge-checks.mjs](merge-checks.mjs) and follow the `risk` and `next` of its verdict ([review-and-merge.md](review-and-merge.md)).
 - Releases, publishes, deploys, secrets and settings stay the owner's whatever the class ([Rules](#rules)).
 
 ## Run files
