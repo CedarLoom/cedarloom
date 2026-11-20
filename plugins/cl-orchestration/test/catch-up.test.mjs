@@ -34,8 +34,9 @@ function github({ runs = [run('success')], asked = [], prs = [], skip } = {}) {
   gh.answer(answers.filter(([args]) => args[0] !== skip).map(([args, out]) => [args, JSON.stringify(out)]));
 }
 
-// git answers as a clone of acme/app whose default branch holds no policy file (the defaults: stallMinutes 20); gh runs the fake.
+// git answers as a clone of acme/app whose default branch holds no policy file (the defaults: stallMinutes 20); gh runs the fake, and issue 77 does not exist.
 const git = (cwd, cmd, args, timeout) => {
+  if (args[1] === 'repos/acme/app/issues/77') throw Object.assign(new Error('Command failed: gh'), { stderr: 'gh: Not Found (HTTP 404)\n' });
   if (cmd !== 'git') return sh(cwd, cmd, args, timeout);
   const plain = args.filter((a, i) => a !== '-c' && args[i - 1] !== '-c');
   if (plain[0] === 'ls-remote') return `${'c'.repeat(40)}\tHEAD\n`;
@@ -106,6 +107,9 @@ test('catch-up 4: a merge-ready pull request starts a run once the lock is free 
   github({ prs: [pr()], runs: [run('failure')] });
   assert.ok(holds(4)(check(stateWith({ 'pr-9.json': ready, 'red-main.json': { sha: TIP, report: 'r', pr: 9 } }))));
   assert.deepEqual(check(stateWith({ 'pr-9.json': ready, 'red-main.json': { sha: TIP, report: 'r', pr: 8 } })), NOTHING);
+  // A report for the tip holds it red also where the tip's own runs are green: the watch found red on an earlier commit.
+  github({ prs: [pr()] });
+  assert.deepEqual(check(stateWith({ 'pr-9.json': ready, 'red-main.json': { sha: TIP, report: 'r' } })), NOTHING);
 });
 
 test('catch-up 5: a bot pull request whose head is red or in conflict and not handled starts a run', () => {
@@ -116,6 +120,9 @@ test('catch-up 5: a bot pull request whose head is red or in conflict and not ha
   assert.ok(holds(5)(check(stateWith())));
   // A fork's pull request is no bot pull request.
   github({ prs: [pr({ mergeable: 'CONFLICTING', isCrossRepository: true })] });
+  assert.deepEqual(check(stateWith()), NOTHING);
+  // Nor is one whose branch names an issue that does not exist.
+  github({ prs: [pr({ mergeable: 'CONFLICTING', headRefName: 'fix/77-typo' })] });
   assert.deepEqual(check(stateWith()), NOTHING);
 });
 
@@ -137,7 +144,8 @@ test('catch-up 6: a green bot pull request without a review, verdict or recent c
 });
 
 test('catch-up 7: a dispatch past the stall limit, or a headless job whose result nobody read, starts a run', () => {
-  github();
+  // Pull request 4 is open and no bot pull request, so conditions 5 and 6 pass it.
+  github({ prs: [pr({ number: 4, headRefName: 'docs-edit' })] });
   const job = (entry) => stateWith({ 'pr-4.json': { repo: 'acme/app', pr: 4, dispatches: [entry] } });
   assert.deepEqual(check(job({ startedAt: ago(21) })), { start: true, condition: 7, reason: 'a dispatch or run of #4 has no result', probe: false });
   assert.deepEqual(check(job({ startedAt: ago(10) })), NOTHING);
@@ -145,6 +153,9 @@ test('catch-up 7: a dispatch past the stall limit, or a headless job whose resul
   const result = join(mkdtempSync(join(tmpdir(), 'cl-catch-up-job-')), 'result.json');
   writeFileSync(result, '{}');
   assert.ok(holds(7)(check(stateWith({ 'pr-4.json': { repo: 'acme/app', pr: 4, runs: [{ startedAt: ago(1), resultFile: result }] } }))));
+  // A closed pull request's dispatch starts nothing.
+  github();
+  assert.deepEqual(check(job({ startedAt: ago(21) })), NOTHING);
 });
 
 test('catch-up: the first condition that holds names the run', () => {
@@ -199,7 +210,8 @@ test('catch-up: while no catch-up run started today, the run starts and takes th
 test('catch-up: the command line exits 0 to start a run and 1 to start none, with the JSON line', () => {
   const precheck = fileURLToPath(new URL('../skills/coordinate/precheck.mjs', import.meta.url));
   const state = mkdtempSync(join(tmpdir(), 'cl-catch-up-cli-'));
-  writeFileSync(join(state, `counts-${new Date().toISOString().slice(0, 10)}.json`), JSON.stringify({ runs: 320, workerStarts: 0, catchUp: 1, prs: {} }));
+  // Today and tomorrow: the child may read its clock after UTC midnight.
+  for (const at of [Date.now(), Date.now() + 86_400_000]) writeFileSync(join(state, `counts-${new Date(at).toISOString().slice(0, 10)}.json`), JSON.stringify({ runs: 320, workerStarts: 0, catchUp: 1, prs: {} }));
   const at = spawnSync(process.execPath, [precheck, '--catch-up', '/p', '--state', state], { encoding: 'utf8' });
   assert.equal(at.status, 1);
   assert.deepEqual(JSON.parse(at.stdout), { start: false, condition: null, reason: 'the daily limit of 320 runs is reached', probe: false });
