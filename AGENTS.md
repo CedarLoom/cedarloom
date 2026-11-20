@@ -24,7 +24,7 @@ The changed-files check, for each area the change touches:
 
 ## Every change considers
 
-- Scope: CedarLoom ships only plugins for Claude Code and Codex (cl-workflow, cl-repo and cl-orchestration, plus the Claude Code bundle cedarloom) and never requires an app of its own; this repository holds no other product. A script, workflow or doc that needs plugin files names that plugin's folder or `plugins/*/`, never `plugins/cedarloom`, which holds only the bundle's manifest, changelog and license.
+- Scope: CedarLoom ships only plugins for Claude Code and Codex (cl-workflow, cl-repo and cl-orchestration, plus the Claude Code bundle cedarloom) and never requires an app of its own; this repository holds no other product. A script, workflow or doc that needs a plugin's files names that plugin's folder or `plugins/*/`; prefer either to a new hard-coded `plugins/cedarloom` path, since that folder holds only the bundle's manifest, changelog and license.
 - The plugins: Linux and macOS (the plugin tests run on both, on Node.js 22; when macOS runs: [Development](docs/development.md#workflows)), Windows untested.
 - Footguns, read before changing that area: [git and child processes](docs/agents/git-and-processes.md).
 

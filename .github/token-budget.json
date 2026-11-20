@@ -8,7 +8,7 @@
     "^\\.github/copilot-instructions\\.md$"
   ],
   "baseline": {
-    "AGENTS.md": 617,
+    "AGENTS.md": 629,
     "CLAUDE.md": 3,
     "README.md": 2006,
     "docs/agents/domain.md": 114,
