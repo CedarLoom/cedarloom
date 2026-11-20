@@ -23,14 +23,15 @@ const text = (path) => { try { return readFileSync(path, 'utf8'); } catch { retu
 export const readState = (path) => { try { return JSON.parse(text(path) ?? 'null'); } catch { return null; } };
 
 const unique = () => `${process.pid}-${randomBytes(6).toString('hex')}`;
-// Per project and UTC day: runs of the project bot, worker starts (a role bot run counts as one), and runs per pull request, after which it is held for the owner.
+// Per project and UTC day: runs of the project bot, worker starts (a role bot run counts as one), and runs per pull request, after which the catch-up counts that pull request for no condition until the UTC day ends.
 export const LIMITS = { runs: 320, workerStarts: 120, prRuns: 12 };
 const COUNTED = ['runs', 'workerStarts', 'catchUp'];
 const countable = (n) => Number.isInteger(n) && n >= 0;
-// The counts of now's UTC day, counts-<YYYY-MM-DD>.json: { runs, workerStarts, catchUp (catch-up runs), prs: { <n>: runs } }; a day without a file counts zero. add's counts, its runs also for add.pr, are added and written first.
+// The counts of now's UTC day, counts-<YYYY-MM-DD>.json: { runs, workerStarts, catchUp (catch-up runs), prs: { <n>: runs } }; a day without a file counts zero. add's counts, its runs also for add.pr, are added and written first; counts that are no non-negative integers, or a pr that is no positive one, throw and write nothing.
 // An unreadable or malformed file throws, so a limit never resets unseen.
 // shortcut: two runs that count at the same moment can lose one count (read, then rename); count under the lock if runs ever overlap often.
 export function count(state, now, add = {}) {
+  if (!COUNTED.every((k) => add[k] === undefined || countable(add[k])) || !(add.pr === undefined || (Number.isInteger(add.pr) && add.pr > 0))) throw new Error('count: add holds no counts');
   const file = join(state, `counts-${now.toISOString().slice(0, 10)}.json`);
   let counts = { runs: 0, workerStarts: 0, catchUp: 0, prs: {} };
   try { counts = JSON.parse(readFileSync(file, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw new Error(`${basename(file)} is unreadable`); }

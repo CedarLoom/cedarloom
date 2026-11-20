@@ -34,8 +34,8 @@ const childEnv = () => {
     GIT_NO_REPLACE_OBJECTS: '1',
   };
 };
-// 64 MB: a thousand pull requests with their bodies do not fit Node's default of 1 MB. Two minutes by default: a stalled transfer or a prompt ssh waits at ends.
-export const sh = (cwd, cmd, args, timeout = 120_000) => execFileSync(cmd, args, { cwd, env: childEnv(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20, timeout });
+// 64 MB: a thousand pull requests with their bodies do not fit Node's default of 1 MB. Two minutes by default: a stalled transfer or a prompt ssh waits at ends; SIGKILL, since a child that ignores SIGTERM would outlive the timeout.
+export const sh = (cwd, cmd, args, timeout = 120_000) => execFileSync(cmd, args, { cwd, env: childEnv(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20, timeout, killSignal: 'SIGKILL' });
 
 const kind = (v) => (v === null ? 'null' : Array.isArray(v) ? 'array' : Number.isInteger(v) ? 'integer' : typeof v);
 

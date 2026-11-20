@@ -117,10 +117,10 @@ export function report(dirs, pick) {
 // The project paths; an option fails, so an old schedule's arguments are not read as a path.
 export const projectsOf = (argv) => parseArgs({ args: argv, allowPositionals: true }).positionals;
 
-if (isMain(import.meta.url) && process.argv[2] === '--catch-up') {
+if (isMain(import.meta.url) && process.argv.slice(2).includes('--catch-up')) {
   // catch-up.mjs imports this file: an await here would wait on itself, so the import resolves after this file is done.
   import('./catch-up.mjs').then(({ catchUpLine }) => {
-    const { line, code } = catchUpLine(process.argv.slice(3));
+    const { line, code } = catchUpLine(process.argv.slice(2).filter((a) => a !== '--catch-up'));
     console.log(line);
     process.exit(code);
   }, (e) => {

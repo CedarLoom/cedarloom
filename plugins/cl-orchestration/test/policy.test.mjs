@@ -44,6 +44,11 @@ const remote = (file, calls = []) => bare((dir, cmd, args) => {
   return args[0] === 'show' ? file : '';
 }, calls);
 
+test('policy: sh kills a command that outlives its timeout, also one that ignores SIGTERM', () => {
+  const ignoring = 'process.on("SIGTERM", () => {}); setTimeout(() => {}, 4000);';
+  assert.throws(() => sh(tmpdir(), process.execPath, ['-e', ignoring], 1000), { code: 'ETIMEDOUT', signal: 'SIGKILL' });
+});
+
 test('policy: a version 1 file, or one without schemaVersion, keeps its fields and gets every default', () => {
   assert.deepEqual(effective({}, '0.1.0'), { policy: DEFAULTS, errors: [], warnings: [] });
   const file = { schemaVersion: 1, startLabel: 'agent-ready', trustedAuthors: ['review-bot[bot]'], hostWorkerLimit: 3, merge: { allowed: true, requiredChecks: ['ci'] }, closeIssue: true };

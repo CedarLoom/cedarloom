@@ -99,3 +99,10 @@ test('state: count adds to the counts of the UTC day, per pull request too, and 
   writeFileSync(join(dir, 'counts-2026-11-20.json'), JSON.stringify({ runs: -1, workerStarts: 0, catchUp: 0, prs: {} }));
   assert.throws(() => count(dir, NOW, { runs: 1 }), /counts-2026-11-20\.json holds no counts/);
 });
+
+test('state: count refuses to add what is no count, and writes nothing', () => {
+  const dir = folder();
+  count(dir, NOW, { runs: 320, pr: 9 });
+  for (const add of [{ runs: 0.5 }, { runs: -320, pr: 9 }, { catchUp: '1' }, { runs: 1, pr: 0 }]) assert.throws(() => count(dir, NOW, add), /count: add holds no counts/);
+  assert.deepEqual(count(dir, NOW), { runs: 320, workerStarts: 0, catchUp: 0, prs: { 9: 320 } });
+});

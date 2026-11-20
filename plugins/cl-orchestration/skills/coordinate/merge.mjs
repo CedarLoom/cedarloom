@@ -50,13 +50,16 @@ export const redRuns = (onCommit) => onCommit.filter((r) => isRed(r) && !onCommi
 // A check that has not finished, or no check yet: the runs of a pushed update appear some time after the push.
 const pending = (rollup) => !rollup?.length || rollup.some((c) => (c.status !== undefined && c.status !== 'COMPLETED') || ['PENDING', 'EXPECTED'].includes(c.state));
 
+// A merge command the merge log does not confirm, or one held for the owner: it pauses every merge in the state folder.
+export const unconfirmed = (state, s) => Boolean(s.mergeCommandAt && (s.held || !logged(state, s.repo, s.pr)));
+
 // The watch of the default branch, read from GitHub (review-and-merge.md, step 6). null when it passed, else the answer.
 function watch({ gh, repo, n, branch, state, now }) {
   for (const file of readdirSync(state).filter(isPrFile)) {
     const other = readState(join(state, file));
     // A state that cannot be read could hide a merge command nobody confirmed.
     if (!other) return { answer: wait(`${file} is unreadable`) };
-    if (other.mergeCommandAt && (other.held || !logged(state, other.repo, other.pr))) return { answer: wait(`the merge of #${other.pr} is not confirmed`) };
+    if (unconfirmed(state, other)) return { answer: wait(`the merge of #${other.pr} is not confirmed`) };
   }
   const tip = JSON.parse(gh('api', `repos/${repo}/branches/${branch}`)).commit.sha;
   if (!COMMIT.test(tip)) throw new Error('GitHub gave no commit for the default branch');

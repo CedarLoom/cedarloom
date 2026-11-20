@@ -2,19 +2,19 @@
 // Exit 0 starts the run and exit 1 starts none, as Orca reads a precheck. One JSON line { start, condition, reason, probe }: condition is the first condition below that holds (1 to 7), 'probe', 'failed' (a read failed or the 90-second limit neared: the run reports it), or null for no run; probe is true while no catch-up run started in the current UTC day, so the run takes the daily automatic-start probe.
 // <clone> is the bot's checkout of the repository, <folder> the state folder (default: state in the working folder); the local question queue is read in the working folder. It writes nothing but the policy reader's ref in <clone>.
 // The conditions, in this order; from 4 on only an open pull request whose state is neither held nor merged counts, and from 1 on none that had LIMITS.prRuns runs today:
-// 1. The merge lock is stale, or a pull request state holds a merge command time and the merge log no line for it.
+// 1. The merge lock is stale, or, while no merge holds the lock, a pull request state that is not held holds a merge command time and the merge log no line for it.
 // 2. The default branch's tip has a red run, or red-main.json names the tip, and red-main.json names no report for that tip.
 // 3. An owner answered an open cl:needs-human issue, or a local question that answered.json does not list.
-// 4. A pull request is merge-ready: its state's handled names its head with the verdict merge or trial (merge-checks.mjs) and a reviewed head, its checks are green or the repository runs none, the lock is free, and the tip's watch ended (10 minutes from tip.json's first sight, no run open) or red-main.json names the red tip and that pull request.
+// 4. A pull request is merge-ready: its state's handled names its head with the verdict merge or trial (merge-checks.mjs) and a reviewed head, its checks are green, or it has none and merge.requiredChecks is empty, the lock is free, no merge command is unconfirmed or held (merge.mjs pauses every merge then), and the tip's watch ended (10 minutes from tip.json's first sight, no run open) or red-main.json names the red tip and that pull request.
 // 5. A bot pull request's head is red or in conflict and handled does not name that head.
-// 6. A bot pull request's head is green, or the repository runs no CI, neither handled nor the reviewed head names that head, and no claim-<n>-<head> folder is younger than stallMinutes.
+// 6. A bot pull request's head is green, or has no checks and merge.requiredChecks is empty, neither handled nor the reviewed head names that head, and no claim-<n>-<head> folder is younger than stallMinutes.
 // 7. An entry of a pull request state's dispatches or runs has no result and its result file exists (a headless job ended) or it started more than stallMinutes ago.
-// A bot pull request is open, not from a fork, on a head branch <type>/<n>-<slug>, and issue n exists and has a trusted author (precheck.mjs).
+// A bot pull request is open, not from a fork, on a head branch <type>/<n>-<slug>, and issue n exists, is no pull request and has a trusted author (precheck.mjs).
 import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { answer, readQueue } from './approval.mjs';
-import { redRuns } from './merge.mjs';
+import { redRuns, unconfirmed } from './merge.mjs';
 import { errorLine, json, read, sh } from './policy.mjs';
 import { originRepo, trusts, writers } from './precheck.mjs';
 import { count, inspectLock, isPrFile, LIMITS, logged, RED_MAIN, TIP } from './state.mjs';
@@ -28,11 +28,18 @@ const BOT_BRANCH = /^[a-z]+\/([1-9]\d*)-./;
 const GOOD = ['SUCCESS', 'SKIPPED', 'NEUTRAL'];
 
 // 'none', 'red', 'pending' or 'green' of a statusCheckRollup: check runs carry status and conclusion, commit statuses a state.
+// The rollup lists every run of a check; as gh pr checks does, only the newest of each (by name and workflow, or a status's context) counts.
 function checks(rollup) {
-  if (!rollup?.length) return 'none';
+  const newest = new Map();
+  for (const c of rollup ?? []) {
+    const key = c.context ?? `${c.name}\n${c.workflowName}`;
+    if (!newest.has(key) || newest.get(key).startedAt < c.startedAt) newest.set(key, c);
+  }
+  const latest = [...newest.values()];
+  if (!latest.length) return 'none';
   const done = (c) => (c.status === undefined ? !['PENDING', 'EXPECTED'].includes(c.state) : c.status === 'COMPLETED');
-  if (rollup.some((c) => done(c) && !GOOD.includes(c.conclusion ?? c.state))) return 'red';
-  return rollup.every(done) ? 'green' : 'pending';
+  if (latest.some((c) => done(c) && !GOOD.includes(c.conclusion ?? c.state))) return 'red';
+  return latest.every(done) ? 'green' : 'pending';
 }
 
 // { condition, reason } of the first condition that holds, or null. run(cwd, cmd, args) gives stdout or throws; queue() lists the local questions as approval.mjs queue does.
@@ -50,7 +57,8 @@ function pending({ clone, state, now, run, queue, counts }) {
     states.set(s.pr, s);
   }
   const spent = (n) => (counts.prs[n] ?? 0) >= LIMITS.prRuns;
-  for (const s of states.values()) if (!spent(s.pr) && s.mergeCommandAt && !logged(state, s.repo, s.pr)) return { condition: 1, reason: `the merge of #${s.pr} is not confirmed` };
+  // A lock still here is live: the merge that holds it confirms its own command. A held state is the owner's to clear.
+  for (const s of states.values()) if (!lock && !s.held && !spent(s.pr) && s.mergeCommandAt && !logged(state, s.repo, s.pr)) return { condition: 1, reason: `the merge of #${s.pr} is not confirmed` };
 
   const { policy, errors } = read(clone, run);
   if (!policy) throw new Error(errors.map(errorLine).join('; '));
@@ -60,7 +68,7 @@ function pending({ clone, state, now, run, queue, counts }) {
   const tip = gh('api', `repos/${repo}/branches/${branch}`).commit.sha;
   const onTip = gh('run', 'list', '-R', repo, '--branch', branch, '--commit', tip, '--limit', '100', '--json', 'databaseId,headSha,status,conclusion,workflowDatabaseId,createdAt');
   const redMain = stored(RED_MAIN);
-  // A report for the tip counts as red: merge.mjs's watch also reads red runs on the commits since the last passed tip.
+  // A report for the tip counts as red: merge.mjs's watch also reads red runs on the commits since the last passed tip. A red run that ran again and passed keeps the tip red here until the tip moves or the report is answered, an accepted wait.
   const red = redRuns(onTip).length > 0 || redMain?.sha === tip;
   if (red && !(redMain?.sha === tip && redMain.report)) return { condition: 2, reason: `the default branch is red at ${tip} and has no report` };
 
@@ -76,25 +84,26 @@ function pending({ clone, state, now, run, queue, counts }) {
 
   const prs = gh('pr', 'list', '-R', repo, '--state', 'open', '--limit', '1000', '--json', 'number,headRefName,headRefOid,isCrossRepository,mergeable,statusCheckRollup')
     .sort((a, b) => a.number - b.number);
-  // A repository whose tip ran nothing runs no CI.
-  const passes = (pr) => checks(pr.statusCheckRollup) === 'green' || (checks(pr.statusCheckRollup) === 'none' && !onTip.length);
+  // A head without checks passes while no check is required (review-and-merge.md, Review); the run itself waits for checks that appear late.
+  const passes = (pr) => checks(pr.statusCheckRollup) === 'green' || (checks(pr.statusCheckRollup) === 'none' && !policy.merge.requiredChecks.length);
   const open = prs.filter((pr) => !spent(pr.number) && !states.get(pr.number)?.held && !states.get(pr.number)?.mergedAt);
   const seen = stored(TIP);
+  const paused = [...states.values()].some((s) => unconfirmed(state, s));
   const watched = red ? null : !(seen?.sha === tip && ageOf(seen.firstSeen) < WATCH_MIN) && onTip.every((r) => r.status === 'completed');
   for (const pr of open) {
     const s = states.get(pr.number);
     const ready = ['merge', 'trial'].includes(s?.handled?.action) && s.handled.head === pr.headRefOid && s.reviewedHead && passes(pr);
-    if (ready && !lock && (red ? redMain?.sha === tip && redMain.pr === pr.number : watched)) return { condition: 4, reason: `#${pr.number} is merge-ready` };
+    if (ready && !lock && !paused && (red ? redMain?.sha === tip && redMain.pr === pr.number : watched)) return { condition: 4, reason: `#${pr.number} is merge-ready` };
   }
 
   const trusted = trusts(policy, writes);
-  // A branch named after an issue that does not exist, or was deleted, is no bot pull request.
+  // A branch named after an issue that does not exist, was deleted, or is a pull request is no bot pull request.
   const issue = (n) => { try { return gh('api', `repos/${repo}/issues/${n}`); } catch (e) { if (/\(HTTP 4(04|10)\)/.test(e.stderr)) return null; throw e; } };
   const bot = (pr) => {
     const n = BOT_BRANCH.exec(pr.headRefName)?.[1];
     if (pr.isCrossRepository || n === undefined) return false;
     const found = issue(n);
-    return found !== null && trusted(found);
+    return found !== null && !found.pull_request && trusted(found);
   };
   const handled = (pr) => states.get(pr.number)?.handled?.head === pr.headRefOid;
   for (const pr of open) {

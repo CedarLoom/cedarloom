@@ -10,6 +10,8 @@ import { sh } from '../skills/coordinate/policy.mjs';
 import { fakeGh } from './fake-gh.mjs';
 
 const gh = fakeGh(mkdtempSync(join(tmpdir(), 'cl-catch-up-gh-')));
+// The fake answers as github.com: a caller's GH_HOST would refuse the origin.
+delete process.env.GH_HOST;
 process.env.PATH = `${gh.bin}${delimiter}${process.env.PATH}`;
 
 const NOW = new Date('2026-11-20T12:00:00Z');
@@ -30,19 +32,24 @@ function github({ runs = [run('success')], asked = [], prs = [], skip } = {}) {
     [['issue', 'list', '-R', 'acme/app', '--label', 'cl:needs-human', '--state', 'open', '--limit', '1000', '--json', 'number,labels,comments,author,body,url'], asked],
     [['pr', 'list', '-R', 'acme/app', '--state', 'open', '--limit', '1000', '--json', 'number,headRefName,headRefOid,isCrossRepository,mergeable,statusCheckRollup'], prs],
     [['api', 'repos/acme/app/issues/5'], { number: 5, author_association: 'OWNER', user: { login: 'owner' } }],
+    [['api', 'repos/acme/app/issues/6'], { number: 6, author_association: 'OWNER', user: { login: 'owner' }, pull_request: { url: 'https://api.github.com/repos/acme/app/pulls/6' } }],
+    [['api', 'repos/acme/app/issues/8'], { number: 8, author_association: 'NONE', user: { login: 'stranger' } }],
   ];
   gh.answer(answers.filter(([args]) => args[0] !== skip).map(([args, out]) => [args, JSON.stringify(out)]));
 }
 
-// git answers as a clone of acme/app whose default branch holds no policy file (the defaults: stallMinutes 20); gh runs the fake, and issue 77 does not exist.
-const git = (cwd, cmd, args, timeout) => {
+// git answers as a clone of acme/app whose default branch holds the policy file text, or none (the defaults: stallMinutes 20); gh runs the fake, and issue 77 does not exist.
+const gitWith = (policy) => (cwd, cmd, args, timeout) => {
   if (args[1] === 'repos/acme/app/issues/77') throw Object.assign(new Error('Command failed: gh'), { stderr: 'gh: Not Found (HTTP 404)\n' });
   if (cmd !== 'git') return sh(cwd, cmd, args, timeout);
   const plain = args.filter((a, i) => a !== '-c' && args[i - 1] !== '-c');
   if (plain[0] === 'ls-remote') return `${'c'.repeat(40)}\tHEAD\n`;
   if (plain[0] === 'remote') return 'https://github.com/acme/app.git\n';
+  if (plain[0] === 'ls-tree' && policy) return 'docs/agents/orchestration.json\n';
+  if (plain[0] === 'show' && policy) return policy;
   return '';
 };
+const git = gitWith(null);
 
 // A state folder with files { name: value } and today's counts; a catch-up run started today unless counts say otherwise.
 function stateWith(files = {}, counts = { runs: 1, workerStarts: 0, catchUp: 1, prs: {} }) {
@@ -52,7 +59,7 @@ function stateWith(files = {}, counts = { runs: 1, workerStarts: 0, catchUp: 1, 
   return state;
 }
 const CLONE = mkdtempSync(join(tmpdir(), 'cl-catch-up-clone-'));
-const check = (state, { now = NOW, queue = () => [] } = {}) => catchUp({ clone: CLONE, state, now, run: git, queue });
+const check = (state, { now = NOW, queue = () => [], run = git } = {}) => catchUp({ clone: CLONE, state, now, run, queue });
 const holds = (condition, probe = false) => (r) => r.start === true && r.condition === condition && r.probe === probe;
 const NOTHING = { start: false, condition: null, reason: 'nothing pending', probe: false };
 const SPENT = { ...NOTHING, reason: 'nothing pending; at the daily limit of 12 runs: #9' };
@@ -72,6 +79,12 @@ test('catch-up 1: a stale merge lock, or a merge command time without a merge lo
   assert.deepEqual(check(merged), { start: true, condition: 1, reason: 'the merge of #9 is not confirmed', probe: false });
   writeFileSync(join(merged, 'merge-log.md'), `- ${ago(2)} acme/app #9 merged\n`);
   assert.deepEqual(check(merged), NOTHING);
+  // The merge that holds a live lock confirms its own command; a held merge is the owner's to clear.
+  const merging = stateWith({ 'pr-9.json': { repo: 'acme/app', pr: 9, mergeCommandAt: ago(0.2) } });
+  mkdirSync(join(merging, 'lock'));
+  writeFileSync(join(merging, 'lock', 'holder.json'), JSON.stringify({ pid: process.pid, start: null, pr: 9, head: HEAD, takenAt: ago(0.5) }));
+  assert.deepEqual(check(merging), NOTHING);
+  assert.deepEqual(check(stateWith({ 'pr-9.json': { repo: 'acme/app', pr: 9, mergeCommandAt: ago(600), held: 'the merge is not confirmed' } })), NOTHING);
 });
 
 test('catch-up 2: a red tip without a report for that tip starts a run', () => {
@@ -96,6 +109,14 @@ test('catch-up 4: a merge-ready pull request starts a run once the lock is free 
   github({ prs: [pr()] });
   assert.ok(holds(4)(check(stateWith({ 'pr-9.json': ready, 'tip.json': { sha: TIP, firstSeen: ago(11) } }))));
   assert.ok(holds(4)(check(stateWith({ 'pr-9.json': { ...ready, handled: { head: HEAD, action: 'trial' } } }))));
+  // The verdict must name the head, which needs a review; a merged pull request waits for nothing.
+  assert.deepEqual(check(stateWith({ 'pr-9.json': { ...ready, handled: { head: 'e'.repeat(40), action: 'merge' } } })), NOTHING);
+  assert.deepEqual(check(stateWith({ 'pr-9.json': { ...ready, reviewedHead: undefined } })), NOTHING);
+  assert.deepEqual(check(stateWith({ 'pr-9.json': { ...ready, mergedAt: ago(1) } })), NOTHING);
+  // A merge held for the owner pauses every merge, as merge.mjs does, also once it is logged.
+  const paused = stateWith({ 'pr-9.json': ready, 'pr-8.json': { repo: 'acme/app', pr: 8, mergeCommandAt: ago(60), held: 'the merged head was not reviewed' } });
+  writeFileSync(join(paused, 'merge-log.md'), `- ${ago(59)} acme/app #8 merged\n`);
+  assert.deepEqual(check(paused), NOTHING);
   // The watch runs 10 minutes from the tip's first sight.
   assert.deepEqual(check(stateWith({ 'pr-9.json': ready, 'tip.json': { sha: TIP, firstSeen: ago(5) } })), NOTHING);
   const locked = stateWith({ 'pr-9.json': ready });
@@ -122,24 +143,34 @@ test('catch-up 5: a bot pull request whose head is red or in conflict and not ha
   // A fork's pull request is no bot pull request.
   github({ prs: [pr({ mergeable: 'CONFLICTING', isCrossRepository: true })] });
   assert.deepEqual(check(stateWith()), NOTHING);
-  // Nor is one whose branch names an issue that does not exist.
-  github({ prs: [pr({ mergeable: 'CONFLICTING', headRefName: 'fix/77-typo' })] });
-  assert.deepEqual(check(stateWith()), NOTHING);
+  // Nor is one whose branch names an issue that does not exist, a pull request, or an issue of an untrusted author.
+  for (const headRefName of ['fix/77-typo', 'fix/6-x', 'fix/8-x']) {
+    github({ prs: [pr({ mergeable: 'CONFLICTING', headRefName })] });
+    assert.deepEqual(check(stateWith()), NOTHING);
+  }
+  // As gh pr checks reads them, only the newest run of a check counts: a failed run that ran again and passed is green.
+  const ci = (conclusion, startedAt) => ({ __typename: 'CheckRun', name: 'test', workflowName: 'CI', status: 'COMPLETED', conclusion, startedAt });
+  github({ prs: [pr({ statusCheckRollup: [ci('FAILURE', ago(20)), ci('SUCCESS', ago(10))] })] });
+  assert.ok(holds(6)(check(stateWith())));
+  github({ prs: [pr({ statusCheckRollup: [ci('SUCCESS', ago(20)), ci('FAILURE', ago(10))] })] });
+  assert.ok(holds(5)(check(stateWith())));
 });
 
 test('catch-up 6: a green bot pull request without a review, verdict or recent claim for its head starts a run', () => {
   github({ prs: [pr()] });
   assert.deepEqual(check(stateWith()), { start: true, condition: 6, reason: `#9 has no review for ${HEAD}`, probe: false });
   assert.deepEqual(check(stateWith({ 'pr-9.json': { repo: 'acme/app', pr: 9, reviewedHead: HEAD } })), NOTHING);
+  assert.deepEqual(check(stateWith({ 'pr-9.json': { repo: 'acme/app', pr: 9, handled: { head: HEAD, action: 'update' } } })), NOTHING);
   const claimed = stateWith(), claim = join(claimed, `claim-9-${HEAD}`);
   mkdirSync(claim);
   utimesSync(claim, new Date(ago(5)), new Date(ago(5)));
   assert.deepEqual(check(claimed), NOTHING);
   utimesSync(claim, new Date(ago(25)), new Date(ago(25)));
   assert.ok(holds(6)(check(claimed)));
-  // A repository whose tip ran nothing runs no CI: a head without checks waits for nothing.
-  github({ prs: [pr({ statusCheckRollup: [] })], runs: [] });
+  // A head without checks passes while merge.requiredChecks is empty, also where the tip has runs.
+  github({ prs: [pr({ statusCheckRollup: [] })] });
   assert.ok(holds(6)(check(stateWith())));
+  assert.deepEqual(check(stateWith(), { run: gitWith('{ "merge": { "requiredChecks": ["test"] } }') }), NOTHING);
   github({ prs: [pr({ statusCheckRollup: [{ status: 'IN_PROGRESS', conclusion: '' }] })] });
   assert.deepEqual(check(stateWith()), NOTHING);
 });
@@ -182,6 +213,14 @@ test('catch-up: a failed read starts a run that reports it', () => {
   assert.deepEqual(check(cut), { start: true, condition: 'failed', reason: 'red-main.json is unreadable', probe: true });
 });
 
+test('catch-up: a precheck near its 90-second limit starts the run, which reports it', () => {
+  github();
+  let at = 0;
+  // The first gh read takes 90 seconds: the next command would start past the limit.
+  const slow = (cwd, cmd, args, timeout) => { if (cmd === 'gh') at += 90_000; return git(cwd, cmd, args, timeout); };
+  assert.deepEqual(catchUp({ clone: CLONE, state: stateWith(), now: NOW, run: slow, queue: () => [], clock: () => at }), { start: true, condition: 'failed', reason: 'the 90-second limit nears', probe: false });
+});
+
 test('catch-up: a daily limit reached starts no run and says which', () => {
   github({ runs: [run('failure')] });
   assert.deepEqual(check(stateWith({}, { runs: 320, workerStarts: 0, catchUp: 1, prs: {} })), { start: false, condition: null, reason: 'the daily limit of 320 runs is reached', probe: false });
@@ -220,6 +259,10 @@ test('catch-up: the command line exits 0 to start a run and 1 to start none, wit
   const at = spawnSync(process.execPath, [precheck, '--catch-up', '/p', '--state', state], { encoding: 'utf8' });
   assert.equal(at.status, 1);
   assert.deepEqual(JSON.parse(at.stdout), { start: false, condition: null, reason: 'the daily limit of 320 runs is reached', probe: false });
+  // --catch-up is read wherever it stands.
+  const later = spawnSync(process.execPath, [precheck, '--state', state, '--catch-up', '/p'], { encoding: 'utf8' });
+  assert.equal(later.status, 1);
+  assert.deepEqual(JSON.parse(later.stdout), { start: false, condition: null, reason: 'the daily limit of 320 runs is reached', probe: false });
   const bad = spawnSync(process.execPath, [precheck, '--catch-up'], { encoding: 'utf8' });
   assert.equal(bad.status, 0);
   assert.deepEqual(JSON.parse(bad.stdout), { start: true, condition: 'failed', reason: 'usage: node precheck.mjs --catch-up <clone> [--state <folder>]', probe: false });
