@@ -55,6 +55,7 @@ const CLONE = mkdtempSync(join(tmpdir(), 'cl-catch-up-clone-'));
 const check = (state, { now = NOW, queue = () => [] } = {}) => catchUp({ clone: CLONE, state, now, run: git, queue });
 const holds = (condition, probe = false) => (r) => r.start === true && r.condition === condition && r.probe === probe;
 const NOTHING = { start: false, condition: null, reason: 'nothing pending', probe: false };
+const SPENT = { ...NOTHING, reason: 'nothing pending; at the daily limit of 12 runs: #9' };
 
 test('catch-up: nothing pending starts no run', () => {
   github({ prs: [pr()] });
@@ -175,6 +176,10 @@ test('catch-up: a failed read starts a run that reports it', () => {
   const broken = stateWith({}, null);
   writeFileSync(join(broken, 'counts-2026-11-20.json'), '{ "runs": ');
   assert.deepEqual(check(broken), { start: true, condition: 'failed', reason: 'counts-2026-11-20.json is unreadable', probe: false });
+  // A cut optional file is no missing one: the run reports it, also on a day that still needs the probe.
+  const cut = stateWith({}, { runs: 1, workerStarts: 0, catchUp: 0, prs: {} });
+  writeFileSync(join(cut, 'red-main.json'), '{ "sha": ');
+  assert.deepEqual(check(cut), { start: true, condition: 'failed', reason: 'red-main.json is unreadable', probe: true });
 });
 
 test('catch-up: a daily limit reached starts no run and says which', () => {
@@ -186,11 +191,11 @@ test('catch-up: a daily limit reached starts no run and says which', () => {
 
 test('catch-up: a pull request that had 12 runs today, or is held, starts none', () => {
   github({ prs: [pr()] });
-  assert.deepEqual(check(stateWith({}, { runs: 12, workerStarts: 0, catchUp: 1, prs: { 9: 12 } })), NOTHING);
+  assert.deepEqual(check(stateWith({}, { runs: 12, workerStarts: 0, catchUp: 1, prs: { 9: 12 } })), SPENT);
   assert.ok(holds(6)(check(stateWith({}, { runs: 11, workerStarts: 0, catchUp: 1, prs: { 9: 11 } }))));
   assert.deepEqual(check(stateWith({ 'pr-9.json': { repo: 'acme/app', pr: 9, held: 'a question to the owner' } })), NOTHING);
   github();
-  assert.deepEqual(check(stateWith({ 'pr-9.json': { repo: 'acme/app', pr: 9, mergeCommandAt: ago(1) } }, { runs: 12, workerStarts: 0, catchUp: 1, prs: { 9: 12 } })), NOTHING);
+  assert.deepEqual(check(stateWith({ 'pr-9.json': { repo: 'acme/app', pr: 9, mergeCommandAt: ago(1) } }, { runs: 12, workerStarts: 0, catchUp: 1, prs: { 9: 12 } })), SPENT);
 });
 
 test('catch-up: the counts start again at the UTC day\'s start, with the probe', () => {

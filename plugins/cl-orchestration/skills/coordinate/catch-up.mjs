@@ -10,14 +10,14 @@
 // 6. A bot pull request's head is green, or the repository runs no CI, neither handled nor the reviewed head names that head, and no claim-<n>-<head> folder is younger than stallMinutes.
 // 7. An entry of a pull request state's dispatches or runs has no result and its result file exists (a headless job ended) or it started more than stallMinutes ago.
 // A bot pull request is open, not from a fork, on a head branch <type>/<n>-<slug>, and issue n exists and has a trusted author (precheck.mjs).
-import { existsSync, lstatSync, readdirSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { answer, readQueue } from './approval.mjs';
 import { redRuns } from './merge.mjs';
 import { errorLine, json, read, sh } from './policy.mjs';
 import { originRepo, trusts, writers } from './precheck.mjs';
-import { count, inspectLock, isPrFile, LIMITS, logged, readState, RED_MAIN, TIP } from './state.mjs';
+import { count, inspectLock, isPrFile, LIMITS, logged, RED_MAIN, TIP } from './state.mjs';
 
 const MINUTE = 60_000;
 // Orca's --precheck-timeout is set above this, so the precheck answers before Orca skips the run.
@@ -41,10 +41,11 @@ function pending({ clone, state, now, run, queue, counts }) {
   const lock = inspectLock(state, now);
   if (lock?.stale) return { condition: 1, reason: 'the merge lock is stale' };
 
+  // A missing file is absent; one that cannot be read or parsed fails the precheck, so the run reports or rebuilds it.
+  const stored = (name) => { try { return JSON.parse(readFileSync(join(state, name), 'utf8')); } catch (e) { if (e.code === 'ENOENT') return null; throw new Error(`${name} is unreadable`); } };
   const states = new Map();
   for (const file of readdirSync(state).filter(isPrFile)) {
-    const s = readState(join(state, file));
-    // A state that cannot be read is rebuilt by the run.
+    const s = stored(file);
     if (s?.pr !== Number(file.slice(3, -5))) throw new Error(`${file} is unreadable`);
     states.set(s.pr, s);
   }
@@ -58,7 +59,7 @@ function pending({ clone, state, now, run, queue, counts }) {
   const branch = gh('repo', 'view', repo, '--json', 'defaultBranchRef').defaultBranchRef.name;
   const tip = gh('api', `repos/${repo}/branches/${branch}`).commit.sha;
   const onTip = gh('run', 'list', '-R', repo, '--branch', branch, '--commit', tip, '--limit', '100', '--json', 'databaseId,headSha,status,conclusion,workflowDatabaseId,createdAt');
-  const redMain = readState(join(state, RED_MAIN));
+  const redMain = stored(RED_MAIN);
   // A report for the tip counts as red: merge.mjs's watch also reads red runs on the commits since the last passed tip.
   const red = redRuns(onTip).length > 0 || redMain?.sha === tip;
   if (red && !(redMain?.sha === tip && redMain.report)) return { condition: 2, reason: `the default branch is red at ${tip} and has no report` };
@@ -67,7 +68,7 @@ function pending({ clone, state, now, run, queue, counts }) {
   const asked = gh('issue', 'list', '-R', repo, '--label', 'cl:needs-human', '--state', 'open', '--limit', '1000', '--json', 'number,labels,comments,author,body,url');
   const answered = asked.find((issue) => answer(issue, writes));
   if (answered) return { condition: 3, reason: `#${answered.number} has an answer` };
-  const acted = new Set(readState(join(state, 'answered.json')) ?? []);
+  const acted = new Set(stored('answered.json') ?? []);
   for (const q of queue()) {
     if (q.error) throw new Error(`the question ${q.file} ${q.error}`);
     if (q.status === 'answered' && !acted.has(`${q.file} ${q.at}`)) return { condition: 3, reason: `the question ${q.file} has an answer` };
@@ -78,7 +79,7 @@ function pending({ clone, state, now, run, queue, counts }) {
   // A repository whose tip ran nothing runs no CI.
   const passes = (pr) => checks(pr.statusCheckRollup) === 'green' || (checks(pr.statusCheckRollup) === 'none' && !onTip.length);
   const open = prs.filter((pr) => !spent(pr.number) && !states.get(pr.number)?.held && !states.get(pr.number)?.mergedAt);
-  const seen = readState(join(state, TIP));
+  const seen = stored(TIP);
   const watched = red ? null : !(seen?.sha === tip && ageOf(seen.firstSeen) < WATCH_MIN) && onTip.every((r) => r.status === 'completed');
   for (const pr of open) {
     const s = states.get(pr.number);
@@ -129,7 +130,10 @@ export function catchUp({ clone, state, now = new Date(), run = sh, queue = read
     probe = counts.catchUp === 0;
     const found = pending({ clone, state, now, run: timed, queue, counts });
     if (found) return { start: true, ...found, probe };
-    return probe ? { start: true, condition: 'probe', reason: 'no catch-up run started today', probe } : { start: false, condition: null, reason: 'nothing pending', probe };
+    if (probe) return { start: true, condition: 'probe', reason: 'no catch-up run started today', probe };
+    // A pull request at its limit is named, so its skip does not read as an idle project.
+    const spent = Object.keys(counts.prs).filter((n) => counts.prs[n] >= LIMITS.prRuns);
+    return { start: false, condition: null, reason: spent.length ? `nothing pending; at the daily limit of ${LIMITS.prRuns} runs: #${spent.join(', #')}` : 'nothing pending', probe };
   } catch (e) {
     return { start: true, condition: 'failed', reason: String(e.stderr || e.message).trim().split('\n')[0], probe };
   }
