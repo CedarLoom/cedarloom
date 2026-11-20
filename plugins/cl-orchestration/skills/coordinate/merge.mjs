@@ -42,6 +42,11 @@ function latestRuns(runs, newestFirst) {
   return [...latest.values()];
 }
 
+const isRed = (r) => r.status === 'completed' && !GREEN.includes(r.conclusion);
+const replaces = (x, r) => r.conclusion === 'cancelled' && x.workflowDatabaseId === r.workflowDatabaseId && x.createdAt > r.createdAt;
+// The red runs among the runs of one commit, of every event: each red run counts, whatever came after it; a cancelled one is replaced by a newer run of its workflow (steps 6.6 and 6.7).
+export const redRuns = (onCommit) => onCommit.filter((r) => isRed(r) && !onCommit.some((x) => replaces(x, r)));
+
 // A check that has not finished, or no check yet: the runs of a pushed update appear some time after the push.
 const pending = (rollup) => !rollup?.length || rollup.some((c) => (c.status !== undefined && c.status !== 'COMPLETED') || ['PENDING', 'EXPECTED'].includes(c.state));
 
@@ -68,12 +73,8 @@ function watch({ gh, repo, n, branch, state, now }) {
   const runs = list('--event', 'push');
   const onTipAll = list('--commit', tip);
   const since = seen.passed && seen.passed !== tip ? JSON.parse(gh('api', `repos/${repo}/compare/${seen.passed}...${tip}`)).commits.map((c) => c.sha).reverse() : [];
-  const isRed = (r) => r.status === 'completed' && !GREEN.includes(r.conclusion);
-  // On the tip every red run counts, whatever came after it; a cancelled one is replaced by a newer run of its workflow (steps 6.6 and 6.7).
-  const replaces = (x, r) => r.conclusion === 'cancelled' && x.workflowDatabaseId === r.workflowDatabaseId && x.createdAt > r.createdAt;
-  const replaced = (r) => onTipAll.some((x) => replaces(x, r));
   const red = [
-    ...onTipAll.filter((r) => isRed(r) && !replaced(r)),
+    ...redRuns(onTipAll),
     ...latestRuns(runs, [tip, ...since.filter((sha) => sha !== tip)]).filter((r) => r.headSha !== tip && isRed(r)),
   ];
   if (red.length) {

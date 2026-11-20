@@ -5,7 +5,7 @@ import { linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { inspectLock, processStart, readState, removeLock, takeLock, writeState } from '../skills/coordinate/state.mjs';
+import { count, inspectLock, processStart, readState, removeLock, takeLock, writeState } from '../skills/coordinate/state.mjs';
 
 const folder = () => mkdtempSync(join(tmpdir(), 'cl-state-'));
 const NOW = new Date('2026-11-20T12:00:00Z');
@@ -88,4 +88,14 @@ test('state: a lock is removed only while its holder is the one read, else it is
   assert.equal(removeLock(state, raw), true);
   assert.deepEqual(readdirSync(state), []);
   assert.equal(removeLock(state, raw), false);
+});
+
+test('state: count adds to the counts of the UTC day, per pull request too, and refuses a file that holds no counts', () => {
+  const dir = folder();
+  count(dir, NOW, { runs: 1, workerStarts: 1, pr: 9 });
+  assert.deepEqual(count(dir, new Date('2026-11-20T23:59:59Z'), { runs: 1, catchUp: 1, pr: 9 }), { runs: 2, workerStarts: 1, catchUp: 1, prs: { 9: 2 } });
+  assert.deepEqual(readState(join(dir, 'counts-2026-11-20.json')), { runs: 2, workerStarts: 1, catchUp: 1, prs: { 9: 2 } });
+  assert.deepEqual(count(dir, new Date('2026-11-21T00:00:00Z')), { runs: 0, workerStarts: 0, catchUp: 0, prs: {} });
+  writeFileSync(join(dir, 'counts-2026-11-20.json'), JSON.stringify({ runs: -1, workerStarts: 0, catchUp: 0, prs: {} }));
+  assert.throws(() => count(dir, NOW, { runs: 1 }), /counts-2026-11-20\.json holds no counts/);
 });
