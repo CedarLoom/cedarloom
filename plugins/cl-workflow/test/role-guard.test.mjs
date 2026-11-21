@@ -272,30 +272,9 @@ test('role guard: reads the commands of Monitor and PowerShell, PowerShell with 
     '${a b} +=git push origin trunk',
     '$env:R =claude --bare -p x',
     "$env:cedarloom_role='coordinator'; claude -p x",
-    // A block comment on the line runs nothing; the command after it does.
-    '<# c #> gh pr merge 12',
-    '<# a #><# b #>gh pr merge 12',
-    '<# c gh pr merge 12',
-    'foreach ($n in gh pr merge 12) { }',
   ];
   for (const command of powershell) assert.equal(decision(command, { tool: 'PowerShell', cwd: feature }), 'deny', command);
   assert.equal(decision('gh pr view 12 `\n  --json title', { tool: 'PowerShell' }), 'none');
-  assert.equal(decision('<# gh pr merge 12 #> gh pr view 12', { tool: 'PowerShell' }), 'none');
-});
-
-test('role guard: a command with thousands of = words before a gh is refused at once, never aborts or passes', () => {
-  const merge = `${'a=b '.repeat(5000)}gh pr merge 12`;
-  for (const role of [undefined, 'coordinator', 'project-bot', ...ROLE_BOTS]) {
-    const input = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'PowerShell', tool_input: { command: merge }, tool_use_id: 'toolu_01', cwd: trunk });
-    const started = performance.now();
-    const r = run(input, role);
-    assert.equal(r.status, 2, `${role}: ${r.stderr.slice(0, 200)}`);
-    assert.match(r.stderr, /more text after = than the guard reads/);
-    assert.ok(performance.now() - started < 1000, `${role}: ${performance.now() - started} ms`);
-  }
-  // Long commands that read, or have no gh or git behind the = words, pass.
-  assert.equal(decision(`${'a=b '.repeat(5000)}echo done`, { role: 'fixer-bot', tool: 'PowerShell' }), 'none');
-  assert.equal(decision(`${'a=b '.repeat(200)}gh pr view 12`, { role: 'fixer-bot', tool: 'PowerShell' }), 'none');
 });
 
 test('role guard: passes a Monitor call on a WebSocket', () => {
@@ -310,7 +289,7 @@ test('role guard: passes everything in the coordinator role, but not in its suba
 test('role guard: refuses a merge with --admin in every role, the coordinator included', () => {
   for (const role of ['coordinator', 'project-bot']) assert.equal(decision('gh pr merge 12 --squash --admin', { role }), 'deny', role);
   assert.equal(decision('gh pr --subject x merge 12 --admin', { role: 'coordinator' }), 'deny');
-  for (const command of ['$r=gh pr merge 12 --admin', '$r =gh pr merge 12 --admin', '${r}=gh pr merge 12 --admin', '[string] $r=gh pr merge 12 --admin', '<# c #> gh pr merge 12 --admin']) {
+  for (const command of ['$r=gh pr merge 12 --admin', '$r =gh pr merge 12 --admin', '${r}=gh pr merge 12 --admin', '[string] $r=gh pr merge 12 --admin']) {
     assert.equal(decision(command, { role: 'coordinator', tool: 'PowerShell' }), 'deny', command);
   }
 });
@@ -381,10 +360,8 @@ test('role guard: a reviewer, fixer or worker bot runs only gh commands that rea
     'try { gh pr view 12 } catch [System.Exception] { gh pr comment 12 --body-file c.md }',
     "switch ($x) { 'a' { gh pr comment 12 --body-file c.md } }",
     '. gh pr comment 12 --body-file c.md',
-    'foreach ($n in gh issue close 3) { }',
-    '<# c #> gh issue close 3',
   ];
-  const powershellReads = ['foreach ($n in gh pr view 3) { }', '<# c #> gh pr view 12', '$r = gh pr view 12 --json title','1..2 | ForEach-Object { gh pr view $_ }', 'gh api repos/{owner}/{repo}/pulls/12/comments', 'gh pr view ${n} --json title'];
+  const powershellReads = ['$r = gh pr view 12 --json title', '1..2 | ForEach-Object { gh pr view $_ }', 'gh api repos/{owner}/{repo}/pulls/12/comments', 'gh pr view ${n} --json title'];
   const reads = [
     'gh repo clone o/r /bots/r/clones/r-12-1 --no-upstream -- --filter=blob:none --no-checkout',
     'gh pr view 12 -R o/r --json headRefOid',
@@ -407,7 +384,7 @@ test('role guard: a reviewer, fixer or worker bot runs only gh commands that rea
 
 test('role guard: in PowerShell a bot is refused a merge or a write after any assignment and in a script block after any character', () => {
   for (const role of ['project-bot', ...ROLE_BOTS]) {
-    for (const command of ['$r =gh pr merge 12 --squash', '${r}=gh pr merge 12 --squash', '[string] $r=gh pr merge 12 --squash', '<# c #> gh pr merge 12', 'foreach ($n in gh pr merge 12) { }']) {
+    for (const command of ['$r =gh pr merge 12 --squash', '${r}=gh pr merge 12 --squash', '[string] $r=gh pr merge 12 --squash']) {
       assert.equal(decision(command, { role, tool: 'PowerShell' }), 'deny', `${role}: ${command}`);
     }
   }

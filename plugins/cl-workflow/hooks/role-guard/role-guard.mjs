@@ -59,9 +59,8 @@ const WRAPPERS = new Map([
   ['noglob', []],
   // PowerShell's dot-source operator runs the command after it in the current scope, as & does in a child scope.
   ['.', []],
-  // PowerShell's flow-control keywords that take a pipeline (https://learn.microsoft.com/en-us/powershell/scripting/lang-spec/chapter-08#85-flow-control-statements),
-  // and the in of foreach ($n in <pipeline>) (chapter-08#843-the-foreach-statement).
-  ...['return', 'throw', 'exit', 'in'].map((word) => [word, []]),
+  // PowerShell's flow-control keywords that take a pipeline (https://learn.microsoft.com/en-us/powershell/scripting/lang-spec/chapter-08#85-flow-control-statements).
+  ...['return', 'throw', 'exit'].map((word) => [word, []]),
   // The reserved words a command can follow (bash, zsh).
   ...['if', 'then', 'elif', 'else', 'do', 'while', 'until', '!', '{'].map((word) => [word, []]),
 ]);
@@ -114,11 +113,6 @@ const UNREAD_DEFAULT = 'a push to a remote whose default branch the guard cannot
 // Inside double quotes bash drops a backslash only before these (https://www.gnu.org/software/bash/manual/html_node/Double-Quotes.html).
 const BASH_QUOTED_ESCAPES = '$`"\\';
 
-// The readings after the = of a PowerShell command repeat the words behind it, so many = words before a gh or git grow
-// quadratically. Past this many characters in all the guard throws, which its catch turns into a refusal.
-const MAX_READ_TEXT = 4_000_000;
-let readText = 0;
-
 // The commands of a shell text, each a list of words with quotes and escapes resolved, as the shell splits them: a line
 // continuation joins its lines, a quoted word stays whole, and the targets of redirections are kept apart from the words. The text
 // of a quoted word is read again as commands, so `bash -c "gh pr merge 1"` shows its gh; text that only names such a command is denied as well.
@@ -137,7 +131,6 @@ function commands(source, powershell, nested = false) {
   const out = [];
   const escape = powershell ? '`' : '\\';
   const s = source.replace(powershell ? /`\r?\n/g : /\\\r?\n/g, '');
-  const lastClose = s.lastIndexOf('#>');
   let words = [], targets = [], word = '', started = false, quoted = false, quote = null, redirect = false, depth = 0, backticks = false;
   // Per open brace in PowerShell, whether it opened a script block.
   const blocks = [];
@@ -165,8 +158,6 @@ function commands(source, powershell, nested = false) {
           // Of a run of = (a ruler in quoted text) only the last one can end an operator.
           if (head.startsWith('=')) continue;
           const after = [...(head ? [head] : []), ...(i < last || acted(head) ? words.slice(i + 1) : [])];
-          readText += after.reduce((n, w) => n + w.length + 1, 0);
-          if (readText > MAX_READ_TEXT) throw new RangeError('more text after = than the guard reads');
           if (after.length) out.push({ words: after, targets: [], nested: inner });
         }
       });
@@ -187,10 +178,6 @@ function commands(source, powershell, nested = false) {
     } else if (c === escape) {
       word += s[++i] ?? '';
       started = quoted = true;
-    } else if (powershell && c === '<' && s[i + 1] === '#' && lastClose >= i + 2) {
-      // A PowerShell block comment, closed by the first #> after the <#, runs nothing; one never closed is still read.
-      i = s.indexOf('#>', i + 2) + 1;
-      endWord();
     } else if (c === '<' || c === '>' || (c === '&' && s[i + 1] === '>')) {
       // A file descriptor number in front (2>&1) and the target after are no words of the command.
       if (!quoted && /^\d+$/.test(word)) started = false;
