@@ -39,9 +39,34 @@ const BOT_GH_READS = new Map([['repo', ['clone', 'view', 'list']], ['pr', ['view
 // The project bot deletes a merged head branch, named <type>/<number>-<slug>, so never a default branch.
 const BOT_BRANCH_REF = /^\/?repos\/[\w.-]+\/[\w.-]+\/git\/refs\/heads\/[a-z0-9-]+\/\d+-[a-z0-9-]+$/;
 const FORCE_OPTIONS = ['force', 'force-with-lease', 'force-if-includes', 'delete', 'prune'];
-// Words before a program that still run it: env assignments, wrappers (env, sudo, xargs, timeout), their options and durations.
-const WRAPPERS = new Set(['env', 'sudo', 'doas', 'xargs', 'time', 'command', 'exec', 'nohup', 'nice', 'timeout', 'stdbuf', 'builtin', '&']);
-const runs = (words, j) => words.slice(0, j).every((w) => WRAPPERS.has(program(w)) || /^(-|\d+[smhd]?$|[A-Za-z_]\w*=)/.test(w));
+// Programs that run the program after them, each with its options whose value is the next word.
+const WRAPPERS = new Map([
+  ['env', ['-u', '--unset', '-C', '--chdir', '-S', '--split-string']],
+  ['sudo', ['-u', '--user', '-g', '--group', '-C', '--close-from', '-D', '--chdir', '-h', '--host', '-p', '--prompt', '-r', '--role', '-t', '--type', '-U', '--other-user', '-T', '--command-timeout']],
+  ['doas', ['-u', '-C']],
+  ['xargs', ['-I', '-d', '--delimiter', '-E', '--eof', '-a', '--arg-file', '-L', '--max-lines', '-n', '--max-args', '-P', '--max-procs', '-s', '--max-chars', '--process-slot-var']],
+  ['time', ['-f', '--format', '-o', '--output']],
+  ['timeout', ['-k', '--kill-after', '-s', '--signal']],
+  ['nice', ['-n', '--adjustment']],
+  ['stdbuf', ['-i', '--input', '-o', '--output', '-e', '--error']],
+  ['exec', ['-a']],
+  ['command', []],
+  ['nohup', []],
+  ['builtin', []],
+  ['&', []],
+]);
+// Word j runs as the command: every word before it is an env assignment, a wrapper, a wrapper's option with its value, or a
+// duration (timeout 10).
+function runs(words, j) {
+  let values = [];
+  for (let i = 0; i < j; i++) {
+    const w = words[i];
+    if (WRAPPERS.has(program(w))) values = WRAPPERS.get(program(w));
+    else if (w.startsWith('-')) i += values.includes(w) ? 1 : 0;
+    else if (!/^([A-Za-z_]\w*=|\d+(\.\d+)?[smhd]?$)/.test(w)) return false;
+  }
+  return true;
+}
 
 // gh flags that take the next word as their value, wherever they stand (gh pr -R owner/repo merge).
 const GH_VALUE_FLAGS = new Set(['-R', '--repo', '--hostname', '-b', '--body', '-F', '--body-file', '-f', '--field', '--raw-field', '-X', '--method', '-H', '--header', '-q', '--jq', '-t', '--template', '--input', '-p', '--preview', '--cache']);

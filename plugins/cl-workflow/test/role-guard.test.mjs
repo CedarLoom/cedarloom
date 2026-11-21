@@ -316,6 +316,9 @@ test('role guard: a reviewer, fixer or worker bot runs only gh commands that rea
     `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "T_1"}) { clientMutationId } }'`,
     `gh api -X GET graphql -f query='mutation { addComment(input: {subjectId: "I_1", body: "x"}) { clientMutationId } }'`,
     'xargs -n1 gh pr comment --body-file c.md',
+    "xargs -I '{}' gh pr comment '{}' --body-file c.md",
+    'sudo -u bot gh pr comment 12 --body-file c.md',
+    'timeout -s KILL 10 gh pr comment 12 --body-file c.md',
     'FOO=1 gh pr comment 12 --body-file c.md',
   ];
   const reads = [
