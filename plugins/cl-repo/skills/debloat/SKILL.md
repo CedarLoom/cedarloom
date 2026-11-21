@@ -24,7 +24,7 @@ Target: $ARGUMENTS (Codex: the text after the skill name), as in [audit](../audi
 ## Steps: instructions and docs
 
 1. Measure. `tb measure <files>` gives lines and estimated tokens (4 bytes each) per file and the always-loaded sum, paid in every session:
-   - whole: root CLAUDE.md and AGENTS.md (also in `.claude/`), root `.claude/rules` without `paths`, the files in the config's `alwaysLoadedFiles` (each also in `include`), and what these import, four hops deep;
+   - whole: root CLAUDE.md and AGENTS.md (also in `.claude/`), rules in the root `.claude/` without `paths`, the files in the config's `alwaysLoadedFiles` (each also in `include`), and what these import, four hops deep;
    - the listed tokens: descriptions of agents and of skills a host lists. Claude Code hides a skill with `disable-model-invocation: true`, Codex one whose `agents/openai.yaml` sets `policy.allow_implicit_invocation: false`. A skill counts when either host lists it, so the sum is an upper bound; shortening an unlisted description saves nothing. Hook output is not counted.
 
    `budget.alwaysLoaded` caps that sum: the measured value plus about 10 percent, with 5,000 as a target, not a cap. Host limits: Codex cuts the project instruction file that crosses 32 KiB, with a warning, and skips later ones (its global file does not count); Claude Code cuts a nested CLAUDE.md or path-scoped rule above 40,000 characters (https://developers.openai.com/codex/guides/agents-md, https://code.claude.com/docs/en/memory). `tb check` lists dead references. No baseline yet: `tb baseline --write`.
