@@ -1,9 +1,9 @@
 # Bots
 
-The Orca bots that run a repository's coordinator work, and the steps the setup skill of cl-repo takes for them. The repository's `docs/agents/bots.md` is this file up to [Setup](#setup), with `<repo>` and `<owner/repo>` filled. Each other `<...>` path stays a placeholder there and is filled, as an absolute path, only in the bot homes:
+The Orca bots that run a repository's coordinator work, and the steps the setup skill of cl-repo takes for them. The repository's `docs/agents/bots.md` is this file up to its Setup section, with `<repo>` and `<owner/repo>` filled. Each other `<...>` path stays a placeholder there and is filled, as an absolute path, only in the bot homes:
 - `ORCA`: the Orca executable; `<skill folder>`: the `coordinate` skill folder of the installed cl-orchestration plugin.
 - `<repo>`: the repository's name; `<owner/repo>`: what `git remote get-url origin` names.
-- `<home>`: a bot's home, the `~/.orca/bots/<name>` folder Orca made; `<project home>`: the project bot's; `<clone>`: `<project home>/<repo>`, the project bot's checkout.
+- `<home>`: a bot's home, the folder Orca made for it; `<project home>`: the project bot's; `<clone>`: `<project home>/<repo>`, the project bot's checkout.
 
 ## The bots
 
@@ -38,13 +38,16 @@ Per bot:
     "enabled": true,
     "failIfUnavailable": true,
     "allowUnsandboxedCommands": false,
-    "filesystem": { "denyWrite": ["<home>/SOUL.md", "<home>/MEMORY.md", "<home>/state", "<home>/.claude", "<other home>"] }
+    "filesystem": { "denyWrite": ["<home>/SOUL.md", "<home>/MEMORY.md", "<home>/state", "<home>/.claude", "<other home>"] },
+    "network": { "allowedDomains": ["github.com", "api.github.com", "*.githubusercontent.com"] }
   }
 }
 ```
 
-  A refused `MEMORY.md` write is what keeps a role bot's memory off. Each `<...>` is absolute, so every `Edit` rule starts with `//`.
-- `<project home>/.claude/settings.json`, the project bot: `permissions.deny` `Bash(gh pr merge *)`, `Edit(/<project home>/SOUL.md)`, `Edit(/<project home>/.claude/**)`, `Edit(/<project home>/pre-merge.json)` and `Edit(/<project home>/questions.json)`.
+  A refused `MEMORY.md` write is what keeps a role bot's memory off. Each `<...>` is absolute, so every `Edit` rule starts with `//`. `allowedDomains` adds the policy's `sandbox.allowedDomains`.
+- `<project home>/.claude/settings.json`, the project bot: `permissions.deny` `Bash(gh pr merge *)`, `Edit(/<project home>/SOUL.md)`, `Edit(/<project home>/.claude/**)`, `Edit(/<project home>/pre-merge.json)` and `Edit(/<project home>/questions.json)`. Its shell runs unsandboxed, so these cover its file tools only.
+
+The deny rules are a backstop: every bot may act under one GitHub login, so the Roles of `SOUL.md` hold by its procedures, not by a permission.
 - The project bot's `<clone>` (`gh repo clone <owner/repo> <clone>`) and an empty `<project home>/state/`.
 
 Merges go only through `node <skill folder>/merge.mjs`, which only the project bot runs, never `gh pr merge`, `--admin` or `--auto`. `<project home>/pre-merge.json`, only when the user names a command: `{ "command": ["<program>", "<args>"] }`, the program by its absolute path. It gets each merge's and each post's text on stdin and must exit 0; none by default.
@@ -72,6 +75,6 @@ The catch-up sweep only once `<skill folder>` holds `SOUL.md`, `bot-project.md`,
 
 The setup skill of cl-repo takes these steps in its own phases. It creates no bot.
 - **Which bots.** None where no Orca executable is found or the user declines. With `docs/agents/orchestration.json` on the default branch or in the plan: the project bot and the three role bots, and `security-check` if wanted. Without it: only the `pr-review` and `security-check` templates, if wanted.
-- **Read only.** `ORCA bot list`, `ORCA automations list --json`, an existing `docs/agents/bots.md` and the bot homes it names, and `<skill folder>`, which must hold `merge.mjs`, `precheck.mjs` and the procedures Automations names. Ask the owner-question channel (`issues` recommended), the reconciliation time and a pre-merge command (none recommended).
+- **Read only.** `ORCA bot list` and the homes of the bots it lists, `ORCA automations list --json`, an existing `docs/agents/bots.md`, and `<skill folder>`, which must hold `merge.mjs`, `precheck.mjs` and the procedures Automations names: a missing one skips the bots, naming it. A plugin update moves `<skill folder>`: compare each automation's and `SOUL.md`'s paths with it, and propose the changed ones. Ask the owner-question channel (`issues` recommended), the reconciliation time and a pre-merge command (none recommended).
 - **Plan.** `docs/agents/bots.md`, committed, with no local path; per bot its card (name, purpose, look), its home files, the clone and the automations, each with its filled text. Bot homes and automations belong to the repository's bots, not to user scope.
-- **Apply.** Per bot, put its card in the bot chat the session runs in, else give the user the command, and wait for Create bot. Then write its home files (never its `MEMORY.md`) and the clone. Before any automation, a one-time run on each role bot asks it to write its `MEMORY.md` with the file tool and with a shell command. Both refused: create the automations, the catch-up sweep last. Otherwise create none and report why: whether a bot run loads its home's `.claude/settings.json` is unverified.
+- **Apply.** Per bot, put its card in the bot chat the session runs in, else give the user the command, and wait for Create bot. Then write its home files (never its `MEMORY.md`) and the clone. Before any automation, a one-time run on each role bot asks it to write its `MEMORY.md` with the file tool and with a shell command, and to run `gh api rate_limit`. Its result must show both writes refused by a permission and the `gh` call answered: no result, or a write that went through, fails the test (remove what it wrote). Whether a bot run loads its home's `.claude/settings.json` is unverified. Passed, and `docs/agents/orchestration.json` on the default branch: create the automations, the catch-up sweep last. Otherwise create none and report them as waiting, with the reason.
