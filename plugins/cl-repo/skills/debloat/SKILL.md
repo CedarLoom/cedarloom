@@ -23,7 +23,11 @@ Target: $ARGUMENTS (Codex: the text after the skill name), as in [audit](../audi
 
 ## Steps: instructions and docs
 
-1. Measure. `tb measure <files>` gives lines and estimated tokens per file, and the listed tokens: the descriptions of skills the model can start and of agents, paid in every session. A user-invoked skill's description is not listed, so shortening it saves nothing. `tb check` lists dead references. No baseline yet: `tb baseline --write`.
+1. Measure. `tb measure <files>` gives lines and estimated tokens (4 bytes each) per file and the always-loaded sum, paid in every session:
+   - whole: root CLAUDE.md and AGENTS.md (also in `.claude/`), rules in the root `.claude/rules/**/*.md` without `paths`, the files in the config's `alwaysLoadedFiles` and what these import, four hops deep; `tb check` fails for such a file outside `include`;
+   - the listed tokens: descriptions of agents and of skills a host lists (a `.claude/commands/**/*.md` file is a skill). Claude Code hides a skill with `disable-model-invocation: true`, Codex one whose `agents/openai.yaml` sets `policy.allow_implicit_invocation: false`. A skill counts when either host lists it, so the sum is an upper bound; shortening an unlisted description saves nothing. Hook output is not counted.
+
+   `budget.alwaysLoaded` caps that sum: the measured value plus about 10 percent, with 5,000 as a target, not a cap. Host limits: Codex cuts the project instruction file that crosses 32 KiB, with a warning, and skips later ones (its global file does not count); Claude Code cuts a nested CLAUDE.md or path-scoped rule above 40,000 characters (https://developers.openai.com/codex/guides/agents-md, https://code.claude.com/docs/en/memory). `tb check` lists dead references. No baseline yet: `tb baseline --write`.
 2. Protect, before judging what to cut. `tb protect --suggest <files>` prints candidates, among them the description line of each listed skill and agent. Read each file in full and add what the patterns miss: rules worded without "never", decisions with their reason, safety steps. Show the list to the user, then store it: `tb protect --add <file>:<start>-<end> ...`.
 3. Plan. Candidates, largest first:
    - duplicate (cite the copy that stays), restated heading, history, recap, a line that is only a dead reference, text the code or a linked doc already says (cite it).
@@ -36,7 +40,7 @@ Target: $ARGUMENTS (Codex: the text after the skill name), as in [audit](../audi
    - `tb check` passes: every protected span is present, no link, anchor or import is dead. Its table shows the change against the baseline.
    - `git diff` shows deletions only, inside the approved ranges. A cut that left half a sentence, an empty section or a broken list is restored from the diff and reported as a finding for `/cl-repo:improve`.
    - A cut from an instruction file is a hypothesis until an agent has worked without the text. Per file, name the task that would show a regression.
-8. Report: tokens before and after (the `tb check` table, the listed tokens), cuts applied, cuts refused and why, the minimum that can be reached when the budget was missed, the warnings of `tb check`. A pull request of the cuts carries the same table as its evidence before and after. When the user accepts the result: `tb baseline --write`.
+8. Report: tokens before and after (the `tb check` table, the always-loaded sum), cuts applied, cuts refused and why, the minimum that can be reached when the budget was missed, the warnings of `tb check`. A pull request of the cuts carries the same table as its evidence before and after. When the user accepts the result: `tb baseline --write`.
 
 ## Steps: code
 
