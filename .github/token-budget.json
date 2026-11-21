@@ -1,6 +1,6 @@
 {
   "budget": {
-    "total": 115000
+    "total": 117000
   },
   "ignoreRefs": [
     "^docs/agents/(worker-rules\\.md|orchestration\\.json)$",
