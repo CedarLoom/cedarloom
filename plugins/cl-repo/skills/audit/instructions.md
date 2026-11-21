@@ -17,7 +17,7 @@
 | trigger text | A skill or agent description that does not say what it does and when, is in the first person or lists keywords. | rewrite; the rewrite keeps every trigger and boundary sentence ("Use when", "Use only when", "Do not use", "Prefer ... over") |
 | hook | A hook command whose path does not exist, a matcher that matches no tool, a "must always" rule with no hook behind it, prose that repeats what a hook enforces. | rewrite, add or remove |
 
-Size is a signal for where to look, not a finding: a CLAUDE.md above 200 lines, a SKILL.md above 500 lines, a description above 1,024 characters. An `@` import does not lower the context cost of the importing file. Only the descriptions of skills the model can start and of agents are listed in every session (`measure` prints them as listed tokens); the description of a skill with `disable-model-invocation: true` costs nothing until the skill runs.
+Size is a signal for where to look, not a finding: a CLAUDE.md above 200 lines, a SKILL.md above 500 lines, a description above 1,024 characters. An `@` import does not lower the context cost of the importing file. Every session pays the root instruction files and the descriptions of listed skills and agents (`measure` prints the always-loaded sum and the listed tokens); the description of a skill no host lists costs nothing until the skill runs.
 
 ## One rule file
 
