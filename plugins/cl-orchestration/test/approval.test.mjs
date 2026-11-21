@@ -283,6 +283,22 @@ test('approval: without a private tracker, the question goes into the local queu
   assert.equal(queue()[0].option, 'b');
 });
 
+test('approval: the digest folder is kept out of git with one exclude line, also on a second write', () => {
+  const script = fileURLToPath(new URL(`${SKILL}approval.mjs`, import.meta.url));
+  const repo = mkdtempSync(join(tmpdir(), 'cl-approval-'));
+  execFileSync('git', ['init', '-q'], { cwd: repo });
+  const dir = join(repo, 'work');
+  mkdirSync(dir);
+  for (let i = 0; i < 2; i++) {
+    const r = spawnSync(process.execPath, [script, 'digests'], { cwd: dir, encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout), { folder: '.cedarloom/digests' });
+  }
+  const lines = readFileSync(join(repo, '.git/info/exclude'), 'utf8').split('\n').filter((line) => line.includes('digests'));
+  assert.deepEqual(lines, ['/work/.cedarloom/digests/']);
+  assert.equal(spawnSync('git', ['check-ignore', '-q', '.cedarloom/digests/2026-11-21.md'], { cwd: dir }).status, 0);
+});
+
 test('approval: the local queue refuses links, existing files and planted answers, and reports a file it cannot read', () => {
   const script = fileURLToPath(new URL(`${SKILL}approval.mjs`, import.meta.url));
   const project = (sub = '.') => {

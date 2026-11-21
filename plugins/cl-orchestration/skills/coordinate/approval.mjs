@@ -3,6 +3,7 @@
 // Usage: node approval.mjs file <file> <project>, the file in the run folder: checks it as above and files it as the next question of the local queue, .cedarloom/questions/<project>-<n>.md, printing { file }.
 // Usage: node approval.mjs apply <owner/name> <number>. Reads the issue with gh and its owner's answer as the answer mode does; on an answer takes cl:needs-human and cl:deferred off, and cl:ready-for-agent too when the body holds an Approval table, else puts cl:ready-for-agent on, then prints { option, text, at, labels } and exits 0; exit 1 while there is none, exit 2 with one line on an error.
 // Usage: node approval.mjs queue: { file, status, option, text, at } of each question in the local queue as JSON, or exit 2 with one line.
+// Usage: node approval.mjs digests: makes the digest folder .cedarloom/digests/ (digest.md) and keeps it out of git as the queue is, printing { folder }, or exit 2 with one line.
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { escaped, isMain, json, sh } from './policy.mjs';
@@ -140,27 +141,24 @@ export function apply(repo, number, exec) {
   return found && { ...found, labels: settle(repo, issue, exec) };
 }
 
-// The local question queue (approvals.md): a folder that is a link is refused, as the run folder is.
+// The local question queue (approvals.md) and the digest folder (digest.md): a folder that is a link is refused, as the run folder is.
 const QUEUE = join('.cedarloom', 'questions');
-function queueDir(create) {
+const DIGESTS = join('.cedarloom', 'digests');
+function ownDir(folder, create) {
   const root = realpathSync('.');
-  const dir = join(root, QUEUE);
+  const dir = join(root, folder);
   // Checked before mkdir, which would follow a link.
   for (const at of [dirname(dir), dir]) if (existsSync(at) && realpathSync(at) !== at) throw new Error(`refused: ${at.slice(root.length + 1)} is a link`);
   if (create) mkdirSync(dir, { recursive: true });
   else if (!existsSync(dir)) return null;
   return dir;
 }
+const queueDir = (create) => ownDir(QUEUE, create);
 
-// Files the approval text as the next question <project>-<n>.md of the queue, never over an existing file, and keeps the queue out of git.
-export function fileQuestion(text, project, run) {
-  // A project name reads as a repository name does (REPO).
-  if (!/^(?!\.\.?$)[A-Za-z0-9._-]+$/.test(project)) throw new Error(`no plain project name: ${project}`);
-  // The answer is the last Owner answer line, so the filed text carries none: every such line comes after it.
-  if (/^Owner answer \(/m.test(text)) throw new Error('refused: the question text holds a line starting "Owner answer ("');
-  const dir = queueDir(true);
+// Adds an existing folder of the working directory to info/exclude unless git ignores it already.
+function keepOut(folder, run) {
   try {
-    run('git', ['check-ignore', '-q', QUEUE]);
+    run('git', ['check-ignore', '-q', folder]);
   } catch (e) {
     // 1: not ignored; 128: no git repository, nothing to keep out.
     // An exclude pattern with a slash matches from the repository root, so it names the folder from there,
@@ -170,9 +168,26 @@ export function fileQuestion(text, project, run) {
       if (/[\r\n]/.test(prefix)) throw new Error('refused: the folder path holds a line break, which no exclude line can name');
       const exclude = resolve(run('git', ['rev-parse', '--git-path', 'info/exclude']).trim());
       mkdirSync(dirname(exclude), { recursive: true });
-      appendFileSync(exclude, `\n/${prefix.replace(/[\\[*?]/g, '\\$&')}${QUEUE.replaceAll(sep, '/')}/\n`);
+      appendFileSync(exclude, `\n/${prefix.replace(/[\\[*?]/g, '\\$&')}${folder.replaceAll(sep, '/')}/\n`);
     } else if (e.status !== 128) throw e;
   }
+}
+
+// Makes the digest folder, kept out of git before the first digest is written.
+export function digestFolder(run) {
+  ownDir(DIGESTS, true);
+  keepOut(DIGESTS, run);
+  return DIGESTS.replaceAll(sep, '/');
+}
+
+// Files the approval text as the next question <project>-<n>.md of the queue, never over an existing file, and keeps the queue out of git.
+export function fileQuestion(text, project, run) {
+  // A project name reads as a repository name does (REPO).
+  if (!/^(?!\.\.?$)[A-Za-z0-9._-]+$/.test(project)) throw new Error(`no plain project name: ${project}`);
+  // The answer is the last Owner answer line, so the filed text carries none: every such line comes after it.
+  if (/^Owner answer \(/m.test(text)) throw new Error('refused: the question text holds a line starting "Owner answer ("');
+  const dir = queueDir(true);
+  keepOut(QUEUE, run);
   const taken = readdirSync(dir).filter((name) => name.startsWith(`${project}-`)).map((name) => /^(\d+)\.md$/.exec(name.slice(project.length + 1))?.[1]).filter(Boolean).map(Number);
   const name = `${project}-${Math.max(0, ...taken) + 1}.md`;
   writeFileSync(join(dir, name), `Status: open\n\n${text}`, { flag: 'wx' });
@@ -209,10 +224,10 @@ if (isMain(import.meta.url)) {
   process.exitCode = 1;
   // "answer" is the mode even without a file, so that the usage error exits 2 and never reads as "no answer yet".
   const args = process.argv.slice(2);
-  const mode = ['answer', 'apply', 'file', 'queue'].includes(args[0]) ? args.shift() : 'check';
+  const mode = ['answer', 'apply', 'digests', 'file', 'queue'].includes(args[0]) ? args.shift() : 'check';
   const [file, project] = args;
   try {
-    if (args.length !== { check: 1, answer: 1, apply: 2, file: 2, queue: 0 }[mode]) throw new Error('usage: node approval.mjs [answer] <file>, node approval.mjs apply <owner/name> <number>, node approval.mjs file <file> <project>, or node approval.mjs queue');
+    if (args.length !== { check: 1, answer: 1, apply: 2, file: 2, queue: 0, digests: 0 }[mode]) throw new Error('usage: node approval.mjs [answer] <file>, node approval.mjs apply <owner/name> <number>, node approval.mjs file <file> <project>, node approval.mjs queue, or node approval.mjs digests');
     if (mode === 'apply' && !(REPO.test(file) && /^[1-9]\d*$/.test(project))) throw new Error(`no repository as owner/name and issue number: ${args.join(' ')}`);
     const reads = ['check', 'answer', 'file'].includes(mode);
     const real = reads ? inRuns(file) : null;
@@ -227,7 +242,7 @@ if (isMain(import.meta.url)) {
     let writes = writers(repo, (cmd, args) => sh('.', cmd, args));
     if (!repo) writes = () => { throw new Error('the file holds no issue url: it must be what gh issue view --json labels,comments,author,body,url printed'); };
     else if (host.toLowerCase() !== gh) writes = () => { throw new Error(`the issue is on ${host}, and gh asks ${gh}: set GH_HOST for an approval on another host`); };
-    const found = mode === 'answer' ? answer(issue, writes) : mode === 'apply' ? apply(file, project, (cmd, cmdArgs) => sh('.', cmd, cmdArgs)) : mode === 'queue' ? readQueue() : null;
+    const found = mode === 'answer' ? answer(issue, writes) : mode === 'apply' ? apply(file, project, (cmd, cmdArgs) => sh('.', cmd, cmdArgs)) : mode === 'queue' ? readQueue() : mode === 'digests' ? { folder: digestFolder((cmd, cmdArgs) => sh('.', cmd, cmdArgs)) } : null;
     if (found) console.log(json(found));
     const lacks = mode === 'check' || mode === 'file' ? missing(text) : [];
     if (mode === 'file' && !lacks.length) console.log(json({ file: fileQuestion(text, project, (cmd, cmdArgs) => sh('.', cmd, cmdArgs)) }));
