@@ -4,26 +4,11 @@ What the CedarLoom plugins add to a Claude Code session besides their skills: ho
 
 | Plugin | Hooks | Settings |
 |---|---|---|
-| `cl-workflow` | [Terminal questions](#terminal-questions), [role guard](#role-guard), [status band](#the-status-band) | `tierBand` |
+| `cl-workflow` | [Terminal questions](#terminal-questions), [role guard](#role-guard) | none |
 | `cl-orchestration` | [Coordinator context rotation](#coordinator-context-rotation) | `rotateAtTokens`, `rotateAtPercent` |
 | `cl-repo` | none | none |
 
 Every hook runs `node`, so Node.js must be on the PATH. Set a plugin's options with `/plugin` (Installed tab, Configure options) or under `pluginConfigs` in `$HOME/.claude/settings.json`, then start a new session.
-
-## The status band
-
-Two rows of text above the prompt in the Claude Code terminal and desktop app (not the VS Code extension), off by default.
-
-- Top row: the project folder, its git branch, and the level of [Ponytail](../README.md#recommended-add-on-ponytail), when a valid `.ponytail-active` file is present.
-- Checks row: the last test run and the last lint or type check of the main loop, each `passed`, `failed`, `not run` or `stale (N edits since)`, then `ASK until <time>` (or `ASK for this session`) while [terminal questions](#terminal-questions) are allowed, and the button `?`, a short version of this text.
-  - Test runs: `npm test`, `pnpm test`, `yarn test`, `bun test` (also with `run` and as `npm run test:<name>`), `node --test`, `playwright test`, `pytest`, `go test`, `cargo test`, `vitest` or `jest`.
-  - Lint or type checks: `eslint`, `npm run lint`, `tsc`, `ruff`, `mypy`, `pyright`, `go vet`, `cargo clippy` or `biome`.
-  - Stale: an edit by the main loop (Edit, Write, MultiEdit, NotebookEdit; not a subagent's, not a failed one) after a result.
-  - A command counts when it starts the command or a part of a chain joined by `&&`, also after `npx`, `pnpm`, `pnpm exec`, `yarn`, `bunx`, `uv run` or `python -m`.
-  - Redirections (`> test.log`, `2>&1`) are ignored, and one `sh -c '<script>'` (also `sh -lc`) counts as its script.
-  - `not run`: a chain with `||`, `;`, `|` or `&`, a quoted name, a background run, or a failed chain that is not the check alone.
-
-Set `tierBand` to `true` (off: `false`) for `cl-workflow@cedarloom`. The band reads the working folder, the git branch, Ponytail's flag file `.ponytail-active` in the Claude Code configuration folder, and the commands and edits of the main loop; it writes no file and makes no network request.
 
 ## Terminal questions
 
@@ -182,7 +167,6 @@ Every switch except one environment variable is a Claude Code setting. In the pr
 - It needs, among others: Claude Code at the [minimum version](../README.md#requirements) on the native build, an interactive terminal session, and Opus 5.5, Sonnet 5.5, Haiku 5.5 or Fable 5.2. Its [requirements](https://code.claude.com/docs/en/code-mode#requirements) list the rest and the settings that block it.
 - Turn it on: set `"CLAUDE_CODE_EXPERIMENTAL_CODE_MODE": "1"` in the `env` block of `$HOME/.claude/settings.json`. Claude Code ignores it in a project's settings. A Code Mode session resumes only with it on.
 - The hooks of these plugins keep working: each tool call the code makes still reaches the `PreToolUse` hooks, and a hook that fails or times out refuses that call.
-- Code Mode does not start while the `cl-workflow` [status band](#the-status-band) is on, since its module checks tool calls: set `tierBand` to `false` (the default) first.
 
 ## Untrusted input
 
