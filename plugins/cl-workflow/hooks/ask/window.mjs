@@ -14,7 +14,7 @@ function clock(at, now) {
 
 // /cl-workflow:questions opens the window for the rest of the session: an end of Infinity, kept as SESSION in the window file.
 export const SESSION = 'session';
-export const lasting = (until, now) => (until === Infinity ? 'for this session' : `until ${clock(until, now)}`);
+const lasting = (until, now) => (until === Infinity ? 'for this session' : `until ${clock(until, now)}`);
 
 export const allowed = (until, now) => `Terminal questions are allowed ${lasting(until, now)}: the user opened them with /cl-workflow:ask or /cl-workflow:questions, and the question tool and plan mode are refused again after that.`;
 
