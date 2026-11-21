@@ -1,7 +1,7 @@
 {
   "name": "cedarloom",
   "displayName": "CedarLoom",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Installs the CedarLoom plugins cl-workflow, cl-repo and cl-orchestration together.",
   "author": {
     "name": "CedarLoom",
