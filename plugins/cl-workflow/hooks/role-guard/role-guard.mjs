@@ -1,6 +1,7 @@
 // PreToolUse hook for Bash, Monitor and PowerShell: a session that does not run as the coordinator (CEDARLOOM_ROLE=coordinator),
 // and every subagent, may not merge, release, push tags or to the default branch, change repository settings or security,
-// use gh auth, write git config, use git stash or start a session in bare mode, which runs no hooks.
+// use gh auth, write git config, use git stash or start a session in bare mode, which runs no hooks. The bot roles take narrower
+// rules (BOTS), and no role, the coordinator included, merges with --admin.
 // It stops a session that forgets its role, not one that works around it (variables, aliases, scripts, another tool):
 // the boundary is a gh token without those rights.
 // For Write, Edit, MultiEdit and NotebookEdit too: an answer in the local question queue counts as the owner's, so every session, the
@@ -28,6 +29,58 @@ const LAUNCHERS = new Set(['claude', 'claude-code']);
 const MAX_FOLDERS = 64;
 
 const ROLE = 'CEDARLOOM_ROLE';
+// The bots of a repository take the guarded rules and these on top: none merges but through merge.mjs, which runs gh as a child
+// process no hook reads. The project bot and the reviewer bot never push; fixer and worker bots push only the branch checked out.
+const BOTS = new Set(['project-bot', 'reviewer-bot', 'fixer-bot', 'worker-bot']);
+const ROLE_BOTS = new Set(['reviewer-bot', 'fixer-bot', 'worker-bot']);
+const OWN_BRANCH = new Set(['fixer-bot', 'worker-bot']);
+// Role bots post nothing on GitHub but their push: per gh command the verbs they may run, null for any; gh api only with GET.
+const BOT_GH_READS = new Map([['repo', ['clone', 'view', 'list']], ['pr', ['view', 'diff', 'list', 'checks', 'status']], ['issue', ['view', 'list', 'status']], ['run', ['view', 'list', 'watch']], ['search', null]]);
+// The project bot deletes a merged head branch, named <type>/<number>-<slug>, so never a default branch.
+const BOT_BRANCH_REF = /^\/?repos\/[\w.-]+\/[\w.-]+\/git\/refs\/heads\/[a-z0-9-]+\/\d+-[a-z0-9-]+$/;
+const FORCE_OPTIONS = ['force', 'force-with-lease', 'force-if-includes', 'delete', 'prune'];
+// Programs that run the program after them, each with its options whose value is the next word.
+const WRAPPERS = new Map([
+  ['env', ['-u', '--unset', '-C', '--chdir', '-S', '--split-string', '-P']],
+  ['sudo', ['-u', '--user', '-g', '--group', '-C', '--close-from', '-D', '--chdir', '-h', '--host', '-p', '--prompt', '-r', '--role', '-t', '--type', '-U', '--other-user', '-T', '--command-timeout']],
+  ['doas', ['-u', '-C']],
+  // --eof and --max-lines take their optional value only after =.
+  ['xargs', ['-I', '-d', '--delimiter', '-E', '-a', '--arg-file', '-L', '-n', '--max-args', '-P', '--max-procs', '-s', '--max-chars', '--process-slot-var', '-J', '-R', '-S']],
+  ['time', ['-f', '--format', '-o', '--output']],
+  ['timeout', ['-k', '--kill-after', '-s', '--signal']],
+  ['gtimeout', ['-k', '--kill-after', '-s', '--signal']],
+  ['nice', ['-n', '--adjustment']],
+  ['stdbuf', ['-i', '--input', '-o', '--output', '-e', '--error']],
+  ['exec', ['-a']],
+  ['command', []],
+  ['nohup', []],
+  ['builtin', []],
+  ['eval', []],
+  ['noglob', []],
+  // PowerShell's dot-source operator runs the command after it in the current scope, as & does in a child scope.
+  ['.', []],
+  // PowerShell's flow-control keywords that take a pipeline (https://learn.microsoft.com/en-us/powershell/scripting/lang-spec/chapter-08#85-flow-control-statements).
+  ...['return', 'throw', 'exit'].map((word) => [word, []]),
+  // The reserved words a command can follow (bash, zsh).
+  ...['if', 'then', 'elif', 'else', 'do', 'while', 'until', '!', '{'].map((word) => [word, []]),
+]);
+// A PowerShell assignment takes the output of the command after it: its target ($r, $script:r, [string]$r) and operator
+// (=, +=, ??=) as words before the command.
+const PS_TARGET = /^(\[[^\]]*\])*\$\S+$/;
+const PS_OPERATOR = /^(\?\?|[-+*/%])?=$/;
+// Word j runs as the command: every word before it is an env assignment, a wrapper, a wrapper's option with its value, a
+// duration (timeout 10), or in PowerShell an assignment's target or operator.
+function runs(words, j, powershell) {
+  let values = [];
+  for (let i = 0; i < j; i++) {
+    const w = words[i];
+    if (WRAPPERS.has(program(w))) values = WRAPPERS.get(program(w));
+    else if (w.startsWith('-')) i += values.includes(w) ? 1 : 0;
+    else if (powershell && (PS_TARGET.test(w) || PS_OPERATOR.test(w))) values = [];
+    else if (!/^([A-Za-z_]\w*=|\d+(\.\d+)?[smhd]?$)/.test(w)) return false;
+  }
+  return true;
+}
 
 // gh flags that take the next word as their value, wherever they stand (gh pr -R owner/repo merge).
 const GH_VALUE_FLAGS = new Set(['-R', '--repo', '--hostname', '-b', '--body', '-F', '--body-file', '-f', '--field', '--raw-field', '-X', '--method', '-H', '--header', '-q', '--jq', '-t', '--template', '--input', '-p', '--preview', '--cache']);
@@ -53,6 +106,7 @@ const DEFAULT_BRANCHES = ['main', 'master'];
 // Commands that change the folder the following commands run in, in bash and PowerShell.
 const CHANGE_DIR = new Set(['cd', 'pushd', 'popd', 'chdir', 'set-location', 'sl', 'push-location', 'pop-location']);
 const UNREAD_BRANCH = 'a push without a branch name from a folder the guard cannot read (name it: git push <remote> <branch>)';
+const OWN_UNREAD = 'a push from a folder whose checked-out branch the guard cannot read (name the folder as a path: git -C <clone> push <remote> <branch>)';
 const GIT_DIR_PUSH = 'a push from the repository GIT_DIR or --git-dir names, which the guard does not read (push from its folder: git -C <dir> push <remote> <branch>)';
 const UNREAD_DEFAULT = 'a push to a remote whose default branch the guard cannot read (push to a remote by name whose refs/remotes/<remote>/HEAD is set: git remote set-head <remote> --auto)';
 
@@ -66,12 +120,20 @@ const BASH_QUOTED_ESCAPES = '$`"\\';
 // may not reach the commands after it.
 // PowerShell escapes and continues lines with the backtick and keeps the backslash as a plain character
 // (https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_special_characters).
+// A PowerShell script block ({ } as in ForEach-Object { }, %{ }, try { }, catch [X]{ } and -Process:{ }) holds commands of its own,
+// nested; a brace after $, @, / or ^ (${n}, @{ }, stash@{0}, repos/{owner}, HEAD^{commit}) only ends a word. The block ends the
+// command it follows: a program takes a script block as -encodedCommand with base64 text, never as its verb, method or branch
+// (https://github.com/PowerShell/PowerShell/blob/ba2221aed027041b6620c5fe1c0675567f14452a/src/System.Management.Automation/engine/MinishellParameterBinderController.cs#L177-L192).
+// PowerShell also runs the command after an assignment operator, whatever its target ($r =gh, ${r}=gh, [int] $a[0] += gh,
+// @{ a = gh }): the words after each = of a command are read as a command of their own as well.
 function commands(source, powershell, nested = false) {
   /** @type {{ words: string[], targets: string[], nested: boolean }[]} */
   const out = [];
   const escape = powershell ? '`' : '\\';
   const s = source.replace(powershell ? /`\r?\n/g : /\\\r?\n/g, '');
   let words = [], targets = [], word = '', started = false, quoted = false, quote = null, redirect = false, depth = 0, backticks = false;
+  // Per open brace in PowerShell, whether it opened a script block.
+  const blocks = [];
   const endWord = () => {
     if (started) {
       if (redirect) {
@@ -85,7 +147,21 @@ function commands(source, powershell, nested = false) {
   };
   const endCommand = (subshell = false) => {
     endWord();
-    if (words.length || targets.length) out.push({ words, targets, nested: nested || subshell || depth > 0 || backticks });
+    const inner = nested || subshell || depth > 0 || backticks;
+    if (words.length || targets.length) out.push({ words, targets, nested: inner });
+    if (powershell) {
+      // Where no word after the = is one the guard acts on, the reading keeps only the word joined to it, a path the command may reach.
+      const last = words.findLastIndex(acted);
+      words.forEach((w, i) => {
+        for (let at = w.indexOf('='); at >= 0; at = w.indexOf('=', at + 1)) {
+          const head = w.slice(at + 1);
+          // Of a run of = (a ruler in quoted text) only the last one can end an operator.
+          if (head.startsWith('=')) continue;
+          const after = [...(head ? [head] : []), ...(i < last || acted(head) ? words.slice(i + 1) : [])];
+          if (after.length) out.push({ words: after, targets: [], nested: inner });
+        }
+      });
+    }
     words = [];
     targets = [];
     redirect = false;
@@ -114,9 +190,17 @@ function commands(source, powershell, nested = false) {
       if (c === '(') depth++;
       else if (c === ')' && depth) depth--;
       else if (c === '`') backticks = !backticks;
-    }
-    // The braces of a PowerShell script block stand next to its first and last word: {gh pr merge 1}.
-    else if (/\s/.test(c) || (powershell && '{}'.includes(c))) endWord();
+    } else if (powershell && '{}'.includes(c)) {
+      // The braces of a script block may stand next to its first and last word: {gh pr merge 1}.
+      const block = c === '{' ? !'$@/^'.includes(s[i - 1] ?? ' ') : blocks.pop() ?? true;
+      if (c === '{') blocks.push(block);
+      if (!block) endWord();
+      else {
+        endCommand();
+        if (c === '{') depth++;
+        else if (depth) depth--;
+      }
+    } else if (/\s/.test(c)) endWord();
     else {
       word += c;
       started = true;
@@ -129,6 +213,8 @@ function commands(source, powershell, nested = false) {
 const program = (word) => word.split(/[/\\]/).pop().toLowerCase().replace(/\.exe$/, '');
 // A launcher also goes by its package with a version (npx @anthropic-ai/claude-code@latest) and, on Windows, by its script file (claude.cmd).
 const launcher = (word) => program(word).replace(/@[^@]*$/, '').replace(/\.(cmd|ps1|bat)$/, '');
+// The words the guard acts on: gh, git, a launcher and a folder change.
+const acted = (word) => ['gh', 'git'].includes(program(word)) || LAUNCHERS.has(launcher(word)) || CHANGE_DIR.has(word.toLowerCase());
 
 const GIT = gitProgram();
 // Without git every query fails: no tag, no branch and no remote's default branch is known, so every push is denied.
@@ -157,7 +243,11 @@ function folder(dir, args) {
 }
 
 // known: dir is the folder git runs in. Otherwise dir is one of the folders it may run in, and only a named branch is read.
-function push(args, dir, known) {
+// switched: an earlier git command in the same command line changes the branch, which the guard reads before the line runs.
+function push(args, dir, known, role, switched) {
+  if (BOTS.has(role) && !OWN_BRANCH.has(role)) return 'a push';
+  const own = OWN_BRANCH.has(role);
+  if (own && switched) return 'a push after a branch switch in the same command';
   const positionals = [];
   let repo;
   for (let i = 0; i < args.length; i++) {
@@ -170,10 +260,12 @@ function push(args, dir, known) {
       const name = w.slice(2).split('=')[0];
       const denied = name && PUSH_OPTIONS.find(([option]) => option.startsWith(name));
       if (denied) return denied[1];
+      if (own && name && FORCE_OPTIONS.some((option) => option.startsWith(name))) return 'a force or delete push';
       // --repo, or its prefix --rep, names the remote of a push without positionals.
       if (name === 'rep' || name === 'repo') repo = w.includes('=') ? w.slice(w.indexOf('=') + 1) : args[i + 1];
       if (!w.includes('=') && ['--push-option', '--receive-pack', '--exec', '--repo', '--rep'].includes(w)) i++;
     } else if (w.startsWith('-') && w.length > 1) {
+      if (own && /^-[^o]*[fd]/.test(w)) return 'a force or delete push';
       if (w.endsWith('o')) i++;
     } else positionals.push(w);
   }
@@ -195,26 +287,35 @@ function push(args, dir, known) {
   const remoteHead = /^[\w.-]+$/.test(remote) ? gitLine(dir, ['symbolic-ref', '--short', `refs/remotes/${remote}/HEAD`]) : '';
   const defaults = new Set([...DEFAULT_BRANCHES, remoteHead && branchOf(remoteHead)].filter(Boolean));
   const targets = specs.length ? [] : ['HEAD', branchOf(pushTarget)];
+  // The local side of each refspec, which a fixer or worker bot may only take from the branch checked out.
+  const sources = [];
   for (const spec of specs) {
+    if (own && /^(\+|:)/.test(spec)) return 'a force or delete push';
     // git resolves tags/x and heads/x as refs/tags/x and refs/heads/x.
     const [src, dst = src] = spec.replace(/^\+/, '').split(':').map((side) => side.replace(/^(tags|heads)\//, 'refs/$1/'));
     if (isTag(dir, src) || isTag(dir, dst)) return 'a tag push';
     targets.push(dst === '@' ? 'HEAD' : dst.replace(/^refs\/heads\//, ''));
+    if (src !== '@') sources.push(src.replace(/^refs\/heads\//, ''));
   }
   // A push of the current branch passes only where the guard can read which branch that is.
+  const current = (own || targets.includes('HEAD')) && known ? gitLine(dir, ['symbolic-ref', '--short', 'HEAD']) : '';
   if (targets.includes('HEAD')) {
-    const current = known ? gitLine(dir, ['symbolic-ref', '--short', 'HEAD']) : '';
     if (!current) return UNREAD_BRANCH;
     targets.push(current);
   }
   // A URL, a path or a remote never fetched names no default branch; the same command may create the repository it pushes from.
   if (!remoteHead) return UNREAD_DEFAULT;
   const target = targets.find((branch) => defaults.has(branch));
-  return target ? `a push to the default branch ${target}` : null;
+  if (target) return `a push to the default branch ${target}`;
+  if (!own) return null;
+  // Where the folder git runs in is unknown, no branch counts as checked out.
+  if (!current) return OWN_UNREAD;
+  const other = [...targets, ...sources].find((branch) => branch && branch !== 'HEAD' && branch !== current);
+  return other ? `a push that names ${other}, which is not the branch checked out where git runs` : null;
 }
 
-// gitDir: the command text sets GIT_DIR.
-function git(args, cwd, known, gitDir) {
+// gitDir: the command text sets GIT_DIR. line.switched records a branch switch for the pushes after it.
+function git(args, cwd, known, gitDir, role, line) {
   let i = 0;
   let dir = cwd;
   for (; i < args.length && args[i].startsWith('-'); i++) {
@@ -233,7 +334,10 @@ function git(args, cwd, known, gitDir) {
   if (sub === 'push' && gitDir) return GIT_DIR_PUSH;
   // Only the explicit read forms pass: `git config <key>` alone reads too, but `--get` says so.
   if (sub === 'config' && !(rest.some((w) => CONFIG_READ.test(w)) && !rest.some((w) => CONFIG_WRITE.test(w)))) return 'git config';
-  return sub === 'push' ? push(rest, dir, known) : null;
+  // A rebase may switch to the branch it names, bisect checks out commits and its reset a branch, and symbolic-ref HEAD <ref>
+  // moves HEAD; git takes --mo and --cop for --move and --copy.
+  if (sub === 'checkout' || sub === 'switch' || sub === 'rebase' || sub === 'bisect' || (sub === 'symbolic-ref' && rest.filter((w) => !w.startsWith('-')).length > 1) || (sub === 'branch' && rest.some((w) => /^(-[^-]*[mMcC]|--(mov?e?|copy?)$)/.test(w)))) line.switched = true;
+  return sub === 'push' ? push(rest, dir, known, role, line.switched) : null;
 }
 
 // gh api's flags as gh reads them: grouped short flags (-iX PUT), values joined (-XPUT, --method=PUT) or in the next word.
@@ -265,8 +369,10 @@ function apiCall(args) {
 // A path with each percent escape decoded, as the server may read it.
 const decoded = (path) => path.replace(/%[\da-f]{2}/gi, (escape) => String.fromCharCode(parseInt(escape.slice(1), 16)));
 
+const writes = (call) => (call.method ? call.method !== 'GET' : call.fields.length > 0 || call.input);
+
 // source: the command text and its words with quotes resolved, where a mutation split by quotes is whole.
-function api(args, source) {
+function api(args, source, role) {
   const call = apiCall(args);
   // A REST call to /graphql or its full URL reaches the same endpoint, its fields sent as the JSON body. The request line
   // carries no fragment (#x), and a host may read the path in any case and with trailing slashes.
@@ -274,26 +380,47 @@ function api(args, source) {
     // A query read from a file stays unseen, so it is denied.
     if (call.input || call.fields.some((v) => /^query=@/.test(v ?? ''))) return 'a gh api graphql query from a file';
     if (MUTATIONS.test(source)) return 'a gh api graphql mutation';
+    // A role bot posts nothing: any mutation, whatever the HTTP method.
+    if (ROLE_BOTS.has(role) && /\bmutation\b/i.test(source)) return 'a gh api graphql mutation';
   }
+  if (role === 'project-bot' && call.method === 'DELETE' && call.positionals.length === 1 && BOT_BRANCH_REF.test(call.positionals[0])) return null;
   // A REST path can end in graphql as well (a repository, branch or user of that name).
-  const writes = call.method ? call.method !== 'GET' : call.fields.length > 0 || call.input;
-  const path = writes && call.positionals.find((p) => API_PATHS.test(p) || API_PATHS.test(decoded(p)));
+  const path = writes(call) && call.positionals.find((p) => API_PATHS.test(p) || API_PATHS.test(decoded(p)));
   return path ? `gh api ${path}` : null;
 }
 
-function gh(args, source) {
+// A gh command line: its command, verb, the index of the command and whether it merges with --admin.
+function ghCall(args) {
   const words = [];
+  let admin = false;
   for (let j = 0; j < args.length; j++) {
-    if (GH_VALUE_FLAGS.has(args[j])) j++;
+    // Before the verb gh takes a flag it does not know there as one with a value (gh pr --subject x merge runs pr merge); --help takes none.
+    if (GH_VALUE_FLAGS.has(args[j]) || (words.length < 2 && /^(--[^=]+|-[^-])$/.test(args[j]) && args[j] !== '--help')) j++;
+    else if (/^--admin(=|$)/.test(args[j])) admin = true;
     else if (!args[j].startsWith('-')) words.push([args[j], j]);
   }
   const [[sub, at] = [], [verb] = []] = words;
-  if (GH_READS.has(sub) && !GH_READS.get(sub).includes(verb)) return `gh ${sub} ${verb ?? ''}`.trim();
-  if (GH_WRITES.get(sub)?.includes(verb)) return `gh ${sub} ${verb}`;
-  return sub === 'api' ? api(args.slice(at + 1), source) : null;
+  return { sub, verb, at, admin: admin && sub === 'pr' && verb === 'merge' };
 }
 
-function reason({ tool_name: tool, tool_input: toolInput }, cwd) {
+// command: gh runs as the command, not as a word in its arguments or in quoted text, where only the rules above apply.
+function gh(args, source, role, command) {
+  const { sub, verb, at } = ghCall(args);
+  if (GH_READS.has(sub) && !GH_READS.get(sub).includes(verb)) return `gh ${sub} ${verb ?? ''}`.trim();
+  if (GH_WRITES.get(sub)?.includes(verb)) return `gh ${sub} ${verb}`;
+  const why = sub === 'api' ? api(args.slice(at + 1), source, role) : null;
+  if (why || !ROLE_BOTS.has(role) || !command || sub === undefined) return why;
+  const reads = BOT_GH_READS.get(sub);
+  if (sub === 'api') return writes(apiCall(args.slice(at + 1))) ? 'a gh api call other than GET' : null;
+  return reads === null || reads?.includes(verb) ? null : `gh ${sub} ${verb ?? ''}`.trim();
+}
+
+// --admin passes branch protection, so no role merges with it, the coordinator included.
+const adminMerge = ({ tool_name: tool, tool_input: toolInput }) =>
+  typeof toolInput?.command === 'string' &&
+  commands(toolInput.command, tool === 'PowerShell').some(({ words }) => words.some((w, j) => program(w) === 'gh' && ghCall(words.slice(j + 1)).admin));
+
+function reason({ tool_name: tool, tool_input: toolInput }, cwd, role) {
   const cmd = toolInput?.command;
   // A Monitor call on a WebSocket runs no command.
   if (tool === 'Monitor' && cmd === undefined && toolInput?.ws) return null;
@@ -311,6 +438,7 @@ function reason({ tool_name: tool, tool_input: toolInput }, cwd) {
   const source = [cmd, ...parsed.flatMap((c) => c.words)].join('\n');
   // Before the command, through env or export in bash, or $env:GIT_DIR in PowerShell.
   const gitDir = /\bGIT_DIR\s*=/i.test(cmd);
+  const line = { switched: false };
   for (const { words, nested } of parsed) {
     if (!words.length) continue;
     const at = words.findIndex(changesDir);
@@ -328,8 +456,8 @@ function reason({ tool_name: tool, tool_input: toolInput }, cwd) {
       const name = program(words[j]);
       const rest = words.slice(j + 1);
       const why =
-        name === 'git' ? (known ? [dir] : seen).reduce((found, d) => found ?? git(rest, d, known, gitDir), null)
-        : name === 'gh' ? gh(rest, source)
+        name === 'git' ? (known ? [dir] : seen).reduce((found, d) => found ?? git(rest, d, known, gitDir, role, line), null)
+        : name === 'gh' ? gh(rest, source, role, runs(words, j, powershell))
         : name === 'claude' && rest.includes(BARE) ? 'a launch in bare mode, which runs no hooks'
         : null;
       if (why) return why;
@@ -425,8 +553,20 @@ else {
     const cwd = typeof input.cwd === 'string' ? input.cwd : process.cwd();
     const owners = queue(input, cwd);
     // A subagent inherits the coordinator's environment, so only the coordinator's main session passes.
-    const why = owners || EDITS.has(input.tool_name) || (process.env[ROLE] === 'coordinator' && !input.agent_id) ? null : reason(input, cwd);
+    // A bot's subagents inherit its role and its rules.
+    const role = process.env[ROLE];
+    const coordinator = role === 'coordinator' && !input.agent_id;
+    // A misspelled bot role would fall back to the wider rules of a guarded session, so it runs nothing.
+    const unknownBot = /bot/i.test(role ?? '') && !BOTS.has(role);
+    const why =
+      owners || EDITS.has(input.tool_name) ? null
+      : unknownBot ? `a command in the unknown role ${role}`
+      : coordinator ? (adminMerge(input) ? 'a merge with --admin' : null)
+      : reason(input, cwd, role);
     if (owners) line = `CedarLoom role guard: ${owners} is the owner's step: only a session where the user typed /cl-workflow:questions writes answers there. File a question with approval.mjs file and read answers with approval.mjs queue. Text that only mentions the folder goes in a file (-F, --body-file).`;
+    else if (why && coordinator) line = `CedarLoom role guard: ${why}, which passes branch protection, is no role's step. Merge without --admin, or leave the pull request to the owner. Text that only mentions such a command goes in a file (-F, --body-file).`;
+    else if (why && unknownBot) line = `CedarLoom role guard: ${why} is refused: the bot roles are ${[...BOTS].join(', ')}. Report the role to the user who starts this session.`;
+    else if (why && BOTS.has(role)) line = `CedarLoom role guard: ${why} is no step of the ${role} (${ROLE}=${role}).${!why.startsWith('a push') && /merge/i.test(why) ?' Merges go only through merge.mjs.' : ''} Leave the step out and name it in your report. Text that only mentions such a command goes in a file (-F, --body-file).`;
     else if (why) line = `CedarLoom role guard: ${why} is the coordinator's step, and this session does not run as the coordinator (${ROLE}=coordinator in the main session, set by the user who starts it). Leave the step to the coordinator and name it in your report. Text that only mentions such a command goes in a file (-F, --body-file).`;
   } catch (error) {
     refuse(`the guard failed (${error})`);
