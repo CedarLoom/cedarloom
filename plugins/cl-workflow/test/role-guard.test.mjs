@@ -277,6 +277,7 @@ test('role guard: passes everything in the coordinator role, but not in its suba
 
 test('role guard: refuses a merge with --admin in every role, the coordinator included', () => {
   for (const role of ['coordinator', 'project-bot']) assert.equal(decision('gh pr merge 12 --squash --admin', { role }), 'deny', role);
+  assert.equal(decision('gh pr --subject x merge 12 --admin', { role: 'coordinator' }), 'deny');
 });
 
 const ROLE_BOTS = ['reviewer-bot', 'fixer-bot', 'worker-bot'];
@@ -292,7 +293,7 @@ test('role guard: a fixer or worker bot pushes only the branch checked out where
     for (const command of ['git push origin feat/x', 'git push -u origin HEAD', `git -C ${feature} push origin feat/x`, 'git push origin feat/x && git checkout main']) assert.equal(decision(command, { role, cwd: feature }), 'none', `${role}: ${command}`);
     for (const command of ['git push origin feat/other', 'git push origin HEAD:feat/other', 'git push origin feat/x feat/other', 'git push origin feat/other:feat/x']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
     // The guard reads the branch before the command runs, so a push after a switch in the same command is refused.
-    for (const command of ['git checkout feat/other && git push', 'git switch -c feat/y && git push origin HEAD', 'git branch -M feat/y && git push origin feat/x']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
+    for (const command of ['git checkout feat/other && git push', 'git switch -c feat/y && git push origin HEAD', 'git branch -M feat/y && git push origin feat/x', 'git rebase origin/trunk trunk && git push', 'git symbolic-ref HEAD refs/heads/feat/other && git push', 'git branch --mov feat/y && git push origin HEAD']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
     // git's folder is unknown after a later cd, so the checked-out branch cannot be read.
     assert.equal(decision(`git status && cd ${feature} && git push origin feat/x`, { role, cwd: feature }), 'deny', role);
   }
@@ -314,13 +315,17 @@ test('role guard: a reviewer, fixer or worker bot runs only gh commands that rea
     'gh api repos/o/r/issues/3/comments -f body=x',
     'gh api -X POST repos/o/r/pulls --input pr.json',
     `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "T_1"}) { clientMutationId } }'`,
-    `gh api -X GET graphql -f query='mutation { addComment(input: {subjectId: "I_1", body: "x"}) { clientMutationId } }'`,
+    // gh after a program the guard does not read as a wrapper: only the text of the mutation is seen.
+    `parallel gh api graphql -f query='mutation { addComment(input: {subjectId: "I_1", body: "x"}) { clientMutationId } }' ::: 1`,
     'xargs -n1 gh pr comment --body-file c.md',
     "xargs -I '{}' gh pr comment '{}' --body-file c.md",
     'sudo -u bot gh pr comment 12 --body-file c.md',
     'xargs --eof env -u GH_DEBUG gh pr comment 12 --body-file c.md',
     'timeout -s KILL 10 gh pr comment 12 --body-file c.md',
     'FOO=1 gh pr comment 12 --body-file c.md',
+    'for n in 1 2; do gh pr comment $n --body-file c.md; done',
+    'if true; then gh pr create --title x --body-file b.md; fi',
+    'gh pr --subject view merge 12 --squash',
   ];
   const reads = [
     'gh repo clone o/r /bots/r/clones/r-12-1 --no-upstream -- --filter=blob:none --no-checkout',
@@ -341,7 +346,7 @@ test('role guard: a reviewer, fixer or worker bot runs only gh commands that rea
 });
 
 test('role guard: an unknown bot role runs no command', () => {
-  for (const role of ['fixer_bot', 'Fixer-Bot', 'review-bot']) for (const command of ['ls', 'gh pr view 12']) assert.equal(decision(command, { role }), 'deny', `${role}: ${command}`);
+  for (const role of ['fixer_bot', 'Fixer-Bot', 'review-bot', 'fixer-bot-1', 'fixer-bot ']) for (const command of ['ls', 'gh pr view 12']) assert.equal(decision(command, { role }), 'deny', `${role}: ${command}`);
 });
 
 test('role guard: the project bot deletes a head branch of the bot shape, never another', () => {

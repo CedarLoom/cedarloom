@@ -86,15 +86,15 @@ Only the coordinator's session runs with `CEDARLOOM_ROLE=coordinator` ([how to s
 
 ### Bot roles
 
-A repository's bots run with `CEDARLOOM_ROLE` set to their role. Each is guarded like any other session and also refused what its procedure does not need; its subagents inherit the role and the rules. A role ending in `bot` that is none of these runs no command. No role, the coordinator included, merges with `--admin`.
+A repository's bots run with `CEDARLOOM_ROLE` set to their role. Each is guarded like any other session and also refused what its procedure does not need; its subagents inherit the role and the rules. A role holding `bot` that is none of these runs no command. No role, the coordinator included, runs `gh pr merge --admin`; the merge endpoints are not read for it.
 
 | `CEDARLOOM_ROLE` | Also refused |
 |---|---|
-| `project-bot` | every `git push`; it may delete a head branch named `<type>/<number>-<slug>` with `gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>`, and the hook does not check that the branch is merged |
-| `reviewer-bot` | every `git push`; `gh` commands other than `repo clone`, `view` and `list`, `pr view`, `diff`, `list`, `checks` and `status`, `issue view`, `list` and `status`, `run view`, `list` and `watch`, `search`, and `gh api` with GET and no GraphQL mutation |
-| `fixer-bot`, `worker-bot` | the `gh` commands the reviewer bot is refused; a push whose refspec names any branch but the one checked out where git runs (on both sides), a push after `git checkout`, `git switch` or a branch rename or copy in the same command, and a force or delete push (`--force`, `-f`, `--force-with-lease`, `--force-if-includes`, `--delete`, `-d`, `--prune`, a refspec starting with `+` or `:`) |
+| `project-bot` | every `git push`; it may delete a head branch named `<type>/<number>-<slug>` with `gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>`, and the hook does not check that the branch is merged (the shape fits `release/2026-11` too) or refuse `gh pr close --delete-branch` |
+| `reviewer-bot` | every `git push`; `gh` commands other than `repo clone`, `view` and `list`, `pr view`, `diff`, `list`, `checks` and `status`, `issue view`, `list` and `status`, `run view`, `list` and `watch`, `search`, and `gh api` with GET only, so no GraphQL (a GET to `graphql` runs no query) |
+| `fixer-bot`, `worker-bot` | the `gh` commands the reviewer bot is refused; a push whose refspec names any branch but the one checked out where git runs (on both sides), a push after `git checkout`, `git switch`, `git rebase`, `git symbolic-ref HEAD <ref>` or a branch rename or copy in the same command, and a force or delete push (`--force`, `-f`, `--force-with-lease`, `--force-if-includes`, `--delete`, `-d`, `--prune`, a refspec starting with `+` or `:`) |
 
-- The `gh` rules of the table apply where `gh` runs as the command: first, or after env assignments and wrappers such as `env`, `sudo`, `xargs` and `timeout`. Elsewhere, as in `grep gh` or a quoted commit message, the rules of a guarded session apply.
+- The `gh` rules of the table apply where `gh` runs as the command: first, or after env assignments, shell keywords (`do`, `then`) and wrappers such as `env`, `sudo`, `xargs`, `timeout` and `eval`. Elsewhere, as in `grep gh` or a quoted commit message, the rules of a guarded session apply.
 - A fixer or worker bot pushes from a local branch named like its remote branch.
 - No bot runs `gh pr merge` or the merge endpoints: merges go through `merge.mjs`, which runs `gh` as a child process that no hook sees, so it needs no exception.
 

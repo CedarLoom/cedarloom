@@ -41,20 +41,24 @@ const BOT_BRANCH_REF = /^\/?repos\/[\w.-]+\/[\w.-]+\/git\/refs\/heads\/[a-z0-9-]
 const FORCE_OPTIONS = ['force', 'force-with-lease', 'force-if-includes', 'delete', 'prune'];
 // Programs that run the program after them, each with its options whose value is the next word.
 const WRAPPERS = new Map([
-  ['env', ['-u', '--unset', '-C', '--chdir', '-S', '--split-string']],
+  ['env', ['-u', '--unset', '-C', '--chdir', '-S', '--split-string', '-P']],
   ['sudo', ['-u', '--user', '-g', '--group', '-C', '--close-from', '-D', '--chdir', '-h', '--host', '-p', '--prompt', '-r', '--role', '-t', '--type', '-U', '--other-user', '-T', '--command-timeout']],
   ['doas', ['-u', '-C']],
   // --eof and --max-lines take their optional value only after =.
-  ['xargs', ['-I', '-d', '--delimiter', '-E', '-a', '--arg-file', '-L', '-n', '--max-args', '-P', '--max-procs', '-s', '--max-chars', '--process-slot-var']],
+  ['xargs', ['-I', '-d', '--delimiter', '-E', '-a', '--arg-file', '-L', '-n', '--max-args', '-P', '--max-procs', '-s', '--max-chars', '--process-slot-var', '-J', '-R', '-S']],
   ['time', ['-f', '--format', '-o', '--output']],
   ['timeout', ['-k', '--kill-after', '-s', '--signal']],
+  ['gtimeout', ['-k', '--kill-after', '-s', '--signal']],
   ['nice', ['-n', '--adjustment']],
   ['stdbuf', ['-i', '--input', '-o', '--output', '-e', '--error']],
   ['exec', ['-a']],
   ['command', []],
   ['nohup', []],
   ['builtin', []],
-  ['&', []],
+  ['eval', []],
+  ['noglob', []],
+  // The reserved words a command can follow (bash, zsh).
+  ...['if', 'then', 'elif', 'else', 'do', 'while', 'until', '!', '{'].map((word) => [word, []]),
 ]);
 // Word j runs as the command: every word before it is an env assignment, a wrapper, a wrapper's option with its value, or a
 // duration (timeout 10).
@@ -93,6 +97,7 @@ const DEFAULT_BRANCHES = ['main', 'master'];
 // Commands that change the folder the following commands run in, in bash and PowerShell.
 const CHANGE_DIR = new Set(['cd', 'pushd', 'popd', 'chdir', 'set-location', 'sl', 'push-location', 'pop-location']);
 const UNREAD_BRANCH = 'a push without a branch name from a folder the guard cannot read (name it: git push <remote> <branch>)';
+const OWN_UNREAD = 'a push from a folder whose checked-out branch the guard cannot read (name the folder as a path: git -C <clone> push <remote> <branch>)';
 const GIT_DIR_PUSH = 'a push from the repository GIT_DIR or --git-dir names, which the guard does not read (push from its folder: git -C <dir> push <remote> <branch>)';
 const UNREAD_DEFAULT = 'a push to a remote whose default branch the guard cannot read (push to a remote by name whose refs/remotes/<remote>/HEAD is set: git remote set-head <remote> --auto)';
 
@@ -263,6 +268,7 @@ function push(args, dir, known, role, switched) {
   if (target) return `a push to the default branch ${target}`;
   if (!own) return null;
   // Where the folder git runs in is unknown, no branch counts as checked out.
+  if (!current) return OWN_UNREAD;
   const other = [...targets, ...sources].find((branch) => branch && branch !== 'HEAD' && branch !== current);
   return other ? `a push that names ${other}, which is not the branch checked out where git runs` : null;
 }
@@ -287,7 +293,8 @@ function git(args, cwd, known, gitDir, role, line) {
   if (sub === 'push' && gitDir) return GIT_DIR_PUSH;
   // Only the explicit read forms pass: `git config <key>` alone reads too, but `--get` says so.
   if (sub === 'config' && !(rest.some((w) => CONFIG_READ.test(w)) && !rest.some((w) => CONFIG_WRITE.test(w)))) return 'git config';
-  if (sub === 'checkout' || sub === 'switch' || (sub === 'branch' && rest.some((w) => /^(-[^-]*[mMcC]|--(move|copy)$)/.test(w)))) line.switched = true;
+  // A rebase may switch to the branch it names, and symbolic-ref HEAD <ref> moves HEAD; git takes --mo and --cop for --move and --copy.
+  if (sub === 'checkout' || sub === 'switch' || sub === 'rebase' || (sub === 'symbolic-ref' && rest.filter((w) => !w.startsWith('-')).length > 1) || (sub === 'branch' && rest.some((w) => /^(-[^-]*[mMcC]|--(mov?e?|copy?)$)/.test(w)))) line.switched = true;
   return sub === 'push' ? push(rest, dir, known, role, line.switched) : null;
 }
 
@@ -345,7 +352,8 @@ function ghCall(args) {
   const words = [];
   let admin = false;
   for (let j = 0; j < args.length; j++) {
-    if (GH_VALUE_FLAGS.has(args[j])) j++;
+    // Before the verb gh takes a flag it does not know there as one with a value (gh pr --subject x merge runs pr merge); --help takes none.
+    if (GH_VALUE_FLAGS.has(args[j]) || (words.length < 2 && /^(--[^=]+|-[^-])$/.test(args[j]) && args[j] !== '--help')) j++;
     else if (/^--admin(=|$)/.test(args[j])) admin = true;
     else if (!args[j].startsWith('-')) words.push([args[j], j]);
   }
@@ -507,16 +515,16 @@ else {
     const role = process.env[ROLE];
     const coordinator = role === 'coordinator' && !input.agent_id;
     // A misspelled bot role would fall back to the wider rules of a guarded session, so it runs nothing.
-    const unknownBot = /bot$/i.test(role ?? '') && !BOTS.has(role);
+    const unknownBot = /bot/i.test(role ?? '') && !BOTS.has(role);
     const why =
       owners || EDITS.has(input.tool_name) ? null
       : unknownBot ? `a command in the unknown role ${role}`
       : coordinator ? (adminMerge(input) ? 'a merge with --admin' : null)
       : reason(input, cwd, role);
     if (owners) line = `CedarLoom role guard: ${owners} is the owner's step: only a session where the user typed /cl-workflow:questions writes answers there. File a question with approval.mjs file and read answers with approval.mjs queue. Text that only mentions the folder goes in a file (-F, --body-file).`;
-    else if (why && coordinator) line = `CedarLoom role guard: ${why}, which passes branch protection, is no role's step. Merge without --admin, or leave the pull request to the owner.`;
+    else if (why && coordinator) line = `CedarLoom role guard: ${why}, which passes branch protection, is no role's step. Merge without --admin, or leave the pull request to the owner. Text that only mentions such a command goes in a file (-F, --body-file).`;
     else if (why && unknownBot) line = `CedarLoom role guard: ${why} is refused: the bot roles are ${[...BOTS].join(', ')}. Report the role to the user who starts this session.`;
-    else if (why && BOTS.has(role)) line = `CedarLoom role guard: ${why} is no step of the ${role} (${ROLE}=${role}).${/merge/i.test(why) ? ' Merges go only through merge.mjs.' : ''} Leave the step out and name it in your report. Text that only mentions such a command goes in a file (-F, --body-file).`;
+    else if (why && BOTS.has(role)) line = `CedarLoom role guard: ${why} is no step of the ${role} (${ROLE}=${role}).${!why.startsWith('a push') && /merge/i.test(why) ?' Merges go only through merge.mjs.' : ''} Leave the step out and name it in your report. Text that only mentions such a command goes in a file (-F, --body-file).`;
     else if (why) line = `CedarLoom role guard: ${why} is the coordinator's step, and this session does not run as the coordinator (${ROLE}=coordinator in the main session, set by the user who starts it). Leave the step to the coordinator and name it in your report. Text that only mentions such a command goes in a file (-F, --body-file).`;
   } catch (error) {
     refuse(`the guard failed (${error})`);
