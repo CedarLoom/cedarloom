@@ -3,7 +3,7 @@ name: questions
 description: "Asks you the open owner questions (this repository's question issues, then the local queue) in batches with the question tool, records each answer, and keeps the ones you defer out of the queue."
 disable-model-invocation: true
 argument-hint: "[project name | deferred]"
-when: "On request, while you sit at the terminal to answer the open questions. It reads one repository: run it in each project's clone."
+when: "On request, while you sit at the terminal to answer the open questions. It reads this folder's repository and queue: run it in each project's clone and the coordinator's folder."
 writes: "A comment and new labels on each issue you answer or defer in this repository, a close as not planned of each one you reject, and the cl:deferred label there when it lacks it; status and answer lines in the local queue; the window file /cl-workflow:ask keeps, open for the rest of the session."
 ---
 

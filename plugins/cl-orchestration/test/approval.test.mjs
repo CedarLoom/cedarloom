@@ -299,6 +299,21 @@ test('approval: the digest folder is kept out of git with one exclude line, also
   assert.equal(spawnSync('git', ['check-ignore', '-q', '.cedarloom/digests/2026-11-21.md'], { cwd: dir }).status, 0);
 });
 
+test('approval: a tracked digest adds no second exclude line', () => {
+  const script = fileURLToPath(new URL(`${SKILL}approval.mjs`, import.meta.url));
+  const repo = mkdtempSync(join(tmpdir(), 'cl-approval-'));
+  execFileSync('git', ['init', '-q'], { cwd: repo });
+  const digests = () => spawnSync(process.execPath, [script, 'digests'], { cwd: repo, encoding: 'utf8' });
+  assert.equal(digests().status, 0);
+  writeFileSync(join(repo, '.cedarloom/digests/2026-11-21.md'), '2026-11-21\n');
+  // A digest the owner asked to commit is added with --force (digest.md step 5).
+  execFileSync('git', ['add', '--force', '--', '.cedarloom/digests/2026-11-21.md'], { cwd: repo });
+  const r = digests();
+  assert.equal(r.status, 0, r.stderr);
+  const lines = readFileSync(join(repo, '.git/info/exclude'), 'utf8').split('\n').filter((line) => line.includes('digests'));
+  assert.deepEqual(lines, ['/.cedarloom/digests/']);
+});
+
 test('approval: the local queue refuses links, existing files and planted answers, and reports a file it cannot read', () => {
   const script = fileURLToPath(new URL(`${SKILL}approval.mjs`, import.meta.url));
   const project = (sub = '.') => {

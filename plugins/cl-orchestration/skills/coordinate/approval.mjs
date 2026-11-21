@@ -158,7 +158,8 @@ const queueDir = (create) => ownDir(QUEUE, create);
 // Adds an existing folder of the working directory to info/exclude unless git ignores it already.
 function keepOut(folder, run) {
   try {
-    run('git', ['check-ignore', '-q', folder]);
+    // --no-index: a folder holding a tracked file (a committed digest) reads as not ignored otherwise.
+    run('git', ['check-ignore', '-q', '--no-index', folder]);
   } catch (e) {
     // 1: not ignored; 128: no git repository, nothing to keep out.
     // An exclude pattern with a slash matches from the repository root, so it names the folder from there,
