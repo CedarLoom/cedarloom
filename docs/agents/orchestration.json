@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 2,
+  "minPlugin": "0.1.0",
+  "startLabel": "cl:ready-for-agent",
+  "merge": {
+    "allowed": true,
+    "requiredChecks": ["checks", "conventional", "dependency-review"],
+    "autoMergeMax": "low"
+  }
+}
