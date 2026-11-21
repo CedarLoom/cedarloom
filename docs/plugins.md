@@ -32,7 +32,7 @@ In a Claude Code session with the cl-workflow plugin on, a hook refuses the ques
 - The plugin's `PreToolUse` hook refuses both with the rule as its reason: open questions with recommendations go into one issue per task in the issue tracker the project names, else the report; safe, reversible recommendations are taken and the work goes on; no chat-text interviews either.
 - A `SessionStart` hook adds that rule as one line at start, resume, `/clear`, compaction and fork.
 - `/cl-workflow:ask` allows both for 30 minutes, `for <n>m` or `for <n>h`, or `until HH:MM` (local time); `off` ends the window early.
-- `/cl-workflow:questions` (the question queue) allows both for the rest of the session; `/cl-workflow:ask off` or a timed `/cl-workflow:ask` replaces that. It asks the open [owner questions](#owner-questions).
+- `/cl-workflow:questions` (the [owner questions](#owner-questions) queue) allows both for the rest of the session; `/cl-workflow:ask off` or a timed `/cl-workflow:ask` replaces that.
 - A window ends at its time or when Claude Code quits. `/clear`, compaction and a fork keep it; a new Claude Code process or a resumed conversation starts with questions off.
 - A `UserPromptExpansion` hook sets the window; that event fires only when a typed command expands ([hooks reference](https://code.claude.com/docs/en/hooks#userpromptexpansion)). The same text in a scheduled task sets nothing, and by that reference neither does a `/loop` iteration or a message from another session; the skill is user-only.
 - The window is one file per Claude Code process in the plugin's data folder (`ask/<CLAUDE_PID>.json`, the window's end). `CLAUDE_PID` is set in the Bash tool too, so a model that writes that file opens the window.
@@ -52,12 +52,12 @@ The coordinator of `/cl-orchestration:coordinate` files an owner question, in th
 | `cl:needs-human` | a question or approval waits for the owner |
 | `cl:in-progress` | a worker holds the issue, so it never starts twice; a label left after its worker ended without a pull request (a host restart) holds the issue until you take it off: `gh issue edit <number> -R <owner/repo> --remove-label cl:in-progress` |
 | `cl:deferred` | the owner parked it: it does not start and the question queue skips it |
-| `cl:follow-up` | found during other work; workers, reviewers and jobs report it, and the coordinator files it sized for one pull request at the run's close, once a day, and in a `keepRunning` run when a project goes idle, only in a private repository; you choose whether it starts |
+| `cl:follow-up` | found during other work and reported by workers, reviewers and jobs; in a private repository the coordinator files it, sized for one pull request, at the run's close, daily, and in a `keepRunning` run when a project goes idle; you choose whether it starts |
 | `cl:triage` | filed through the issue template; read it before adding another label |
 
 Rejected work is closed as not planned, with no label. `/cl-repo:setup` lists the labels the repository lacks and creates the ones you approve.
 
-`/cl-workflow:questions` asks this repository's `cl:needs-human` issues in batches, comments each answer and labels the ones you defer, then asks the local queue, where it writes the answer line the coordinator reads. That line counts as the owner's, so the [role guard](#role-guard) refuses edit-tool writes to the queue, and commands that reach it, in every session but the one where you typed `/cl-workflow:questions` and in every subagent; the coordinator files through `approval.mjs file`.
+`/cl-workflow:questions` asks this repository's `cl:needs-human` issues in batches, then the local queue, where it writes the answer line the coordinator reads. That line counts as the owner's, so the [role guard](#role-guard) refuses edit-tool writes to the queue, and commands that reach it, in every session but the one where you typed `/cl-workflow:questions` and in every subagent; the coordinator files through `approval.mjs file`.
 
 - A command reaches the queue when its text names `.cedarloom/questions` or when a word or redirection target, read as the shell decodes it from the session folder and from each folder a `cd`, `pushd` or `Set-Location` before it names, lies in it (`*`, `?` and `[...]` count as any name, but two such segments in a row, as in `*/*`, match no folder).
 - It does not try to catch a command written to get around it (`.c*/q*`, braces, variables, bracket classes, look-alike letters, a tool's own folder option such as `git -C`), nor one that acts on `.cedarloom` itself. A session whose folder lies in the queue writes nothing there.
