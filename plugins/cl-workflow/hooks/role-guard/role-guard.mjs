@@ -59,27 +59,15 @@ const WRAPPERS = new Map([
   ['noglob', []],
   // PowerShell's dot-source operator runs the command after it in the current scope, as & does in a child scope.
   ['.', []],
+  // PowerShell's flow-control keywords that take a pipeline (https://learn.microsoft.com/en-us/powershell/scripting/lang-spec/chapter-08#85-flow-control-statements).
+  ...['return', 'throw', 'exit'].map((word) => [word, []]),
   // The reserved words a command can follow (bash, zsh).
   ...['if', 'then', 'elif', 'else', 'do', 'while', 'until', '!', '{'].map((word) => [word, []]),
 ]);
 // A PowerShell assignment takes the output of the command after it: its target ($r, $script:r, [string]$r) and operator
-// (=, +=, ??=), as separate words or joined ($r=gh).
+// (=, +=, ??=) as words before the command.
 const PS_TARGET = /^(\[[^\]]*\])*\$\S+$/;
 const PS_OPERATOR = /^(\?\?|[-+*/%])?=$/;
-const PS_ASSIGN = /^((?:\[[^\]]*\])*\$[^=]*?)((?:\?\?|[-+*/%])?=)(.*)$/s;
-// The words of a PowerShell command with the target and operator of each leading assignment ($a = $b=gh) as words of their own.
-function assigned(words) {
-  const out = [];
-  let i = 0, w = words[0];
-  while (w !== undefined) {
-    const glued = PS_ASSIGN.exec(w);
-    if (glued) out.push(glued[1], glued[2]);
-    else if (PS_TARGET.test(w) || PS_OPERATOR.test(w)) out.push(w);
-    else break;
-    w = glued?.[3] || words[++i];
-  }
-  return w === undefined ? out : [...out, w, ...words.slice(i + 1)];
-}
 // Word j runs as the command: every word before it is an env assignment, a wrapper, a wrapper's option with its value, a
 // duration (timeout 10), or in PowerShell an assignment's target or operator.
 function runs(words, j, powershell) {
@@ -132,8 +120,12 @@ const BASH_QUOTED_ESCAPES = '$`"\\';
 // may not reach the commands after it.
 // PowerShell escapes and continues lines with the backtick and keeps the backslash as a plain character
 // (https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_special_characters).
-// A PowerShell script block ({ } after a space, a name or %, as in ForEach-Object { }, %{ } and try { }) holds commands of its
-// own, nested; a brace after another character (${n}, @{ }, stash@{0}, repos/{owner}) only ends a word.
+// A PowerShell script block ({ } as in ForEach-Object { }, %{ }, try { }, catch [X]{ } and -Process:{ }) holds commands of its own,
+// nested; a brace after $, @, / or ^ (${n}, @{ }, stash@{0}, repos/{owner}, HEAD^{commit}) only ends a word. The block ends the
+// command it follows: a program takes a script block as -encodedCommand with base64 text, never as its verb, method or branch
+// (https://github.com/PowerShell/PowerShell/blob/ba2221aed027041b6620c5fe1c0675567f14452a/src/System.Management.Automation/engine/MinishellParameterBinderController.cs#L177-L192).
+// PowerShell also runs the command after an assignment operator, whatever its target ($r =gh, ${r}=gh, [int] $a[0] += gh,
+// @{ a = gh }): the words after each = of a command are read as a command of their own as well.
 function commands(source, powershell, nested = false) {
   /** @type {{ words: string[], targets: string[], nested: boolean }[]} */
   const out = [];
@@ -155,8 +147,21 @@ function commands(source, powershell, nested = false) {
   };
   const endCommand = (subshell = false) => {
     endWord();
-    if (powershell) words = assigned(words);
-    if (words.length || targets.length) out.push({ words, targets, nested: nested || subshell || depth > 0 || backticks });
+    const inner = nested || subshell || depth > 0 || backticks;
+    if (words.length || targets.length) out.push({ words, targets, nested: inner });
+    if (powershell) {
+      // Where no word after the = is one the guard acts on, the reading keeps only the word joined to it, a path the command may reach.
+      const last = words.findLastIndex(acted);
+      words.forEach((w, i) => {
+        for (let at = w.indexOf('='); at >= 0; at = w.indexOf('=', at + 1)) {
+          const head = w.slice(at + 1);
+          // Of a run of = (a ruler in quoted text) only the last one can end an operator.
+          if (head.startsWith('=')) continue;
+          const after = [...(head ? [head] : []), ...(i < last || acted(head) ? words.slice(i + 1) : [])];
+          if (after.length) out.push({ words: after, targets: [], nested: inner });
+        }
+      });
+    }
     words = [];
     targets = [];
     redirect = false;
@@ -187,7 +192,7 @@ function commands(source, powershell, nested = false) {
       else if (c === '`') backticks = !backticks;
     } else if (powershell && '{}'.includes(c)) {
       // The braces of a script block may stand next to its first and last word: {gh pr merge 1}.
-      const block = c === '{' ? !started || /[\w%?-]$/.test(word) : blocks.pop() ?? true;
+      const block = c === '{' ? !'$@/^'.includes(s[i - 1] ?? ' ') : blocks.pop() ?? true;
       if (c === '{') blocks.push(block);
       if (!block) endWord();
       else {
@@ -208,6 +213,8 @@ function commands(source, powershell, nested = false) {
 const program = (word) => word.split(/[/\\]/).pop().toLowerCase().replace(/\.exe$/, '');
 // A launcher also goes by its package with a version (npx @anthropic-ai/claude-code@latest) and, on Windows, by its script file (claude.cmd).
 const launcher = (word) => program(word).replace(/@[^@]*$/, '').replace(/\.(cmd|ps1|bat)$/, '');
+// The words the guard acts on: gh, git, a launcher and a folder change.
+const acted = (word) => ['gh', 'git'].includes(program(word)) || LAUNCHERS.has(launcher(word)) || CHANGE_DIR.has(word.toLowerCase());
 
 const GIT = gitProgram();
 // Without git every query fails: no tag, no branch and no remote's default branch is known, so every push is denied.

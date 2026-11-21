@@ -261,6 +261,16 @@ test('role guard: reads the commands of Monitor and PowerShell, PowerShell with 
     'Set-Location ' + trunk + '; git push',
     'foreach ($n in 12) {gh pr merge $n}',
     '$r=gh pr merge 12 --squash',
+    // The command after an assignment operator, whatever stands before the operator.
+    '$r =gh pr merge 12 --squash',
+    '${r}=gh pr merge 12 --squash',
+    '[string] $r=gh pr merge 12 --squash',
+    '$a = $b[0] ??=gh pr merge 12',
+    '$o.p =gh.exe pr merge 12',
+    '@{a=gh pr merge 12}',
+    '$r =git push origin trunk',
+    '${a b} +=git push origin trunk',
+    '$env:R =claude --bare -p x',
     "$env:cedarloom_role='coordinator'; claude -p x",
   ];
   for (const command of powershell) assert.equal(decision(command, { tool: 'PowerShell', cwd: feature }), 'deny', command);
@@ -279,7 +289,9 @@ test('role guard: passes everything in the coordinator role, but not in its suba
 test('role guard: refuses a merge with --admin in every role, the coordinator included', () => {
   for (const role of ['coordinator', 'project-bot']) assert.equal(decision('gh pr merge 12 --squash --admin', { role }), 'deny', role);
   assert.equal(decision('gh pr --subject x merge 12 --admin', { role: 'coordinator' }), 'deny');
-  assert.equal(decision('$r=gh pr merge 12 --admin', { role: 'coordinator', tool: 'PowerShell' }), 'deny');
+  for (const command of ['$r=gh pr merge 12 --admin', '$r =gh pr merge 12 --admin', '${r}=gh pr merge 12 --admin', '[string] $r=gh pr merge 12 --admin']) {
+    assert.equal(decision(command, { role: 'coordinator', tool: 'PowerShell' }), 'deny', command);
+  }
 });
 
 const ROLE_BOTS = ['reviewer-bot', 'fixer-bot', 'worker-bot'];
@@ -368,6 +380,32 @@ test('role guard: a reviewer, fixer or worker bot runs only gh commands that rea
     for (const command of powershell) assert.equal(decision(command, { role, tool: 'PowerShell' }), 'deny', `${role}: ${command}`);
     for (const command of powershellReads) assert.equal(decision(command, { role, tool: 'PowerShell' }), 'none', `${role}: ${command}`);
   }
+});
+
+test('role guard: in PowerShell a bot is refused a merge or a write after any assignment and in a script block after any character', () => {
+  for (const role of ['project-bot', ...ROLE_BOTS]) {
+    for (const command of ['$r =gh pr merge 12 --squash', '${r}=gh pr merge 12 --squash', '[string] $r=gh pr merge 12 --squash']) {
+      assert.equal(decision(command, { role, tool: 'PowerShell' }), 'deny', `${role}: ${command}`);
+    }
+  }
+  const writes = [
+    '$r =gh issue close 3',
+    '${r} = gh pr comment 12 --body-file c.md',
+    '[int] $r = gh issue close 3',
+    "$h['a b'] = gh issue close 3",
+    '$a , $b = gh issue close 3',
+    '[int] $r = . gh issue close 3',
+    '@{ a = gh issue close 3 }',
+    'return gh issue close 3',
+    'throw gh issue close 3',
+    'exit gh issue close 3',
+    'try { gh pr view 12 } catch [System.Exception]{gh pr comment 12 --body-file c.md}',
+    '1..2 | ForEach-Object -Process:{ gh pr comment $_ --body-file c.md }',
+    "switch ($x) { '*'{gh issue close 3} }",
+    "switch ($x) { '@'{gh issue close 3} }",
+    '@{a={gh issue close 3}}',
+  ];
+  for (const command of writes) assert.equal(decision(command, { role: 'reviewer-bot', tool: 'PowerShell' }), 'deny', command);
 });
 
 test('role guard: an unknown bot role runs no command', () => {
