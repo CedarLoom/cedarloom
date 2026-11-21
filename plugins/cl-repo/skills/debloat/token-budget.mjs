@@ -80,10 +80,21 @@ function repoFiles(root) {
   }
 }
 
-export function scope(root, cfg, listed = repoFiles(root)) {
+// Whether git ignores `path`; false outside a git repository, without git, or when git cannot check the path (exit 128).
+function ignored(root, path) {
+  if (!GIT) return false;
+  try {
+    execFileSync(GIT, ['check-ignore', '-q', '--', path], { cwd: root, stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function scope(root, cfg) {
   const inc = cfg.include.map(globRegex);
   const exc = cfg.exclude.map(globRegex);
-  return [...new Set(listed)].filter((p) => inc.some((re) => re.test(p)) && !exc.some((re) => re.test(p)) && existsSync(join(root, p))).sort(byCodeUnit);
+  return [...new Set(repoFiles(root))].filter((p) => inc.some((re) => re.test(p)) && !exc.some((re) => re.test(p)) && existsSync(join(root, p))).sort(byCodeUnit);
 }
 
 // Front matter as `key: value` fields (quotes dropped) with their first and last line, and the number of its closing `---` line;
@@ -155,9 +166,9 @@ const importsOf = (path, text) => [...prose(linesOf(text))].flatMap(([, line]) =
 // Text every session loads in at least one host, so the sum is an upper bound. Counted whole: root CLAUDE.md and AGENTS.md
 // (also in .claude/), root .claude/rules without `paths`, the files in alwaysLoadedFiles, and in-scope files these import up to
 // four hops (https://code.claude.com/docs/en/memory). Every other file counts its listing text.
-// Returns the always-loaded text it cannot count: imported files of `listed` (the repository's files) outside the measured set,
-// and alwaysLoadedFiles patterns that match no measured file.
-function classify(root, cfg, files, texts, listed) {
+// Returns the always-loaded text it cannot count: imported files in the repository that git does not ignore outside the
+// measured set, and alwaysLoadedFiles patterns that match no measured file.
+function classify(root, cfg, files, texts) {
   const extra = cfg.alwaysLoadedFiles.map(globRegex);
   const unscopedRule = (p) => /^\.claude\/rules\/.+\.md$/.test(p) && !('paths' in frontMatter(linesOf(texts[p])).fields);
   const paths = Object.keys(files);
@@ -169,7 +180,7 @@ function classify(root, cfg, files, texts, listed) {
     for (const from of hop) {
       for (const p of importsOf(from, texts[from])) {
         if (Object.hasOwn(files, p)) { if (!whole.has(p)) next.add(p); }
-        else if (listed.has(p) && isFile(join(root, p))) unmeasured.push(`${p}: loads every session (imported by ${from}) but is not measured (include, exclude)`);
+        else if (!p.startsWith('../') && isFile(join(root, p)) && !ignored(root, p)) unmeasured.push(`${p}: loads every session (imported by ${from}) but is not measured (include, exclude)`);
       }
     }
     hop = [...next];
@@ -188,12 +199,11 @@ function classify(root, cfg, files, texts, listed) {
 export function measure(root, cfg, only = []) {
   const files = {};
   const texts = {};
-  const listed = repoFiles(root);
-  for (const path of only.length ? only.map((p) => posix.normalize(p)) : scope(root, cfg, listed)) {
+  for (const path of only.length ? only.map((p) => posix.normalize(p)) : scope(root, cfg)) {
     const text = texts[path] = readFileSync(join(root, path), 'utf8');
     files[path] = { lines: linesOf(text).length, bytes: Buffer.byteLength(text, 'utf8'), tokens: tokensOf(text), listed: listedTokens(path, linesOf(text), root), sha256: sha256(text) };
   }
-  const unmeasured = classify(root, cfg, files, texts, new Set(listed));
+  const unmeasured = classify(root, cfg, files, texts);
   const all = Object.values(files);
   return { files, total: sum(all.map((f) => f.tokens)), listed: sum(all.map((f) => f.listed)), alwaysLoaded: sum(all.map((f) => f.always)), unmeasured };
 }

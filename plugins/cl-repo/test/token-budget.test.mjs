@@ -121,6 +121,13 @@ test('token-budget: check passes for an imported file git ignores', () => {
   assert.deepEqual(check(root, loadConfig(root), undefined, true).failures, []);
 });
 
+test('token-budget: check fails for an import through a symlinked directory', () => {
+  const root = repo(undefined, { 'CLAUDE.md': '@shared/rules.md\n', 'real/rules.md': sized('', 70) });
+  symlinkSync('real', join(root, 'shared'));
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  assert.deepEqual(check(root, loadConfig(root), undefined, true).failures, ['shared/rules.md: loads every session (imported by CLAUDE.md) but is not measured (include, exclude)']);
+});
+
 test('token-budget: check fails for an alwaysLoadedFiles pattern that matches no measured file', () => {
   const root = repo({ alwaysLoadedFiles: ['docs/other.md', 'notes/*.md'] });
   assert.deepEqual(check(root, loadConfig(root), undefined, true).failures, ['alwaysLoadedFiles notes/*.md matches no measured file']);
