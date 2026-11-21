@@ -110,10 +110,21 @@ export function frontMatter(lines) {
 const SKILL = /(^|\/)skills\/[^/]+\/SKILL\.md$/;
 const AGENT = /(^|\/)(\.claude|plugins\/[^/]+)\/agents\/.+\.md$/;
 
-// A skill whose agents/openai.yaml sets `policy.allow_implicit_invocation: false` is not listed in Codex; Codex does not read .claude/skills.
+// A skill whose agents/openai.yaml sets `allow_implicit_invocation: false` as a direct child of `policy` is not listed in Codex;
+// Codex does not read .claude/skills.
 function codexHides(root, path) {
+  if (path.startsWith('.claude/')) return true;
   const yaml = join(root, dirname(path), 'agents', 'openai.yaml');
-  return path.startsWith('.claude/') || (existsSync(yaml) && /^policy:[ \t]*\r?\n(?:[ \t]+.*\r?\n)*?[ \t]+allow_implicit_invocation:[ \t]*false\b/m.test(readFileSync(yaml, 'utf8')));
+  if (!existsSync(yaml)) return false;
+  let policy = false;
+  let indent;
+  for (const line of linesOf(readFileSync(yaml, 'utf8'))) {
+    if (/^\s*(#|$)/.test(line)) continue;
+    const lead = /^ */.exec(line)[0].length;
+    if (!lead) { policy = /^policy:\s*(#.*)?$/.test(line); indent = undefined; }
+    else if (policy && lead === (indent ??= lead) && /^\s*allow_implicit_invocation:\s*false\s*(#.*)?$/.test(line)) return true;
+  }
+  return false;
 }
 
 // The description line of a skill the model can start, or of a subagent: it sits in every session's listing.
@@ -126,7 +137,7 @@ function routing(path, lines, root) {
 }
 
 // Listing cost: name and description, and for a skill `when_to_use`, cut at 1,536 characters as Claude Code cuts them.
-export function listedTokens(path, lines, root) {
+export function listedTokens(path, lines, root = '.') {
   const fields = routing(path, lines, root);
   if (!fields) return 0;
   const text = [fields.description.value, fields.when_to_use?.value].filter(Boolean).join(' ');
@@ -140,26 +151,32 @@ const importsOf = (path, text) => [...prose(linesOf(text))].flatMap(([, line]) =
 // Text every session loads in at least one host, so the sum is an upper bound. Counted whole: root CLAUDE.md and AGENTS.md
 // (also in .claude/), root .claude/rules without `paths`, the files in alwaysLoadedFiles, and in-scope files these import up to
 // four hops (https://code.claude.com/docs/en/memory). Every other file counts its listing text.
-function classify(cfg, files, texts) {
+function classify(root, cfg, files, texts) {
   const extra = cfg.alwaysLoadedFiles.map(globRegex);
   const unscopedRule = (p) => /^\.claude\/rules\/.+\.md$/.test(p) && !('paths' in frontMatter(linesOf(texts[p])).fields);
   let hop = Object.keys(files).filter((p) => ROOT_INSTRUCTIONS.test(p) || unscopedRule(p) || extra.some((re) => re.test(p)));
   const whole = new Set(hop);
   for (let depth = 0; depth < 4 && hop.length; depth++) {
-    hop = [...new Set(hop.flatMap((p) => importsOf(p, texts[p])))].filter((p) => files[p] && !whole.has(p));
+    hop = [...new Set(hop.flatMap((p) => importsOf(p, texts[p])))].filter((p) => Object.hasOwn(files, p) && !whole.has(p));
     for (const p of hop) whole.add(p);
   }
-  for (const [p, f] of Object.entries(files)) f.always = whole.has(p) ? f.tokens : f.listed;
+  // A CLAUDE.md that links to AGENTS.md is one text: count each target once.
+  const seen = new Set();
+  for (const [p, f] of Object.entries(files)) {
+    const real = whole.has(p) ? realpathSync(join(root, p)) : null;
+    f.always = real && !seen.has(real) ? f.tokens : f.listed;
+    if (real) seen.add(real);
+  }
 }
 
 export function measure(root, cfg, only = []) {
   const files = {};
   const texts = {};
-  for (const path of only.length ? only : scope(root, cfg)) {
+  for (const path of only.length ? only.map((p) => posix.normalize(p)) : scope(root, cfg)) {
     const text = texts[path] = readFileSync(join(root, path), 'utf8');
     files[path] = { lines: linesOf(text).length, bytes: Buffer.byteLength(text, 'utf8'), tokens: tokensOf(text), listed: listedTokens(path, linesOf(text), root), sha256: sha256(text) };
   }
-  classify(cfg, files, texts);
+  classify(root, cfg, files, texts);
   const all = Object.values(files);
   return { files, total: sum(all.map((f) => f.tokens)), listed: sum(all.map((f) => f.listed)), alwaysLoaded: sum(all.map((f) => f.always)) };
 }
@@ -418,7 +435,7 @@ export function check(root, cfg, against, budgetOnly = false) {
   ];
   const warnings = [...(budgetOnly ? broken : []), ...refs.filter((r) => r.level === 'warning').map((r) => `${r.file}:${r.line}: path ${r.target} not found`)];
   // Against the stored baseline (path to tokens) or an older measure file there is no earlier always-loaded sum.
-  out.push('', `Always loaded in every session: ${change(against?.alwaysLoaded, now.alwaysLoaded)}${cfg.budget.alwaysLoaded == null ? '' : `, budget ${cfg.budget.alwaysLoaded}`}. Of it listed (descriptions of model-invocable skills and agents): ${change(against?.listed, now.listed)}.`);
+  out.push('', `Always loaded in every session: ${change(against?.alwaysLoaded, now.alwaysLoaded)}${cfg.budget.alwaysLoaded == null ? '' : `, budget ${cfg.budget.alwaysLoaded}`}. Of it listed (descriptions of agents and of skills a host lists): ${change(against?.listed, now.listed)}.`);
   out.push(`Protected spans: ${cfg.protect.length}. Counts are estimates (4 bytes per token).`);
   if (failures.length) out.push('', '**Failed**', ...failures.map((f) => `- ${f}`));
   if (warnings.length) out.push('', 'Warnings', ...warnings.map((w) => `- ${w}`));
@@ -447,7 +464,7 @@ export function run(argv, print = console.log) {
       for (const [path, f] of Object.entries(m.files).sort((a, b) => b[1].tokens - a[1].tokens)) print(`${String(f.tokens).padStart(7)}  ${String(f.lines).padStart(5)} lines  ${path}`);
       print(`${String(m.total).padStart(7)}  estimated tokens in ${Object.keys(m.files).length} files`);
       print(`${String(m.alwaysLoaded).padStart(7)}  of them always loaded in every session`);
-      print(`${String(m.listed).padStart(7)}  of them listed in every session (descriptions of model-invocable skills and agents)`);
+      print(`${String(m.listed).padStart(7)}  of them listed in every session (descriptions of agents and of skills a host lists)`);
     }
     return 0;
   }

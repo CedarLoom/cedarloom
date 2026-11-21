@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
@@ -10,7 +10,7 @@ const sized = (head, tokens) => head + 'x'.repeat(tokens * 4 - Buffer.byteLength
 // "n: " plus a 37-character description: 40 bytes, 10 listed tokens.
 const skill = (flags = '') => `---\nname: n\ndescription: ${'d'.repeat(37)}\n${flags}---\nBody.\n`;
 const HIDDEN = 'disable-model-invocation: true\n';
-const CODEX_OFF = 'interface:\n  display_name: "N"\npolicy:\n  allow_implicit_invocation: false\n';
+const CODEX_OFF = 'interface:\n  display_name: "N"\npolicy:\n\n  # Codex lists it only on request.\n  allow_implicit_invocation: false\n';
 
 function repo(config) {
   const root = mkdtempSync(join(tmpdir(), 'token-budget-'));
@@ -58,6 +58,13 @@ test('token-budget: root instruction files, their imports and unscoped rules cou
   assert.equal(m.alwaysLoaded, 195);
 });
 
+test('token-budget: a CLAUDE.md that links to AGENTS.md counts once', () => {
+  const root = mkdtempSync(join(tmpdir(), 'token-budget-'));
+  writeFileSync(join(root, 'AGENTS.md'), sized('', 100));
+  symlinkSync('AGENTS.md', join(root, 'CLAUDE.md'));
+  assert.equal(measure(root, loadConfig(root)).alwaysLoaded, 100);
+});
+
 test('token-budget: a skill is unlisted only when no host lists it', () => {
   const root = repo();
   const { files } = measure(root, loadConfig(root));
@@ -76,10 +83,10 @@ test('token-budget: alwaysLoadedFiles counts files in scope whole', () => {
 });
 
 test('token-budget: a config without the new keys reports the always-loaded sum and gates only the total', () => {
-  const root = repo({ budget: { total: 1000 } });
+  const root = repo({ budget: { total: 376 } });
   const c = check(root, loadConfig(root), undefined, true);
-  assert.deepEqual(c.failures, []);
-  assert.match(c.text, /^Always loaded in every session: 195 now\. /m);
+  assert.deepEqual(c.failures, ['total 377 is above the budget 376']);
+  assert.match(c.text, /: 195 now\b/);
 });
 
 test('token-budget: an --against file without the new fields reads, with no earlier always-loaded sum', () => {
@@ -87,9 +94,11 @@ test('token-budget: an --against file without the new fields reads, with no earl
   const against = { files: { 'AGENTS.md': { tokens: 90 } }, total: 90, listed: 7 };
   const c = check(root, loadConfig(root), against, true);
   assert.equal(c.ok, true);
-  assert.match(c.text, /^Always loaded in every session: 195 now\. Of it listed \(descriptions of model-invocable skills and agents\): 7 before, 30 now\.$/m);
+  assert.match(c.text, /: 195 now\b/);
+  assert.doesNotMatch(c.text, /before, 195 now/);
+  assert.match(c.text, /: 7 before, 30 now\b/);
   const newer = check(root, loadConfig(root), { ...against, alwaysLoaded: 180 }, true);
-  assert.match(newer.text, /^Always loaded in every session: 180 before, 195 now\./m);
+  assert.match(newer.text, /: 180 before, 195 now\b/);
 });
 
 test('token-budget: check fails with one line above budget.alwaysLoaded', () => {
