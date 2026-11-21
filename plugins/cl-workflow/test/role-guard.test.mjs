@@ -318,6 +318,7 @@ test('role guard: a reviewer, fixer or worker bot runs only gh commands that rea
     'xargs -n1 gh pr comment --body-file c.md',
     "xargs -I '{}' gh pr comment '{}' --body-file c.md",
     'sudo -u bot gh pr comment 12 --body-file c.md',
+    'xargs --eof env -u GH_DEBUG gh pr comment 12 --body-file c.md',
     'timeout -s KILL 10 gh pr comment 12 --body-file c.md',
     'FOO=1 gh pr comment 12 --body-file c.md',
   ];

@@ -44,7 +44,8 @@ const WRAPPERS = new Map([
   ['env', ['-u', '--unset', '-C', '--chdir', '-S', '--split-string']],
   ['sudo', ['-u', '--user', '-g', '--group', '-C', '--close-from', '-D', '--chdir', '-h', '--host', '-p', '--prompt', '-r', '--role', '-t', '--type', '-U', '--other-user', '-T', '--command-timeout']],
   ['doas', ['-u', '-C']],
-  ['xargs', ['-I', '-d', '--delimiter', '-E', '--eof', '-a', '--arg-file', '-L', '--max-lines', '-n', '--max-args', '-P', '--max-procs', '-s', '--max-chars', '--process-slot-var']],
+  // --eof and --max-lines take their optional value only after =.
+  ['xargs', ['-I', '-d', '--delimiter', '-E', '-a', '--arg-file', '-L', '-n', '--max-args', '-P', '--max-procs', '-s', '--max-chars', '--process-slot-var']],
   ['time', ['-f', '--format', '-o', '--output']],
   ['timeout', ['-k', '--kill-after', '-s', '--signal']],
   ['nice', ['-n', '--adjustment']],
