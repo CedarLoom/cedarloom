@@ -24,6 +24,13 @@ What the steps name:
   - Any exit but 0 is no verdict: the step stops, and the report names the line the script printed.
   - A head with several merge bases with the default branch gets none: its file list would hide what a merge of it takes back, so the pull request is the owner's to judge ([Owner-only](#owner-only)).
 
+A project bot takes these steps with these changes ([bot-project.md](bot-project.md)):
+
+- The run folder is the bot run's `.cedarloom/runs/<run id>/`, the clones lie in `<bot home>/clones/`, and what the steps write into the handoff file goes into the state file `<bot home>/state/pr-<n>.json`.
+- The reviewer, re-reviewer and verifier are reviewer bot runs ([bot-reviewer.md](bot-reviewer.md)), and a follow-up is a fixer bot run ([bot-fixer.md](bot-fixer.md)), each started by the project bot with its brief in the prompt.
+- "At a later wake-up" is a later run, woken by a pull request event or the catch-up sweep.
+- Merge steps 1 to 5.2 write the subject and body files beside the state file, as `pr-<n>-subject.txt` and `pr-<n>-body.md`. Steps 5.3 to 6.7 and the [Merge log](#merge-log) are `merge.mjs`'s, in the state folder's `merge-log.md`.
+
 ## Scratch clone
 
 The project's checkout shares its git directory with the workers: a branch, a ref, a grafts file or a setting that a worker writes there makes git show other commits than the remote holds. So no git command of this file runs there. Once `<head>` is read, before any other step, clone the pull request's repository, without a checkout, into a new folder under `clones/` of the run folder ([SKILL.md](SKILL.md#run-files)). `<scratch path>` is that folder's absolute path:
