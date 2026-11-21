@@ -109,6 +109,7 @@ export function frontMatter(lines) {
 
 const SKILL = /(^|\/)skills\/[^/]+\/SKILL\.md$/;
 const AGENT = /(^|\/)(\.claude|plugins\/[^/]+)\/agents\/.+\.md$/;
+const COMMAND = /^\.claude\/commands\/.+\.md$/;
 
 // A skill whose agents/openai.yaml sets `allow_implicit_invocation: false` as a direct child of `policy` is not listed in Codex;
 // Codex does not read .claude/skills.
@@ -127,21 +128,24 @@ function codexHides(root, path) {
   return false;
 }
 
-// The description line of a skill the model can start, or of a subagent: it sits in every session's listing.
+// The description line of a skill or command the model can start, or of a subagent: it sits in every session's listing.
 // A skill counts as listed when either host lists it; Claude Code hides one with `disable-model-invocation: true`
-// (https://code.claude.com/docs/en/skills).
+// (https://code.claude.com/docs/en/skills). A .claude/commands file is a skill to Claude Code; Codex does not read it.
 function routing(path, lines, root) {
   const { fields } = frontMatter(lines);
-  const listed = (SKILL.test(path) && !(fields['disable-model-invocation']?.value === 'true' && codexHides(root, path))) || AGENT.test(path);
+  const hidden = fields['disable-model-invocation']?.value === 'true';
+  const listed = (SKILL.test(path) && !(hidden && codexHides(root, path))) || (COMMAND.test(path) && !hidden) || AGENT.test(path);
   return listed && fields.description ? fields : null;
 }
 
 // Listing cost: name and description, and for a skill `when_to_use`, cut at 1,536 characters as Claude Code cuts them.
+// A command has no `name` field: the file name is its name.
 export function listedTokens(path, lines, root = '.') {
   const fields = routing(path, lines, root);
   if (!fields) return 0;
   const text = [fields.description.value, fields.when_to_use?.value].filter(Boolean).join(' ');
-  return tokensOf(`${fields.name?.value ?? ''}: ${SKILL.test(path) ? text.slice(0, 1536) : text}`);
+  const command = COMMAND.test(path);
+  return tokensOf(`${command ? posix.basename(path, '.md') : fields.name?.value ?? ''}: ${SKILL.test(path) || command ? text.slice(0, 1536) : text}`);
 }
 
 const ROOT_INSTRUCTIONS = /^(\.claude\/)?(CLAUDE|AGENTS)\.md$/;
@@ -151,13 +155,24 @@ const importsOf = (path, text) => [...prose(linesOf(text))].flatMap(([, line]) =
 // Text every session loads in at least one host, so the sum is an upper bound. Counted whole: root CLAUDE.md and AGENTS.md
 // (also in .claude/), root .claude/rules without `paths`, the files in alwaysLoadedFiles, and in-scope files these import up to
 // four hops (https://code.claude.com/docs/en/memory). Every other file counts its listing text.
+// Returns the always-loaded text it cannot count: imported files in the repository outside the measured set, and
+// alwaysLoadedFiles patterns that match no measured file.
 function classify(root, cfg, files, texts) {
   const extra = cfg.alwaysLoadedFiles.map(globRegex);
   const unscopedRule = (p) => /^\.claude\/rules\/.+\.md$/.test(p) && !('paths' in frontMatter(linesOf(texts[p])).fields);
-  let hop = Object.keys(files).filter((p) => ROOT_INSTRUCTIONS.test(p) || unscopedRule(p) || extra.some((re) => re.test(p)));
+  const paths = Object.keys(files);
+  const unmeasured = cfg.alwaysLoadedFiles.filter((_, i) => !paths.some((p) => extra[i].test(p))).map((g) => `alwaysLoadedFiles ${g} matches no measured file`);
+  let hop = paths.filter((p) => ROOT_INSTRUCTIONS.test(p) || unscopedRule(p) || extra.some((re) => re.test(p)));
   const whole = new Set(hop);
   for (let depth = 0; depth < 4 && hop.length; depth++) {
-    hop = [...new Set(hop.flatMap((p) => importsOf(p, texts[p])))].filter((p) => Object.hasOwn(files, p) && !whole.has(p));
+    const next = new Set();
+    for (const from of hop) {
+      for (const p of importsOf(from, texts[from])) {
+        if (Object.hasOwn(files, p)) { if (!whole.has(p)) next.add(p); }
+        else if (!p.startsWith('../') && isFile(join(root, p))) unmeasured.push(`${p}: loads every session (imported by ${from}) but is outside include`);
+      }
+    }
+    hop = [...next];
     for (const p of hop) whole.add(p);
   }
   // A CLAUDE.md that links to AGENTS.md is one text: count each target once.
@@ -167,6 +182,7 @@ function classify(root, cfg, files, texts) {
     f.always = real && !seen.has(real) ? f.tokens : f.listed;
     if (real) seen.add(real);
   }
+  return [...new Set(unmeasured)];
 }
 
 export function measure(root, cfg, only = []) {
@@ -176,9 +192,9 @@ export function measure(root, cfg, only = []) {
     const text = texts[path] = readFileSync(join(root, path), 'utf8');
     files[path] = { lines: linesOf(text).length, bytes: Buffer.byteLength(text, 'utf8'), tokens: tokensOf(text), listed: listedTokens(path, linesOf(text), root), sha256: sha256(text) };
   }
-  classify(root, cfg, files, texts);
+  const unmeasured = classify(root, cfg, files, texts);
   const all = Object.values(files);
-  return { files, total: sum(all.map((f) => f.tokens)), listed: sum(all.map((f) => f.listed)), alwaysLoaded: sum(all.map((f) => f.always)) };
+  return { files, total: sum(all.map((f) => f.tokens)), listed: sum(all.map((f) => f.listed)), alwaysLoaded: sum(all.map((f) => f.always)), unmeasured };
 }
 
 // The 1-based line range that holds a protected span, whatever the line breaks and spacing are now; null when the text is gone.
@@ -408,6 +424,22 @@ export function deadRefs(root, cfg, paths = scope(root, cfg)) {
 }
 
 const signed = (n) => (n > 0 ? `+${n}` : `${n}`);
+const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
+
+// A budget the caps cannot read would pass silently: a misspelled key, a string, a capped file that is no longer measured.
+function budgetErrors(budget, files) {
+  if (!isObject(budget)) return ['budget is not an object'];
+  const out = Object.keys(budget).filter((k) => !['total', 'alwaysLoaded', 'files'].includes(k)).map((k) => `budget.${k} is not a budget key (total, alwaysLoaded, files)`);
+  out.push(...['total', 'alwaysLoaded'].filter((k) => k in budget && !isNumber(budget[k])).map((k) => `budget.${k} is not a number`));
+  if (!('files' in budget)) return out;
+  if (!isObject(budget.files)) return [...out, 'budget.files is not an object'];
+  for (const [p, max] of Object.entries(budget.files)) {
+    if (!isNumber(max)) out.push(`budget.files ${p} is not a number`);
+    if (!Object.hasOwn(files, p)) out.push(`budget.files ${p} is not a measured file`);
+  }
+  return out;
+}
 const change = (before, now) => `${before == null ? '' : `${before} before, `}${now} now`;
 
 // The report of the CI check and of the skill's verify step, as Markdown.
@@ -428,6 +460,8 @@ export function check(root, cfg, against, budgetOnly = false) {
   const refs = deadRefs(root, cfg);
   const broken = [...missingProtected(root, cfg), ...refs.filter((r) => r.level === 'error').map((r) => `${r.file}:${r.line}: dead ${r.kind} ${r.target}`)];
   const failures = [
+    ...budgetErrors(cfg.budget, now.files),
+    ...now.unmeasured,
     ...(budgetOnly ? [] : broken),
     ...(cfg.budget.total != null && now.total > cfg.budget.total ? [`total ${now.total} is above the budget ${cfg.budget.total}`] : []),
     ...(cfg.budget.alwaysLoaded != null && now.alwaysLoaded > cfg.budget.alwaysLoaded ? [`always loaded ${now.alwaysLoaded} is above the budget ${cfg.budget.alwaysLoaded}`] : []),

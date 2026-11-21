@@ -12,7 +12,7 @@ const skill = (flags = '') => `---\nname: n\ndescription: ${'d'.repeat(37)}\n${f
 const HIDDEN = 'disable-model-invocation: true\n';
 const CODEX_OFF = 'interface:\n  display_name: "N"\npolicy:\n\n  # Codex lists it only on request.\n  allow_implicit_invocation: false\n';
 
-function repo(config) {
+function repo(config, extra = {}) {
   const root = mkdtempSync(join(tmpdir(), 'token-budget-'));
   const files = {
     'AGENTS.md': sized('', 100),
@@ -32,6 +32,7 @@ function repo(config) {
     'plugins/p/agents/helper.md': skill(),
     'notes/outside.md': sized('', 60),
     ...(config ? { '.github/token-budget.json': JSON.stringify(config) } : {}),
+    ...extra,
   };
   for (const [path, text] of Object.entries(files)) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -106,4 +107,40 @@ test('token-budget: check fails with one line above budget.alwaysLoaded', () => 
   assert.deepEqual(check(over, loadConfig(over), undefined, true).failures, ['always loaded 195 is above the budget 194']);
   const at = repo({ budget: { alwaysLoaded: 195 } });
   assert.deepEqual(check(at, loadConfig(at), undefined, true).failures, []);
+});
+
+test('token-budget: check fails for an imported file in the repository that is not measured', () => {
+  const root = repo(undefined, { 'CLAUDE.md': '@docs/imported.md\n@notes/outside.md\n@notes/missing.md\n@../away.md\n' });
+  assert.deepEqual(check(root, loadConfig(root), undefined, true).failures, ['notes/outside.md: loads every session (imported by CLAUDE.md) but is outside include']);
+});
+
+test('token-budget: check fails for an alwaysLoadedFiles pattern that matches no measured file', () => {
+  const root = repo({ alwaysLoadedFiles: ['docs/other.md', 'notes/*.md'] });
+  assert.deepEqual(check(root, loadConfig(root), undefined, true).failures, ['alwaysLoadedFiles notes/*.md matches no measured file']);
+});
+
+test('token-budget: check fails for a budget it cannot read', () => {
+  const failures = (budget) => {
+    const root = repo({ budget });
+    return check(root, loadConfig(root), undefined, true).failures;
+  };
+  assert.deepEqual(failures(1200), ['budget is not an object']);
+  assert.deepEqual(failures({ alwaysloaded: 50 }), ['budget.alwaysloaded is not a budget key (total, alwaysLoaded, files)']);
+  assert.deepEqual(failures({ alwaysLoaded: 'abc' }), ['budget.alwaysLoaded is not a number']);
+  assert.deepEqual(failures({ total: null }), ['budget.total is not a number']);
+  assert.deepEqual(failures({ files: 3 }), ['budget.files is not an object']);
+  assert.deepEqual(failures({ files: { 'AGENTS.md': 'abc' } }), ['budget.files AGENTS.md is not a number']);
+  assert.deepEqual(failures({ files: { 'CLAUDE2.md': 5 } }), ['budget.files CLAUDE2.md is not a measured file']);
+  assert.deepEqual(failures({ total: 377, alwaysLoaded: 195, files: { 'AGENTS.md': 100 } }), []);
+});
+
+test('token-budget: a command description is listed unless the model cannot invoke it', () => {
+  const root = repo(undefined, {
+    '.claude/commands/ops/deploy.md': `---\ndescription: ${'d'.repeat(2000)}\n---\nBody.\n`,
+    '.claude/commands/hidden.md': `---\ndescription: ${'d'.repeat(32)}\n${HIDDEN}---\nBody.\n`,
+  });
+  const { files } = measure(root, loadConfig(root));
+  // "deploy: " plus the first 1,536 characters: 1,544 bytes.
+  assert.equal(files['.claude/commands/ops/deploy.md'].listed, 386);
+  assert.equal(files['.claude/commands/hidden.md'].listed, 0);
 });
