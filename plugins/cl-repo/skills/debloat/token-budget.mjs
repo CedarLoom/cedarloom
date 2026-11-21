@@ -4,11 +4,11 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const USAGE = `node token-budget.mjs <command> [--root <dir>]
-  measure [files...] [--json]        lines, bytes, estimated tokens, listed tokens and sha256 per file
+  measure [files...] [--json]        lines, bytes, estimated, always-loaded and listed tokens and sha256 per file
   protect --suggest [files...]       candidate spans that must stay, as JSON line ranges
   protect --add <file>:<start>-<end> ...   copy these lines into the protect list of the config
   cut --plan <plan.json> [--apply]   check a cut plan; write the cuts only with --apply
@@ -51,7 +51,7 @@ export function globRegex(glob) {
 export function loadConfig(root) {
   const file = join(root, CONFIG);
   const raw = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
-  return { raw, include: raw.include ?? INCLUDE, exclude: raw.exclude ?? EXCLUDE, budget: raw.budget ?? {}, protect: raw.protect ?? [], baseline: raw.baseline ?? {}, ignoreRefs: (raw.ignoreRefs ?? []).map((p) => new RegExp(p)) };
+  return { raw, include: raw.include ?? INCLUDE, exclude: raw.exclude ?? EXCLUDE, budget: raw.budget ?? {}, alwaysLoadedFiles: raw.alwaysLoadedFiles ?? [], protect: raw.protect ?? [], baseline: raw.baseline ?? {}, ignoreRefs: (raw.ignoreRefs ?? []).map((p) => new RegExp(p)) };
 }
 
 function saveConfig(root, raw) {
@@ -110,30 +110,58 @@ export function frontMatter(lines) {
 const SKILL = /(^|\/)skills\/[^/]+\/SKILL\.md$/;
 const AGENT = /(^|\/)(\.claude|plugins\/[^/]+)\/agents\/.+\.md$/;
 
+// A skill whose agents/openai.yaml sets `policy.allow_implicit_invocation: false` is not listed in Codex; Codex does not read .claude/skills.
+function codexHides(root, path) {
+  const yaml = join(root, dirname(path), 'agents', 'openai.yaml');
+  return path.startsWith('.claude/') || (existsSync(yaml) && /^policy:[ \t]*\r?\n(?:[ \t]+.*\r?\n)*?[ \t]+allow_implicit_invocation:[ \t]*false\b/m.test(readFileSync(yaml, 'utf8')));
+}
+
 // The description line of a skill the model can start, or of a subagent: it sits in every session's listing.
-// A skill with `disable-model-invocation: true` is listed nowhere (https://code.claude.com/docs/en/skills).
-function routing(path, lines) {
+// A skill counts as listed when either host lists it; Claude Code hides one with `disable-model-invocation: true`
+// (https://code.claude.com/docs/en/skills).
+function routing(path, lines, root) {
   const { fields } = frontMatter(lines);
-  const listed = (SKILL.test(path) && fields['disable-model-invocation']?.value !== 'true') || AGENT.test(path);
+  const listed = (SKILL.test(path) && !(fields['disable-model-invocation']?.value === 'true' && codexHides(root, path))) || AGENT.test(path);
   return listed && fields.description ? fields : null;
 }
 
 // Listing cost: name and description, and for a skill `when_to_use`, cut at 1,536 characters as Claude Code cuts them.
-export function listedTokens(path, lines) {
-  const fields = routing(path, lines);
+export function listedTokens(path, lines, root) {
+  const fields = routing(path, lines, root);
   if (!fields) return 0;
   const text = [fields.description.value, fields.when_to_use?.value].filter(Boolean).join(' ');
   return tokensOf(`${fields.name?.value ?? ''}: ${SKILL.test(path) ? text.slice(0, 1536) : text}`);
 }
 
+const ROOT_INSTRUCTIONS = /^(\.claude\/)?(CLAUDE|AGENTS)\.md$/;
+const IMPORT = /(^|\s)@([\w./-]*[/.][\w/-]+)/g;
+const importsOf = (path, text) => [...prose(linesOf(text))].flatMap(([, line]) => [...line.replace(/`[^`]*`/g, ' ').matchAll(IMPORT)].map((m) => posix.join(posix.dirname(path), m[2])));
+
+// Text every session loads in at least one host, so the sum is an upper bound. Counted whole: root CLAUDE.md and AGENTS.md
+// (also in .claude/), root .claude/rules without `paths`, the files in alwaysLoadedFiles, and in-scope files these import up to
+// four hops (https://code.claude.com/docs/en/memory). Every other file counts its listing text.
+function classify(cfg, files, texts) {
+  const extra = cfg.alwaysLoadedFiles.map(globRegex);
+  const unscopedRule = (p) => /^\.claude\/rules\/.+\.md$/.test(p) && !('paths' in frontMatter(linesOf(texts[p])).fields);
+  let hop = Object.keys(files).filter((p) => ROOT_INSTRUCTIONS.test(p) || unscopedRule(p) || extra.some((re) => re.test(p)));
+  const whole = new Set(hop);
+  for (let depth = 0; depth < 4 && hop.length; depth++) {
+    hop = [...new Set(hop.flatMap((p) => importsOf(p, texts[p])))].filter((p) => files[p] && !whole.has(p));
+    for (const p of hop) whole.add(p);
+  }
+  for (const [p, f] of Object.entries(files)) f.always = whole.has(p) ? f.tokens : f.listed;
+}
+
 export function measure(root, cfg, only = []) {
   const files = {};
+  const texts = {};
   for (const path of only.length ? only : scope(root, cfg)) {
-    const text = readFileSync(join(root, path), 'utf8');
-    files[path] = { lines: linesOf(text).length, bytes: Buffer.byteLength(text, 'utf8'), tokens: tokensOf(text), listed: listedTokens(path, linesOf(text)), sha256: sha256(text) };
+    const text = texts[path] = readFileSync(join(root, path), 'utf8');
+    files[path] = { lines: linesOf(text).length, bytes: Buffer.byteLength(text, 'utf8'), tokens: tokensOf(text), listed: listedTokens(path, linesOf(text), root), sha256: sha256(text) };
   }
+  classify(cfg, files, texts);
   const all = Object.values(files);
-  return { files, total: sum(all.map((f) => f.tokens)), listed: sum(all.map((f) => f.listed)) };
+  return { files, total: sum(all.map((f) => f.tokens)), listed: sum(all.map((f) => f.listed)), alwaysLoaded: sum(all.map((f) => f.always)) };
 }
 
 // The 1-based line range that holds a protected span, whatever the line breaks and spacing are now; null when the text is gone.
@@ -173,10 +201,10 @@ const HEADING = /^ {0,3}(#{1,6})[ \t](.*)$/;
 
 // Candidates only: the patterns miss rules worded another way, so the reader of the file adds those by hand.
 // A listed description is one line whose trigger and boundary sentences ("Use when", "Do not use") route every session.
-export function suggest(lines, path = '') {
+export function suggest(lines, path = '', root = '.') {
   const ranges = [];
   const text = (n) => lines[n - 1] ?? '';
-  const description = routing(path, lines)?.description;
+  const description = routing(path, lines, root)?.description;
   if (description) ranges.push({ start: description.line, end: description.end, reason: 'routing description' });
   for (const [no, line] of prose(lines)) {
     const h = HEADING.exec(line);
@@ -349,7 +377,7 @@ export function deadRefs(root, cfg, paths = scope(root, cfg)) {
         if (!existsSync(to)) dead('link', target);
         else if (fragment && to.endsWith('.md') && isFile(to) && !anchorsIn(to).has(decode(fragment).toLowerCase())) dead('anchor', target);
       }
-      if (imports) for (const [, , target] of plain.matchAll(/(^|\s)@([\w./-]*[/.][\w/-]+)/g)) if (!existsSync(join(dir, target))) dead('import', `@${target}`);
+      if (imports) for (const [, , target] of plain.matchAll(IMPORT)) if (!existsSync(join(dir, target))) dead('import', `@${target}`);
       for (const [, token] of raw.matchAll(/`([^`\s]+)`/g)) {
         const path = pathOf(token);
         if (!/^(\.{1,2}\/)?[\w@.-]+(\/[\w@.-]+)+\/?$/.test(path)) continue;
@@ -363,6 +391,7 @@ export function deadRefs(root, cfg, paths = scope(root, cfg)) {
 }
 
 const signed = (n) => (n > 0 ? `+${n}` : `${n}`);
+const change = (before, now) => `${before == null ? '' : `${before} before, `}${now} now`;
 
 // The report of the CI check and of the skill's verify step, as Markdown.
 export function check(root, cfg, against, budgetOnly = false) {
@@ -384,10 +413,12 @@ export function check(root, cfg, against, budgetOnly = false) {
   const failures = [
     ...(budgetOnly ? [] : broken),
     ...(cfg.budget.total != null && now.total > cfg.budget.total ? [`total ${now.total} is above the budget ${cfg.budget.total}`] : []),
+    ...(cfg.budget.alwaysLoaded != null && now.alwaysLoaded > cfg.budget.alwaysLoaded ? [`always loaded ${now.alwaysLoaded} is above the budget ${cfg.budget.alwaysLoaded}`] : []),
     ...Object.entries(cfg.budget.files ?? {}).filter(([p, max]) => (now.files[p]?.tokens ?? 0) > max).map(([p, max]) => `${p}: ${now.files[p].tokens} is above its budget ${max}`),
   ];
   const warnings = [...(budgetOnly ? broken : []), ...refs.filter((r) => r.level === 'warning').map((r) => `${r.file}:${r.line}: path ${r.target} not found`)];
-  out.push('', `Listed in every session (descriptions of model-invocable skills and agents): ${against?.listed == null ? '' : `${against.listed} before, `}${now.listed} now.`);
+  // Against the stored baseline (path to tokens) or an older measure file there is no earlier always-loaded sum.
+  out.push('', `Always loaded in every session: ${change(against?.alwaysLoaded, now.alwaysLoaded)}${cfg.budget.alwaysLoaded == null ? '' : `, budget ${cfg.budget.alwaysLoaded}`}. Of it listed (descriptions of model-invocable skills and agents): ${change(against?.listed, now.listed)}.`);
   out.push(`Protected spans: ${cfg.protect.length}. Counts are estimates (4 bytes per token).`);
   if (failures.length) out.push('', '**Failed**', ...failures.map((f) => `- ${f}`));
   if (warnings.length) out.push('', 'Warnings', ...warnings.map((w) => `- ${w}`));
@@ -415,6 +446,7 @@ export function run(argv, print = console.log) {
     else {
       for (const [path, f] of Object.entries(m.files).sort((a, b) => b[1].tokens - a[1].tokens)) print(`${String(f.tokens).padStart(7)}  ${String(f.lines).padStart(5)} lines  ${path}`);
       print(`${String(m.total).padStart(7)}  estimated tokens in ${Object.keys(m.files).length} files`);
+      print(`${String(m.alwaysLoaded).padStart(7)}  of them always loaded in every session`);
       print(`${String(m.listed).padStart(7)}  of them listed in every session (descriptions of model-invocable skills and agents)`);
     }
     return 0;
@@ -422,7 +454,7 @@ export function run(argv, print = console.log) {
   if (command === 'protect' && opts.suggest) {
     const out = (opts._.length ? opts._ : scope(root, cfg)).flatMap((file) => {
       const lines = linesOf(readFileSync(join(root, file), 'utf8'));
-      return suggest(lines, file).map((r) => ({ file, ...r, text: norm(lines.slice(r.start - 1, r.end).join(' ')).slice(0, 100) }));
+      return suggest(lines, file, root).map((r) => ({ file, ...r, text: norm(lines.slice(r.start - 1, r.end).join(' ')).slice(0, 100) }));
     });
     print(JSON.stringify(out, null, 2));
     return 0;

@@ -1,6 +1,10 @@
 {
   "budget": {
-    "total": 115000
+    "total": 115000,
+    "alwaysLoaded": 1200,
+    "files": {
+      "plugins/cl-repo/rules/project.md": 1400
+    }
   },
   "ignoreRefs": [
     "^docs/agents/(worker-rules\\.md|orchestration\\.json)$",
