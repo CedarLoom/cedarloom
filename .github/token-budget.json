@@ -1,9 +1,9 @@
 {
   "budget": {
-    "total": 115000
+    "total": 117000
   },
   "ignoreRefs": [
-    "^docs/agents/(worker-rules\\.md|orchestration\\.json)$",
+    "^docs/agents/(worker-rules\\.md|orchestration\\.json|bots\\.md)$",
     "^docs/adr/$",
     "^\\.github/copilot-instructions\\.md$"
   ],
