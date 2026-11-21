@@ -260,6 +260,7 @@ test('role guard: reads the commands of Monitor and PowerShell, PowerShell with 
     '& "C:\\Program Files\\GitHub CLI\\gh.exe" pr merge 12',
     'Set-Location ' + trunk + '; git push',
     'foreach ($n in 12) {gh pr merge $n}',
+    '$r=gh pr merge 12 --squash',
     "$env:cedarloom_role='coordinator'; claude -p x",
   ];
   for (const command of powershell) assert.equal(decision(command, { tool: 'PowerShell', cwd: feature }), 'deny', command);
@@ -278,6 +279,7 @@ test('role guard: passes everything in the coordinator role, but not in its suba
 test('role guard: refuses a merge with --admin in every role, the coordinator included', () => {
   for (const role of ['coordinator', 'project-bot']) assert.equal(decision('gh pr merge 12 --squash --admin', { role }), 'deny', role);
   assert.equal(decision('gh pr --subject x merge 12 --admin', { role: 'coordinator' }), 'deny');
+  assert.equal(decision('$r=gh pr merge 12 --admin', { role: 'coordinator', tool: 'PowerShell' }), 'deny');
 });
 
 const ROLE_BOTS = ['reviewer-bot', 'fixer-bot', 'worker-bot'];
@@ -293,7 +295,7 @@ test('role guard: a fixer or worker bot pushes only the branch checked out where
     for (const command of ['git push origin feat/x', 'git push -u origin HEAD', `git -C ${feature} push origin feat/x`, 'git push origin feat/x && git checkout main']) assert.equal(decision(command, { role, cwd: feature }), 'none', `${role}: ${command}`);
     for (const command of ['git push origin feat/other', 'git push origin HEAD:feat/other', 'git push origin feat/x feat/other', 'git push origin feat/other:feat/x']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
     // The guard reads the branch before the command runs, so a push after a switch in the same command is refused.
-    for (const command of ['git checkout feat/other && git push', 'git switch -c feat/y && git push origin HEAD', 'git branch -M feat/y && git push origin feat/x', 'git rebase origin/trunk trunk && git push', 'git symbolic-ref HEAD refs/heads/feat/other && git push', 'git branch --mov feat/y && git push origin HEAD']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
+    for (const command of ['git checkout feat/other && git push', 'git switch -c feat/y && git push origin HEAD', 'git branch -M feat/y && git push origin feat/x', 'git rebase origin/trunk trunk && git push', 'git symbolic-ref HEAD refs/heads/feat/other && git push', 'git branch --mov feat/y && git push origin HEAD', 'git bisect reset trunk && git push']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
     // git's folder is unknown after a later cd, so the checked-out branch cannot be read.
     assert.equal(decision(`git status && cd ${feature} && git push origin feat/x`, { role, cwd: feature }), 'deny', role);
   }
@@ -326,7 +328,28 @@ test('role guard: a reviewer, fixer or worker bot runs only gh commands that rea
     'for n in 1 2; do gh pr comment $n --body-file c.md; done',
     'if true; then gh pr create --title x --body-file b.md; fi',
     'gh pr --subject view merge 12 --squash',
+    'eval gh pr comment 12 --body-file c.md',
+    'noglob gh pr comment 12 --body-file c.md',
+    'gtimeout 10 gh pr comment 12 --body-file c.md',
+    'env -P /usr/bin gh pr comment 12 --body-file c.md',
+    'xargs -J % gh pr comment % --body-file c.md',
   ];
+  // A PowerShell assignment takes the output of the command after it, and a script block runs its commands.
+  const powershell = [
+    '$r = gh pr comment 12 --body-file c.md',
+    '$r=gh issue close 3',
+    '$a = $b = gh pr comment 12 --body-file c.md',
+    '[string]$r += gh issue close 3',
+    '1..2 | ForEach-Object { gh pr comment $_ --body-file c.md }',
+    '1..2 | ForEach-Object -Begin { $n = 0 } -Process { gh pr comment $_ --body-file c.md }',
+    'Get-Content list.txt | %{gh issue close $_}',
+    'Get-Content list.txt | Where-Object { gh pr comment $_ --body-file c.md }',
+    'try { gh pr comment 12 --body-file c.md } catch { }',
+    'try { gh pr view 12 } catch [System.Exception] { gh pr comment 12 --body-file c.md }',
+    "switch ($x) { 'a' { gh pr comment 12 --body-file c.md } }",
+    '. gh pr comment 12 --body-file c.md',
+  ];
+  const powershellReads = ['$r = gh pr view 12 --json title', '1..2 | ForEach-Object { gh pr view $_ }', 'gh api repos/{owner}/{repo}/pulls/12/comments', 'gh pr view ${n} --json title'];
   const reads = [
     'gh repo clone o/r /bots/r/clones/r-12-1 --no-upstream -- --filter=blob:none --no-checkout',
     'gh pr view 12 -R o/r --json headRefOid',
@@ -342,6 +365,8 @@ test('role guard: a reviewer, fixer or worker bot runs only gh commands that rea
   for (const role of ROLE_BOTS) {
     for (const command of writes) assert.equal(decision(command, { role }), 'deny', `${role}: ${command}`);
     for (const command of reads) assert.equal(decision(command, { role }), 'none', `${role}: ${command}`);
+    for (const command of powershell) assert.equal(decision(command, { role, tool: 'PowerShell' }), 'deny', `${role}: ${command}`);
+    for (const command of powershellReads) assert.equal(decision(command, { role, tool: 'PowerShell' }), 'none', `${role}: ${command}`);
   }
 });
 

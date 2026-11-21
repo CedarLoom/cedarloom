@@ -57,17 +57,38 @@ const WRAPPERS = new Map([
   ['builtin', []],
   ['eval', []],
   ['noglob', []],
+  // PowerShell's dot-source operator runs the command after it in the current scope, as & does in a child scope.
+  ['.', []],
   // The reserved words a command can follow (bash, zsh).
   ...['if', 'then', 'elif', 'else', 'do', 'while', 'until', '!', '{'].map((word) => [word, []]),
 ]);
-// Word j runs as the command: every word before it is an env assignment, a wrapper, a wrapper's option with its value, or a
-// duration (timeout 10).
-function runs(words, j) {
+// A PowerShell assignment takes the output of the command after it: its target ($r, $script:r, [string]$r) and operator
+// (=, +=, ??=), as separate words or joined ($r=gh).
+const PS_TARGET = /^(\[[^\]]*\])*\$\S+$/;
+const PS_OPERATOR = /^(\?\?|[-+*/%])?=$/;
+const PS_ASSIGN = /^((?:\[[^\]]*\])*\$[^=]*?)((?:\?\?|[-+*/%])?=)(.*)$/s;
+// The words of a PowerShell command with the target and operator of each leading assignment ($a = $b=gh) as words of their own.
+function assigned(words) {
+  const out = [];
+  let i = 0, w = words[0];
+  while (w !== undefined) {
+    const glued = PS_ASSIGN.exec(w);
+    if (glued) out.push(glued[1], glued[2]);
+    else if (PS_TARGET.test(w) || PS_OPERATOR.test(w)) out.push(w);
+    else break;
+    w = glued?.[3] || words[++i];
+  }
+  return w === undefined ? out : [...out, w, ...words.slice(i + 1)];
+}
+// Word j runs as the command: every word before it is an env assignment, a wrapper, a wrapper's option with its value, a
+// duration (timeout 10), or in PowerShell an assignment's target or operator.
+function runs(words, j, powershell) {
   let values = [];
   for (let i = 0; i < j; i++) {
     const w = words[i];
     if (WRAPPERS.has(program(w))) values = WRAPPERS.get(program(w));
     else if (w.startsWith('-')) i += values.includes(w) ? 1 : 0;
+    else if (powershell && (PS_TARGET.test(w) || PS_OPERATOR.test(w))) values = [];
     else if (!/^([A-Za-z_]\w*=|\d+(\.\d+)?[smhd]?$)/.test(w)) return false;
   }
   return true;
@@ -111,12 +132,16 @@ const BASH_QUOTED_ESCAPES = '$`"\\';
 // may not reach the commands after it.
 // PowerShell escapes and continues lines with the backtick and keeps the backslash as a plain character
 // (https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_special_characters).
+// A PowerShell script block ({ } after a space, a name or %, as in ForEach-Object { }, %{ } and try { }) holds commands of its
+// own, nested; a brace after another character (${n}, @{ }, stash@{0}, repos/{owner}) only ends a word.
 function commands(source, powershell, nested = false) {
   /** @type {{ words: string[], targets: string[], nested: boolean }[]} */
   const out = [];
   const escape = powershell ? '`' : '\\';
   const s = source.replace(powershell ? /`\r?\n/g : /\\\r?\n/g, '');
   let words = [], targets = [], word = '', started = false, quoted = false, quote = null, redirect = false, depth = 0, backticks = false;
+  // Per open brace in PowerShell, whether it opened a script block.
+  const blocks = [];
   const endWord = () => {
     if (started) {
       if (redirect) {
@@ -130,6 +155,7 @@ function commands(source, powershell, nested = false) {
   };
   const endCommand = (subshell = false) => {
     endWord();
+    if (powershell) words = assigned(words);
     if (words.length || targets.length) out.push({ words, targets, nested: nested || subshell || depth > 0 || backticks });
     words = [];
     targets = [];
@@ -159,9 +185,17 @@ function commands(source, powershell, nested = false) {
       if (c === '(') depth++;
       else if (c === ')' && depth) depth--;
       else if (c === '`') backticks = !backticks;
-    }
-    // The braces of a PowerShell script block stand next to its first and last word: {gh pr merge 1}.
-    else if (/\s/.test(c) || (powershell && '{}'.includes(c))) endWord();
+    } else if (powershell && '{}'.includes(c)) {
+      // The braces of a script block may stand next to its first and last word: {gh pr merge 1}.
+      const block = c === '{' ? !started || /[\w%?-]$/.test(word) : blocks.pop() ?? true;
+      if (c === '{') blocks.push(block);
+      if (!block) endWord();
+      else {
+        endCommand();
+        if (c === '{') depth++;
+        else if (depth) depth--;
+      }
+    } else if (/\s/.test(c)) endWord();
     else {
       word += c;
       started = true;
@@ -293,8 +327,9 @@ function git(args, cwd, known, gitDir, role, line) {
   if (sub === 'push' && gitDir) return GIT_DIR_PUSH;
   // Only the explicit read forms pass: `git config <key>` alone reads too, but `--get` says so.
   if (sub === 'config' && !(rest.some((w) => CONFIG_READ.test(w)) && !rest.some((w) => CONFIG_WRITE.test(w)))) return 'git config';
-  // A rebase may switch to the branch it names, and symbolic-ref HEAD <ref> moves HEAD; git takes --mo and --cop for --move and --copy.
-  if (sub === 'checkout' || sub === 'switch' || sub === 'rebase' || (sub === 'symbolic-ref' && rest.filter((w) => !w.startsWith('-')).length > 1) || (sub === 'branch' && rest.some((w) => /^(-[^-]*[mMcC]|--(mov?e?|copy?)$)/.test(w)))) line.switched = true;
+  // A rebase may switch to the branch it names, bisect checks out commits and its reset a branch, and symbolic-ref HEAD <ref>
+  // moves HEAD; git takes --mo and --cop for --move and --copy.
+  if (sub === 'checkout' || sub === 'switch' || sub === 'rebase' || sub === 'bisect' || (sub === 'symbolic-ref' && rest.filter((w) => !w.startsWith('-')).length > 1) || (sub === 'branch' && rest.some((w) => /^(-[^-]*[mMcC]|--(mov?e?|copy?)$)/.test(w)))) line.switched = true;
   return sub === 'push' ? push(rest, dir, known, role, line.switched) : null;
 }
 
@@ -415,7 +450,7 @@ function reason({ tool_name: tool, tool_input: toolInput }, cwd, role) {
       const rest = words.slice(j + 1);
       const why =
         name === 'git' ? (known ? [dir] : seen).reduce((found, d) => found ?? git(rest, d, known, gitDir, role, line), null)
-        : name === 'gh' ? gh(rest, source, role, runs(words, j))
+        : name === 'gh' ? gh(rest, source, role, runs(words, j, powershell))
         : name === 'claude' && rest.includes(BARE) ? 'a launch in bare mode, which runs no hooks'
         : null;
       if (why) return why;
