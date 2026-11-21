@@ -107,6 +107,8 @@ jobs:
         run: |
           shopt -s failglob
           for mods in plugins/*/hooks/claude-code.json; do
+            # A plugin without a hooks module has no mod tests.
+            grep -q '"modules"' "$mods" || continue
             claude plugin test "${mods%/hooks/claude-code.json}"
           done
       # A broken manifest and a broken skill front matter must fail the validation (fixtures built from a valid scratch plugin).
