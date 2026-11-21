@@ -275,6 +275,78 @@ test('role guard: passes everything in the coordinator role, but not in its suba
   assert.equal(decision('gh pr merge 12 --squash', { role: 'coordinator', agent: 'agent_01' }), 'deny');
 });
 
+test('role guard: refuses a merge with --admin in every role, the coordinator included', () => {
+  for (const role of ['coordinator', 'project-bot']) assert.equal(decision('gh pr merge 12 --squash --admin', { role }), 'deny', role);
+});
+
+const ROLE_BOTS = ['reviewer-bot', 'fixer-bot', 'worker-bot'];
+
+test('role guard: the project bot and the reviewer bot never push', () => {
+  for (const role of ['project-bot', 'reviewer-bot']) {
+    for (const command of ['git push origin feat/x', 'git push']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
+  }
+});
+
+test('role guard: a fixer or worker bot pushes only the branch checked out where git runs', () => {
+  for (const role of ['fixer-bot', 'worker-bot']) {
+    for (const command of ['git push origin feat/x', 'git push -u origin HEAD', `git -C ${feature} push origin feat/x`, 'git push origin feat/x && git checkout main']) assert.equal(decision(command, { role, cwd: feature }), 'none', `${role}: ${command}`);
+    for (const command of ['git push origin feat/other', 'git push origin HEAD:feat/other', 'git push origin feat/x feat/other', 'git push origin feat/other:feat/x']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
+    // The guard reads the branch before the command runs, so a push after a switch in the same command is refused.
+    for (const command of ['git checkout feat/other && git push', 'git switch -c feat/y && git push origin HEAD', 'git branch -M feat/y && git push origin feat/x']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
+    // git's folder is unknown after a later cd, so the checked-out branch cannot be read.
+    assert.equal(decision(`git status && cd ${feature} && git push origin feat/x`, { role, cwd: feature }), 'deny', role);
+  }
+});
+
+test('role guard: a fixer or worker bot never force-pushes or deletes its branch', () => {
+  const forced = ['git push -f origin feat/x', 'git push -uf origin feat/x', 'git push --force origin feat/x', 'git push --force-with-lease origin feat/x', 'git push --forc origin feat/x', 'git push origin +feat/x', 'git push origin +HEAD:feat/x', 'git push -d origin feat/x', 'git push --delete origin feat/x', 'git push origin :feat/x'];
+  for (const role of ['fixer-bot', 'worker-bot']) for (const command of forced) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
+});
+
+test('role guard: a reviewer, fixer or worker bot runs only gh commands that read', () => {
+  const writes = [
+    'gh pr comment 12 --body-file c.md',
+    'gh pr review 12 --approve',
+    'gh pr create --title x --body-file b.md',
+    'gh pr edit 12 --add-label x',
+    'gh issue close 3',
+    'gh label create x',
+    'gh api repos/o/r/issues/3/comments -f body=x',
+    'gh api -X POST repos/o/r/pulls --input pr.json',
+    `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "T_1"}) { clientMutationId } }'`,
+    `gh api -X GET graphql -f query='mutation { addComment(input: {subjectId: "I_1", body: "x"}) { clientMutationId } }'`,
+    'xargs -n1 gh pr comment --body-file c.md',
+    'FOO=1 gh pr comment 12 --body-file c.md',
+  ];
+  const reads = [
+    'gh repo clone o/r /bots/r/clones/r-12-1 --no-upstream -- --filter=blob:none --no-checkout',
+    'gh pr view 12 -R o/r --json headRefOid',
+    'gh pr diff 12 -R o/r',
+    'gh run view 5 -R o/r --log-failed',
+    'gh issue view 3 -R o/r',
+    'gh api repos/o/r/pulls/12/comments',
+    'gh api -X GET search/issues -f q=x',
+    // gh as a word in another command's arguments or in quoted text runs nothing.
+    'grep -rn gh plugins',
+    'git commit -m "use gh to read the token"',
+  ];
+  for (const role of ROLE_BOTS) {
+    for (const command of writes) assert.equal(decision(command, { role }), 'deny', `${role}: ${command}`);
+    for (const command of reads) assert.equal(decision(command, { role }), 'none', `${role}: ${command}`);
+  }
+});
+
+test('role guard: an unknown bot role runs no command', () => {
+  for (const role of ['fixer_bot', 'Fixer-Bot', 'review-bot']) for (const command of ['ls', 'gh pr view 12']) assert.equal(decision(command, { role }), 'deny', `${role}: ${command}`);
+});
+
+test('role guard: the project bot deletes a head branch of the bot shape, never another', () => {
+  assert.equal(decision('gh api -X DELETE repos/o/r/git/refs/heads/feat/37-bot-roles', { role: 'project-bot' }), 'none');
+  const others = ['repos/o/r/git/refs/heads/main', 'repos/o/r/git/refs/heads/release', 'repos/o/r/git/refs/tags/v1.0.0', 'repos/o/r/git/refs/heads/feat/37-x%2F..%2Fmain'];
+  for (const path of others) assert.equal(decision(`gh api -X DELETE ${path}`, { role: 'project-bot' }), 'deny', path);
+  for (const role of [undefined, ...ROLE_BOTS]) assert.equal(decision('gh api -X DELETE repos/o/r/git/refs/heads/feat/37-bot-roles', { role }), 'deny', role);
+});
+
 test('role guard: only the session where the user typed /cl-workflow:questions writes into the local question queue', () => {
   const data = mkdtempSync(join(tmpdir(), 'role-guard-'));
   const env = { CLAUDE_PLUGIN_DATA: data, CLAUDE_PID: '4242' };
