@@ -154,6 +154,8 @@ function ownDir(folder, create) {
   return dir;
 }
 const queueDir = (create) => ownDir(QUEUE, create);
+// git exits 128 on any fatal error, and its message is translated: only without a .git here or above is there no repository.
+const inRepository = () => { for (let at = realpathSync('.'); ; at = dirname(at)) { if (existsSync(join(at, '.git'))) return true; if (dirname(at) === at) return false; } };
 
 // Adds an existing folder of the working directory to info/exclude unless git ignores it already.
 function keepOut(folder, run) {
@@ -161,7 +163,7 @@ function keepOut(folder, run) {
     // --no-index: a folder holding a tracked file (a committed digest) reads as not ignored otherwise.
     run('git', ['check-ignore', '-q', '--no-index', folder]);
   } catch (e) {
-    // 1: not ignored; 128: no git repository, nothing to keep out.
+    // 1: not ignored; 128 outside a repository: nothing to keep out.
     // An exclude pattern with a slash matches from the repository root, so it names the folder from there,
     // with the pattern characters of the folder names escaped (https://git-scm.com/docs/gitignore#_pattern_format).
     if (e.status === 1) {
@@ -170,7 +172,7 @@ function keepOut(folder, run) {
       const exclude = resolve(run('git', ['rev-parse', '--git-path', 'info/exclude']).trim());
       mkdirSync(dirname(exclude), { recursive: true });
       appendFileSync(exclude, `\n/${prefix.replace(/[\\[*?]/g, '\\$&')}${folder.replaceAll(sep, '/')}/\n`);
-    } else if (e.status !== 128) throw e;
+    } else if (e.status !== 128 || inRepository()) throw e;
   }
 }
 

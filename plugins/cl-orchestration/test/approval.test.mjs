@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { devNull, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -250,11 +250,14 @@ test('approval: the command line refuses a file outside the run folder with exit
   assert.equal(status(linkedRuns, '.cedarloom/runs/r1/filled.md'), 2);
 });
 
+// A global excludes file that ignores .cedarloom/ would keep the folders out of git before the script does.
+const gitInit = (repo) => { execFileSync('git', ['init', '-q'], { cwd: repo }); execFileSync('git', ['config', 'core.excludesFile', devNull], { cwd: repo }); };
+
 test('approval: without a private tracker, the question goes into the local queue, and the coordinator reads its answer there', () => {
   const script = fileURLToPath(new URL(`${SKILL}approval.mjs`, import.meta.url));
   // The working folder of the coordinator can be a subfolder of a repository.
   const repo = mkdtempSync(join(tmpdir(), 'cl-approval-'));
-  execFileSync('git', ['init', '-q'], { cwd: repo });
+  gitInit(repo);
   const dir = join(repo, 'work');
   mkdirSync(join(dir, '.cedarloom/runs/r1'), { recursive: true });
   writeFileSync(join(dir, '.cedarloom/runs/r1/filled.md'), FILLED);
@@ -286,7 +289,7 @@ test('approval: without a private tracker, the question goes into the local queu
 test('approval: the digest folder is kept out of git with one exclude line, also on a second write', () => {
   const script = fileURLToPath(new URL(`${SKILL}approval.mjs`, import.meta.url));
   const repo = mkdtempSync(join(tmpdir(), 'cl-approval-'));
-  execFileSync('git', ['init', '-q'], { cwd: repo });
+  gitInit(repo);
   const dir = join(repo, 'work');
   mkdirSync(dir);
   for (let i = 0; i < 2; i++) {
@@ -302,7 +305,7 @@ test('approval: the digest folder is kept out of git with one exclude line, also
 test('approval: a tracked digest adds no second exclude line', () => {
   const script = fileURLToPath(new URL(`${SKILL}approval.mjs`, import.meta.url));
   const repo = mkdtempSync(join(tmpdir(), 'cl-approval-'));
-  execFileSync('git', ['init', '-q'], { cwd: repo });
+  gitInit(repo);
   const digests = () => spawnSync(process.execPath, [script, 'digests'], { cwd: repo, encoding: 'utf8' });
   assert.equal(digests().status, 0);
   writeFileSync(join(repo, '.cedarloom/digests/2026-11-21.md'), '2026-11-21\n');
@@ -314,11 +317,22 @@ test('approval: a tracked digest adds no second exclude line', () => {
   assert.deepEqual(lines, ['/.cedarloom/digests/']);
 });
 
+test('approval: a fatal git error in a repository leaves the digest folder unconfirmed', () => {
+  const script = fileURLToPath(new URL(`${SKILL}approval.mjs`, import.meta.url));
+  const repo = mkdtempSync(join(tmpdir(), 'cl-approval-'));
+  gitInit(repo);
+  // git exits 128 on a config it cannot parse, as it does outside a repository.
+  appendFileSync(join(repo, '.git/config'), '[core\n');
+  const r = spawnSync(process.execPath, [script, 'digests'], { cwd: repo, encoding: 'utf8' });
+  assert.equal(r.status, 2);
+  assert.equal(r.stdout, '');
+});
+
 test('approval: the local queue refuses links, existing files and planted answers, and reports a file it cannot read', () => {
   const script = fileURLToPath(new URL(`${SKILL}approval.mjs`, import.meta.url));
   const project = (sub = '.') => {
     const repo = mkdtempSync(join(tmpdir(), 'cl-approval-'));
-    execFileSync('git', ['init', '-q'], { cwd: repo });
+    gitInit(repo);
     const dir = join(repo, sub);
     mkdirSync(join(dir, '.cedarloom/runs/r1'), { recursive: true });
     writeFileSync(join(dir, '.cedarloom/runs/r1/filled.md'), FILLED);
