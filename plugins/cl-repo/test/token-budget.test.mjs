@@ -146,7 +146,24 @@ test('token-budget: check fails for a budget it cannot read', () => {
   assert.deepEqual(failures({ files: 3 }), ['budget.files is not an object']);
   assert.deepEqual(failures({ files: { 'AGENTS.md': 'abc' } }), ['budget.files AGENTS.md is not a number']);
   assert.deepEqual(failures({ files: { 'CLAUDE2.md': 5 } }), ['budget.files CLAUDE2.md is not a measured file']);
+  assert.deepEqual(failures({ files: { 'CLAUDE2.md': -1 } }), ['budget.files CLAUDE2.md is negative', 'budget.files CLAUDE2.md is not a measured file']);
   assert.deepEqual(failures({ total: 377, alwaysLoaded: 195, files: { 'AGENTS.md': 100 } }), []);
+});
+
+test('token-budget: git calls ignore the GIT_* variables of the caller', () => {
+  const other = mkdtempSync(join(tmpdir(), 'token-budget-other-'));
+  execFileSync('git', ['init', '-q'], { cwd: other });
+  const root = repo(undefined, { 'CLAUDE.md': '@notes/outside.md\n', '.gitignore': 'notes/\n' });
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  const saved = { GIT_DIR: process.env.GIT_DIR, GIT_WORK_TREE: process.env.GIT_WORK_TREE };
+  Object.assign(process.env, { GIT_DIR: join(other, '.git'), GIT_WORK_TREE: other });
+  try {
+    const cfg = loadConfig(root);
+    assert.ok(Object.hasOwn(measure(root, cfg).files, 'AGENTS.md'));
+    assert.deepEqual(check(root, cfg, undefined, true).failures, []);
+  } finally {
+    for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
 });
 
 test('token-budget: a command description is listed unless the model cannot invoke it', () => {
