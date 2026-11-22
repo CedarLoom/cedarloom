@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -111,7 +112,20 @@ test('token-budget: check fails with one line above budget.alwaysLoaded', () => 
 
 test('token-budget: check fails for an imported file in the repository that is not measured', () => {
   const root = repo(undefined, { 'CLAUDE.md': '@docs/imported.md\n@notes/outside.md\n@notes/missing.md\n@../away.md\n' });
-  assert.deepEqual(check(root, loadConfig(root), undefined, true).failures, ['notes/outside.md: loads every session (imported by CLAUDE.md) but is outside include']);
+  assert.deepEqual(check(root, loadConfig(root), undefined, true).failures, ['notes/outside.md: loads every session (imported by CLAUDE.md) but is not measured (include, exclude)']);
+});
+
+test('token-budget: check passes for an imported file git ignores', () => {
+  const root = repo(undefined, { 'CLAUDE.md': '@notes/outside.md\n', '.gitignore': 'notes/\n' });
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  assert.deepEqual(check(root, loadConfig(root), undefined, true).failures, []);
+});
+
+test('token-budget: check fails for an import through a symlinked directory', () => {
+  const root = repo(undefined, { 'CLAUDE.md': '@shared/rules.md\n', 'real/rules.md': sized('', 70) });
+  symlinkSync('real', join(root, 'shared'));
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  assert.deepEqual(check(root, loadConfig(root), undefined, true).failures, ['shared/rules.md: loads every session (imported by CLAUDE.md) but is not measured (include, exclude)']);
 });
 
 test('token-budget: check fails for an alwaysLoadedFiles pattern that matches no measured file', () => {
@@ -125,6 +139,7 @@ test('token-budget: check fails for a budget it cannot read', () => {
     return check(root, loadConfig(root), undefined, true).failures;
   };
   assert.deepEqual(failures(1200), ['budget is not an object']);
+  assert.deepEqual(failures(null), ['budget is not an object']);
   assert.deepEqual(failures({ alwaysloaded: 50 }), ['budget.alwaysloaded is not a budget key (total, alwaysLoaded, files)']);
   assert.deepEqual(failures({ alwaysLoaded: 'abc' }), ['budget.alwaysLoaded is not a number']);
   assert.deepEqual(failures({ total: null }), ['budget.total is not a number']);
