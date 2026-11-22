@@ -1,4 +1,4 @@
-// The window of terminal questions that /cl-workflow:ask and /cl-workflow:questions open, read alike by the plugin's hook (ask.mjs) and its band.
+// The window of terminal questions that /cl-workflow:ask and /cl-workflow:questions open, read by the plugin's hook (ask.mjs).
 
 // The line a session reads while the window is closed, and the reason the hook gives when it refuses the question tool or plan mode.
 export const OFF = 'Terminal questions are off: the question tool (AskUserQuestion) and plan mode (EnterPlanMode) are refused; run no chat-text interviews either (rounds of questions in plain text, as a grilling skill asks them). Put the open questions with your recommendations into one issue per task in the issue tracker the project names, else the report; take each recommendation that is safe and reversible (an item without one waits), and go on. Only the user can allow terminal questions, with /cl-workflow:ask or /cl-workflow:questions.';
@@ -14,7 +14,7 @@ function clock(at, now) {
 
 // /cl-workflow:questions opens the window for the rest of the session: an end of Infinity, kept as SESSION in the window file.
 export const SESSION = 'session';
-export const lasting = (until, now) => (until === Infinity ? 'for this session' : `until ${clock(until, now)}`);
+const lasting = (until, now) => (until === Infinity ? 'for this session' : `until ${clock(until, now)}`);
 
 export const allowed = (until, now) => `Terminal questions are allowed ${lasting(until, now)}: the user opened them with /cl-workflow:ask or /cl-workflow:questions, and the question tool and plan mode are refused again after that.`;
 
