@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { devNull, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -10,10 +10,13 @@ const HOOK = fileURLToPath(new URL('../hooks/rotation/restore.mjs', import.meta.
 const OWNED = '# Handoff\nSession: s-a\n\n## Next\nwatch #12\n';
 const RUNS = join('.cedarloom', 'runs');
 
+// A global excludes file that ignores .cedarloom/ would keep the handoff file out of the untracked drift list.
+const gitInit = (root) => { execFileSync('git', ['init', '-q', root]); execFileSync('git', ['-C', root, 'config', 'core.excludesFile', devNull]); };
+
 // A folder holding the coordinator's handoff file, untracked in a git work tree unless `git` is false.
 const folder = ({ text = OWNED, git = true } = {}) => {
   const root = mkdtempSync(join(tmpdir(), 'restore-'));
-  if (git) execFileSync('git', ['init', '-q', root]);
+  if (git) gitInit(root);
   mkdirSync(join(root, RUNS), { recursive: true });
   writeFileSync(join(root, RUNS, 'handoff.md'), text);
   return root;
