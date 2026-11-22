@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { openUntil } from '../hooks/ask/window-file.mjs';
 
 const HOOK = fileURLToPath(new URL('../hooks/ask/ask.mjs', import.meta.url));
 // The inputs Claude Code 2.1.316 gave the plugin's hooks in a scratch session, paths and ids replaced.
@@ -26,6 +27,9 @@ const run = (data, input) => {
   return r.stdout === '' ? null : JSON.parse(r.stdout).hookSpecificOutput;
 };
 const decision = (data) => run(data, QUESTION)?.permissionDecision ?? 'none';
+const queued = (args) => ({ ...typed(args), command_name: 'cl-workflow:questions', prompt: `/cl-workflow:questions ${args}` });
+// The window as the role guard reads it: with flagged, only one that lets the session write answers.
+const windowEnd = (data, flagged = false) => openUntil(join(data, 'ask', '4242.json'), Date.now(), flagged);
 
 test('ask hook: refuses the question tool until /cl-workflow:ask opens a window, and again after off', () => {
   const data = mkdtempSync(join(tmpdir(), 'ask-'));
@@ -67,4 +71,28 @@ test('ask hook: /cl-workflow:questions allows the question tool for the session,
   assert.equal(decision(data), 'none');
   run(data, typed('off'));
   assert.equal(decision(data), 'deny');
+});
+
+test('ask hook: /cl-workflow:questions 5 opens the session with the answer flag and names the count', () => {
+  const data = mkdtempSync(join(tmpdir(), 'ask-'));
+  assert.match(run(data, queued('5')).additionalContext, /^Question queue:.*\b5\b/m);
+  assert.equal(decision(data), 'none');
+  assert.equal(windowEnd(data, true), Infinity);
+});
+
+test('ask hook: /cl-workflow:questions 0 opens no window and sets no answer flag', () => {
+  const data = mkdtempSync(join(tmpdir(), 'ask-'));
+  run(data, queued('0'));
+  assert.equal(decision(data), 'deny');
+  assert.equal(windowEnd(data, true), null);
+});
+
+test('ask hook: /cl-workflow:questions 0 leaves a timed window open, with its end and without the answer flag', () => {
+  const data = mkdtempSync(join(tmpdir(), 'ask-'));
+  mkdirSync(join(data, 'ask'));
+  writeFileSync(join(data, 'ask', '4242.json'), '{"askUntil":"2999-01-01T00:00:00.000Z"}');
+  run(data, queued('0'));
+  assert.equal(decision(data), 'none');
+  assert.equal(windowEnd(data), Date.parse('2999-01-01T00:00:00.000Z'));
+  assert.equal(windowEnd(data, true), null);
 });
