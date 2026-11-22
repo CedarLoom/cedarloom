@@ -17,6 +17,8 @@ test('queueArgs: reads a count and a filter', () => {
     ['5 Foo', { count: 5, filter: { project: 'Foo' } }],
     ['all 7', { count: 'all', filter: { project: '7' } }],
     ['all all', { count: 'all', filter: { project: 'all' } }],
+    ['.github', { count: 'all', filter: { project: '.github' } }],
+    ['5 _site', { count: 5, filter: { project: '_site' } }],
   ]) assert.deepEqual(queueArgs(args), expected, args);
 });
 

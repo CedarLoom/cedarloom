@@ -34,7 +34,7 @@ export function askUntil(args, now) {
 }
 
 const COUNT = /^([1-9]\d{0,2}|all)$/;
-const PROJECT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+const PROJECT = /^[A-Za-z0-9._][A-Za-z0-9._-]{0,99}$/;
 
 // The question count and filter of /cl-workflow:questions, undefined unread. A first word of digits or all is always the count, never a project.
 export function queueArgs(args) {
@@ -52,5 +52,6 @@ export function queueArgs(args) {
 export function queueLine({ count, filter }) {
   const asked = count !== 'all' ? `at most ${count} question${count === 1 ? '' : 's'}` : `every ${filter === 'deferred' ? 'deferred' : 'open'} question`;
   const scope = filter === null ? 'no filter' : filter === 'deferred' ? 'filter: deferred' : `local queue filter: project ${filter.project}`;
-  return `Question queue: ${asked}; ${scope}.`;
+  // No closing period: a project name can end in one.
+  return `Question queue: ${asked}; ${scope}`;
 }
