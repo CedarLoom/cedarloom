@@ -42,11 +42,14 @@ The coordinator of `/cl-orchestration:coordinate` files an owner question, in th
 
 Rejected work is closed as not planned, with no label. `/cl-repo:setup` lists the labels the repository lacks and creates the ones you approve.
 
-`/cl-workflow:questions` asks in batches, all or up to a count you name: this repository's `cl:needs-human` issues, then the local queue, where it writes the answer line the coordinator reads. That line counts as the owner's, so the [role guard](#role-guard) refuses edit-tool writes to the queue, and commands that reach it, in every session but the one where you typed `/cl-workflow:questions` with arguments it reads and in every subagent; the coordinator files through `approval.mjs file`.
+`/cl-workflow:questions` asks in batches, all or up to a count you name: this repository's `cl:needs-human` issues, then the local queue, where it writes the answer line the coordinator reads. That line counts as the owner's, so the [role guard](#role-guard) refuses edit-tool writes to the queue, and commands that reach it, in every session but the one where `/cl-workflow:questions` with arguments it reads set the answer flag, and in every subagent; the coordinator files through `approval.mjs file`.
 
+- The hook input does not tell a typed command from a piped one (`claude -p`, `stream-json`), so no flag is set with `permission_mode` `dontAsk` or missing, or `CLAUDE_CODE_ENTRYPOINT=sdk-cli`.
+- Each run logs a line in the plugin's data folder (`ask/log/`); a flagged run shows the runs since the last flagged one.
+- Not prevented: a process on your account typing into a session in default, auto or bypass mode, writing the queue, window or log files, or naming the command in a file or a variable.
 - A command reaches the queue when its text names `.cedarloom/questions` or when a word or redirection target, read as the shell decodes it from the session folder and from each folder a `cd`, `pushd` or `Set-Location` before it names, lies in it (`*`, `?` and `[...]` count as any name, but two such segments in a row, as in `*/*`, match no folder).
 - It does not try to catch a command written to get around it (`.c*/q*`, braces, variables, bracket classes, look-alike letters, a tool's own folder option such as `git -C`), nor one that acts on `.cedarloom` itself. A session whose folder lies in the queue writes nothing there.
-- The guard also refuses, in every session, writes to the window files of `/cl-workflow:ask`, commands that name them, and a `claude` launch with `/cl-workflow:questions` or `/questions` in its command line: `claude -p` expands such a command ([headless mode](https://code.claude.com/docs/en/headless)), and no hook input tells that session from one where you typed it.
+- The guard also refuses, in every session, writes to the window files of `/cl-workflow:ask`, commands that name them, and a `claude` launch with `/cl-workflow:questions` or `/questions` in its command line: `claude -p` expands such a command ([headless mode](https://code.claude.com/docs/en/headless)); where cl-orchestration is on, its hook refuses the same in an `orca` command.
 
 ## Role guard
 

@@ -3,10 +3,20 @@ import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { OFF, SESSION, allowed, askUntil, queueArgs, queueLine } from './window.mjs';
-import { openUntil, windowDir, windowFile } from './window-file.mjs';
+import { openUntil, processId, windowDir, windowFile } from './window-file.mjs';
+import { logFile, logRun } from './questions-log.mjs';
 
 const dir = windowDir();
 const file = windowFile();
+
+// Why the input shows a session nobody may answer in, else null. A mode the hook cannot read refuses too.
+function unattended(input) {
+  const mode = input.permission_mode;
+  if (typeof mode !== 'string' || mode === '') return 'the hook input names no permission mode';
+  if (mode === 'dontAsk') return 'the session runs in dontAsk mode, which asks nobody';
+  if (process.env.CLAUDE_CODE_ENTRYPOINT === 'sdk-cli') return 'the session runs headless (CLAUDE_CODE_ENTRYPOINT=sdk-cli, as claude -p sets it)';
+  return null;
+}
 
 const line = (now) => {
   const end = openUntil(file, now);
@@ -35,15 +45,24 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
   }
   say(event, { additionalContext: line(now) });
 } else if (event === 'UserPromptExpansion' && ['cl-workflow:ask', 'cl-workflow:questions'].includes(input.command_name)) {
-  // Only a typed command expands; a scheduled or delivered prompt with the same text does not.
-  // claude -p expands one (https://code.claude.com/docs/en/headless), so role-guard.mjs refuses such a launch.
+  // A command expands alike when typed, piped to claude -p or sent as a stream-json message, and no field of this input tells
+  // them apart. So /cl-workflow:questions sets no answer flag where the input shows an unattended session, role-guard.mjs
+  // refuses a launch that names it, and the log shows each run to the next one.
   if (!file) throw new Error(`the plugin has no data folder (CLAUDE_PLUGIN_DATA), so /${input.command_name} cannot keep its window`);
   const args = String(input.command_args ?? '');
   const questions = input.command_name === 'cl-workflow:questions';
-  const queue = questions ? queueArgs(args) : undefined;
-  // Running the question queue with arguments it reads is the user allowing terminal questions for the rest of the session.
+  const refused = questions ? unattended(input) : null;
+  const queue = questions && !refused ? queueArgs(args) : undefined;
+  // Running the question queue with arguments it reads in an attended session allows terminal questions for the rest of the session.
   const end = queue ? Infinity : questions ? undefined : askUntil(args, now);
-  if (end === undefined) {
+  // The log entry comes first: where it cannot be written, the hook fails and sets no flag.
+  const entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT ?? null;
+  const earlier = questions
+    ? logRun(logFile(dir), { time: new Date(now).toISOString(), session: input.session_id ?? null, folder: input.cwd ?? null, mode: input.permission_mode ?? null, entrypoint, pid: processId(), flag: end === Infinity })
+    : null;
+  if (refused) {
+    say(event, { additionalContext: `/cl-workflow:questions set no answer flag and allowed no terminal questions: ${refused}. Typed into an interactive terminal session, it can set the flag. ${line(now)}` });
+  } else if (end === undefined) {
     const [read, forms] = questions
       ? ['count or filter', 'alone (every open question) or as [<count>|all] [deferred|<project>], with a count from 1 to 999']
       : ['window', 'alone (30 minutes), for 30m, for 2h, until 14:30 or off'];
@@ -55,6 +74,6 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
     mkdirSync(dir, { recursive: true });
     // The flag lets this session, and no other, write answers into the local question queue (role-guard.mjs).
     writeFileSync(file, `${JSON.stringify({ askUntil: end === Infinity ? SESSION : new Date(end).toISOString(), questions: questions || undefined })}\n`);
-    say(event, { additionalContext: queue ? `${allowed(end, now)}\n${queueLine(queue)}` : allowed(end, now) });
+    say(event, { additionalContext: queue ? `${allowed(end, now)}\n${queueLine(queue)}\n${earlier}` : allowed(end, now) });
   }
 }
