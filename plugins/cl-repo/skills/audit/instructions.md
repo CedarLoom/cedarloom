@@ -44,7 +44,7 @@ The prompt is checked against the fixtures in `test/fixtures/audit/` of this plu
 
 ## Not findings
 
-- A line that is specific and gives its reason, for the four kinds of [One rule file](#one-rule-file).
+- A line that is specific and gives its reason, for vague, enforceable and restates ([One rule file](#one-rule-file)).
 - Context only the author knows: project facts, reasons, constraints of the environment.
 - A prohibition that guards against a failure that still occurs.
 - The exact command or script of a fragile operation.
