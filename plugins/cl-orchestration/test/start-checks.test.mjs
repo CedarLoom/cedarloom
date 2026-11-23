@@ -322,19 +322,20 @@ test('start-checks: a settings key the script does not know to run no command is
   ]);
 });
 
-test('start-checks: an Edit, Write or NotebookEdit allow rule outside the worktree is unresolved, one inside it is listed', () => {
+test('start-checks: an Edit, MultiEdit, Write or NotebookEdit allow rule outside the worktree is unresolved, one inside it is listed', () => {
   const s = setup({
     'home/.claude/settings.json': { permissions: { allow: ['Write(build/**)'] } },
-    'project/.claude/settings.json': { permissions: { allow: ['Edit(src/**)', 'Write(//etc/**)', 'Edit(~/notes/**)', 'Edit(../other/**)', 'Edit', 'NotebookEdit(//etc/**)', 'NotebookEdit(notebooks/**)'] } },
+    'project/.claude/settings.json': { permissions: { allow: ['Edit(src/**)', 'Write(//etc/**)', 'Edit(~/notes/**)', 'Edit(../other/**)', 'Edit', 'NotebookEdit(//etc/**)', 'NotebookEdit(notebooks/**)', 'MultiEdit(//etc/**)', 'MultiEdit(src/**)'] } },
   });
   const r = s.run(), [user, committed] = ['home/.claude/settings.json', 'project/.claude/settings.json'].map((file) => join(s.dir, file));
-  assert.deepEqual(r.allowRules, [{ source: committed, rule: 'Edit(src/**)' }, { source: committed, rule: 'Edit' }, { source: committed, rule: 'NotebookEdit(notebooks/**)' }]);
+  assert.deepEqual(r.allowRules, [{ source: committed, rule: 'Edit(src/**)' }, { source: committed, rule: 'Edit' }, { source: committed, rule: 'NotebookEdit(notebooks/**)' }, { source: committed, rule: 'MultiEdit(src/**)' }]);
   assert.deepEqual(r.unresolved, [
-    { source: user, reason: 'an Edit, Write or NotebookEdit allow rule outside the worktree: Write(build/**)' },
-    { source: committed, reason: 'an Edit, Write or NotebookEdit allow rule outside the worktree: Write(//etc/**)' },
-    { source: committed, reason: 'an Edit, Write or NotebookEdit allow rule outside the worktree: Edit(~/notes/**)' },
-    { source: committed, reason: 'an Edit, Write or NotebookEdit allow rule outside the worktree: Edit(../other/**)' },
-    { source: committed, reason: 'an Edit, Write or NotebookEdit allow rule outside the worktree: NotebookEdit(//etc/**)' },
+    { source: user, reason: 'an Edit, MultiEdit, Write or NotebookEdit allow rule outside the worktree: Write(build/**)' },
+    { source: committed, reason: 'an Edit, MultiEdit, Write or NotebookEdit allow rule outside the worktree: Write(//etc/**)' },
+    { source: committed, reason: 'an Edit, MultiEdit, Write or NotebookEdit allow rule outside the worktree: Edit(~/notes/**)' },
+    { source: committed, reason: 'an Edit, MultiEdit, Write or NotebookEdit allow rule outside the worktree: Edit(../other/**)' },
+    { source: committed, reason: 'an Edit, MultiEdit, Write or NotebookEdit allow rule outside the worktree: NotebookEdit(//etc/**)' },
+    { source: committed, reason: 'an Edit, MultiEdit, Write or NotebookEdit allow rule outside the worktree: MultiEdit(//etc/**)' },
   ]);
 });
 
@@ -381,6 +382,49 @@ test('start-checks: a skill, agent or command file whose frontmatter sets hooks 
   const files = { [`${cache}/hooks/hooks.json`]: {}, [`${cache}/skills/y/SKILL.md`]: HOOKS, [`${cache}/agents/a.md`]: HOOKS, [`${cache}/custom/z/SKILL.md`]: HOOKS, [`${cache}/skills/y/plain.md`]: plainFile };
   assert.deepEqual(withPlugin({ source: './fmt' }, files).unresolved.map((u) => [u.source.slice(u.source.indexOf(cache) + cache.length + 1), u.reason]).sort(), [['agents/a.md', sets('hooks')], ['custom/z/SKILL.md', sets('hooks')], ['skills/y/SKILL.md', sets('hooks')]]);
   assert.deepEqual(withPlugin({ source: './fmt' }, { ...files, 'home/.claude/settings.json': { enabledPlugins: { 'fmt@m': false } } }).unresolved, []);
+});
+
+test('start-checks: frontmatter with a line before its first plain key that is no comment is unresolved', () => {
+  const s = setup({
+    // An indented mapping is a mapping to a YAML reader, so its hooks key counts.
+    'wt/.claude/skills/all/SKILL.md': '---\n  name: x\n  description: x\n  hooks:\n    PreToolUse:\n      - hooks:\n          - type: command\n            command: "./scripts/check.sh"\n---\nx\n',
+    'project/.claude/skills/one/SKILL.md': '---\n hooks:\n  Stop:\n   - hooks:\n      - type: command\n        command: "npm test"\n---\nx\n',
+    'home/.claude/agents/after.md': '---\n# note\n\n  name: x\n  hooks: {}\n---\nx\n',
+    'wt/.claude/commands/list.md': '---\n- hooks: {}\n---\nx\n',
+    'wt/.claude/skills/plain/SKILL.md': '---\n\n  # note\n# note\nname: y\ndescription: >\n  one\nallowed-tools:\n- Read\n---\nx\n',
+    'wt/.claude/skills/empty/SKILL.md': '---\n---\nx\n',
+  });
+  const line = 'its frontmatter holds a line that is no plain key, which the script does not read';
+  assert.deepEqual(s.run().unresolved.map((u) => [u.source.slice(s.dir.length + 1), u.reason]).sort(), [
+    ['home/.claude/agents/after.md', line],
+    ['project/.claude/skills/one/SKILL.md', line],
+    ['wt/.claude/commands/list.md', line],
+    ['wt/.claude/skills/all/SKILL.md', line],
+  ]);
+});
+
+test('start-checks: a skills, agents or commands folder in a .claude folder below the worktree root is unresolved, unread', () => {
+  const s = setup({
+    'wt/packages/a/.claude/skills/x/SKILL.md': HOOKS,
+    'wt/packages/a/.claude/settings.json': {},
+    'wt/packages/b/deep/.claude/agents/a.md': 'a\n',
+    'wt/tools/.claude/commands/c.md': 'c\n',
+    'wt/.claude/skills/y/SKILL.md': 'y\n',
+    'wt/node_modules/p/.claude/skills/x/SKILL.md': HOOKS,
+    'wt/.git/.claude/skills/x/SKILL.md': HOOKS,
+    'wt/docs/.claude/notes.md': HOOKS,
+    'elsewhere/.claude/skills/x/SKILL.md': HOOKS,
+  });
+  // A folder that is a link counts by its own .claude folder, unless that is the root's own, which is read.
+  symlinkSync(join(s.dir, 'elsewhere'), join(s.dir, 'wt/linked'));
+  symlinkSync(join(s.dir, 'wt'), join(s.dir, 'wt/packages/loop'));
+  const reason = 'a nested .claude folder the script does not read';
+  assert.deepEqual(s.run().unresolved.map((u) => [u.source.slice(s.dir.length + 1), u.reason]).sort(), [
+    ['wt/linked/.claude/skills', reason],
+    ['wt/packages/a/.claude/skills', reason],
+    ['wt/packages/b/deep/.claude/agents', reason],
+    ['wt/tools/.claude/commands', reason],
+  ]);
 });
 
 test('start-checks: a hook of another type than command is listed to read, in the settings and in a plugin', () => {

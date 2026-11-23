@@ -32,6 +32,8 @@ const OBJECTS = ['hooks', 'sandbox', 'permissions', 'enabledPlugins', 'env'];
 const LISTS = ['permissions.allow', 'permissions.additionalDirectories', 'sandbox.filesystem.allowRead', 'sandbox.filesystem.allowWrite'];
 // Frontmatter keys of a skill, agent or command file that define hooks or MCP servers, which run outside the sandbox.
 const FRONTMATTER_KEYS = ['hooks', 'mcpServers'];
+// The folders of a .claude folder whose files carry such frontmatter.
+const INSTRUCTIONS = ['skills', 'agents', 'commands'];
 // Plugin manifest keys that hold definitions of commands or name files of them, with the file read when the key is absent.
 const PARTS = [['hooks', 'hooks/hooks.json'], ['mcpServers', '.mcp.json'], ['lspServers', '.lsp.json'], ['monitors', 'monitors/monitors.json'], ['experimental.monitors']];
 // Environment variables that add plugins the script does not read.
@@ -88,11 +90,13 @@ function frontmatter(text) {
   const lines = text.replace(/^﻿/, '').split(/\r?\n/);
   if (lines[0].trimEnd() !== '---') return undefined;
   const end = lines.findIndex((line, i) => i && /^(---|\.\.\.)\s*$/.test(line));
+  let keyed = false;
   for (const line of lines.slice(1, end < 0 ? undefined : end)) {
     const key = /^([A-Za-z_][\w-]*)\s*:(\s|$)/.exec(line)?.[1];
     if (FRONTMATTER_KEYS.includes(key)) return `its frontmatter sets ${key}`;
-    // An indented line, a list entry and a comment belong to the key above them.
-    if (!key && !/^(\s|#|-(\s|$)|$)/.test(line)) return 'its frontmatter holds a line that is no plain key';
+    // An indented line, a list entry and a comment belong to the key above them. With no key above, only a comment or an empty line passes: an indented line there can open a mapping whose keys all sit past column 0.
+    if (!key && !(keyed ? /^(\s|#|-(\s|$)|$)/ : /^\s*(#|$)/).test(line)) return 'its frontmatter holds a line that is no plain key';
+    keyed ||= key !== undefined;
   }
   return undefined;
 }
@@ -123,6 +127,11 @@ function markdown(folder, seen) {
   if (!target || seen.has(target)) return [];
   seen.add(target);
   return names(folder).flatMap((name) => (folderAt(join(folder, name)) ? markdown(join(folder, name), seen) : /\.md$/i.test(name) ? [join(folder, name)] : []));
+}
+// Every skills, agents or commands folder in a .claude folder of a folder below this one, node_modules and .git left out. A folder that is a link is tested and not walked: it can lead anywhere, also back up.
+function nested(folder) {
+  return names(folder).filter((name) => name !== 'node_modules' && name !== '.git').map((name) => join(folder, name)).filter(folderAt)
+    .flatMap((below) => [...INSTRUCTIONS.map((kind) => join(below, '.claude', kind)).filter(folderAt), ...(lstatSync(below).isDirectory() ? nested(below) : [])]);
 }
 
 export function startChecks({ project, worktree, configDir, claudeJson, managedDir, home, platform, domains, env = {} }) {
@@ -196,7 +205,9 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
       if (set) cannot(file, `${set}, which the script does not read`);
     }
   };
-  instructions([configDir, ...checkouts.map((root) => join(root, '.claude'))].flatMap((base) => ['skills', 'agents', 'commands'].map((kind) => join(base, kind))));
+  instructions([configDir, ...checkouts.map((root) => join(root, '.claude'))].flatMap((base) => INSTRUCTIONS.map((kind) => join(base, kind))));
+  // Claude Code loads a subfolder's .claude folder once the worker works on a file there: the script names each and reads none, but for a link to a folder read above.
+  for (const folder of nested(worktree ?? project)) if (!seen.has(real(folder))) cannot(folder, 'a nested .claude folder the script does not read');
   // An installed plugin is on unless a file turns it off; one turned on in any file counts: a later scope may turn it off, but failing closed checks it anyway.
   // A worktree session loads the committed settings of its own folder and the local settings of the main checkout: a false in the other two files turns nothing off for it.
   const unloaded = worktree && worktree !== project ? [join(project, '.claude/settings.json'), join(worktree, '.claude/settings.local.json')] : [];
@@ -304,9 +315,9 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
       // A WebFetch rule of another form than WebFetch(domain:<host>) may allow any host.
       const webFetch = /^\s*WebFetch\b/.test(text), host2 = /^WebFetch\(domain:(.*)\)$/.exec(text)?.[1];
       // An allow rule of a tool that edits files can add its path to the sandbox's write list.
-      const written = /^\s*(?:Edit|Write|NotebookEdit)\((.*)\)\s*$/s.exec(text)?.[1];
+      const written = /^\s*(?:Edit|MultiEdit|Write|NotebookEdit)\((.*)\)\s*$/s.exec(text)?.[1];
       if (webFetch && host2 === undefined) cannot(file, `a WebFetch allow rule of another form than WebFetch(domain:<host>): ${text}`);
-      else if (written !== undefined && outside(scope, written)) cannot(file, `an Edit, Write or NotebookEdit allow rule outside the worktree: ${text}`);
+      else if (written !== undefined && outside(scope, written)) cannot(file, `an Edit, MultiEdit, Write or NotebookEdit allow rule outside the worktree: ${text}`);
       else if (!webFetch || domain(file, host2, text)) allowRules.push({ source: file, rule: escaped(text) });
     }
   }
