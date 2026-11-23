@@ -32,7 +32,7 @@ const childEnv = () => {
     GIT_TERMINAL_PROMPT: '0',
     // A worker shares the git directory: a replace ref it wrote must not swap the policy file for another.
     GIT_NO_REPLACE_OBJECTS: '1',
-    // Nor a promisor remote it configured run its transport command to fetch a missing object. Known window: a git that ignores this variable (unpatched releases below 2.45) is covered only by the config checks (partialClone, otherPromisor), which a setting written after the listing escapes; a minimum git version would close it.
+    // Nor a promisor remote it configured run its transport command to fetch a missing object. A git that ignores this variable (unpatched releases below 2.45) still fetches lazily. The config checks refuse a promisor other than origin (otherPromisor), or any promisor (partialClone); with origin as the promisor, read() pins its own calls, so that fetch runs no hook file. Known window: a setting written after the listing escapes the checks; a minimum git version would close it.
     GIT_NO_LAZY_FETCH: '1',
   };
 };
@@ -173,7 +173,7 @@ export const partialClone = (found) => found.some(([, key]) => PROMISOR.test(key
 // The same for another remote than origin: the scratch clone is a blobless clone of origin, whose transport the reader pins, and a lazy fetch asks every promisor.
 export const otherPromisor = (found) => found.some(([, key, value]) => { const named = PROMISOR.exec(key); return named && (named[1] ?? value) !== 'origin'; });
 export const redirecting = (found) => [...new Set(found.filter(([scope, key, value = '']) => OWN.includes(scope) && (REDIRECTS.test(key) || (/^core\.fsmonitor$/i.test(key) && !BOOLEAN.test(value)))).map(([, key]) => redacted(key)))];
-// Set again for the two calls that reach the remote, as a worker could write the config between the check and the call: no hook (the fetch writes a ref, which runs reference-transaction), no ext:: command as the remote, and git's own monitor. core.sshCommand keeps the user's or system's value, else GIT_SSH, which git ranks below any core.sshCommand, quoted for the shell git runs it with.
+// Set again for every call after the listing, as a worker could write the config between the check and the call: no hook (the fetch writes a ref, which runs reference-transaction), no ext:: command as the remote, and git's own monitor. core.sshCommand keeps the user's or system's value, else GIT_SSH, which git ranks below any core.sshCommand, quoted for the shell git runs it with.
 const pinned = (found) => {
   const ssh = found.filter(([scope, key]) => !OWN.includes(scope) && /^core\.sshcommand$/i.test(key)).at(-1)?.[2] ?? (process.env.GIT_SSH ? `'${process.env.GIT_SSH.replaceAll("'", String.raw`'\''`)}'` : 'ssh');
   return ['-c', `core.hooksPath=${devNull}`, '-c', 'core.fsmonitor=false', '-c', 'protocol.ext.allow=never', '-c', `core.sshCommand=${ssh}`];
@@ -204,10 +204,11 @@ export function read(dir, run = sh) {
   let text;
   try {
     // ls-tree decides whether the file exists, so a show that fails is never read as "no file", which would mean the defaults. --full-tree: the path counts from the repository root, as in the show, also when dir is a folder below it.
-    if (!run(dir, 'git', ['ls-tree', '--full-tree', '--name-only', commit, '--', FILE]).trim()) return { ...effective({}), absent: true };
+    // The three local reads carry the pins as well: with origin as a promisor, a git that ignores GIT_NO_LAZY_FETCH fetches a missing tree or file from them, and that fetch runs no hook either.
+    if (!run(dir, 'git', [...pins, 'ls-tree', '--full-tree', '--name-only', commit, '--', FILE]).trim()) return { ...effective({}), absent: true };
     // A blobless clone of origin holds the tree and not the file: the reader asks origin for that one object, with the pinned settings, since no lazy fetch runs here.
-    if (partialClone(found)) run(dir, 'git', [...pins, 'fetch', UPLOAD_PACK, '--quiet', '--no-tags', '--no-recurse-submodules', '--no-write-fetch-head', 'origin', run(dir, 'git', ['rev-parse', '--verify', `${commit}:${FILE}`]).trim()]);
-    text = run(dir, 'git', ['show', `${commit}:${FILE}`]);
+    if (partialClone(found)) run(dir, 'git', [...pins, 'fetch', UPLOAD_PACK, '--quiet', '--no-tags', '--no-recurse-submodules', '--no-write-fetch-head', 'origin', run(dir, 'git', [...pins, 'rev-parse', '--verify', `${commit}:${FILE}`]).trim()]);
+    text = run(dir, 'git', [...pins, 'show', `${commit}:${FILE}`]);
   } catch { return unreadable(`git could not read ${FILE} from origin's default branch`); }
   let doc;
   try { doc = JSON.parse(text); } catch { return { policy: null, errors: [{ rule: 'bad-json', path: '', message: 'is not valid JSON' }] }; }

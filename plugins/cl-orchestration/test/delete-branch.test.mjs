@@ -151,20 +151,20 @@ test('delete-branch: a hook whose name holds = keeps the local branch', () => {
   assert.equal(s.local(), s.head);
 });
 
-test('delete-branch: a promisor remote or partial clone filter of any remote name keeps the local branch and runs no command, also one set after the runner was made', () => {
-  for (const [key, value] of [['remote.evil.promisor', 'true'], ['remote.evil.partialclonefilter', 'blob:none'], ['extensions.partialclone', 'evil']]) {
+test('delete-branch: a promisor remote or partial clone filter of any remote name, origin included, keeps the local branch and runs no command, also one set after the runner was made', () => {
+  for (const [name, key, value] of ['evil', 'origin'].flatMap((name) => [[name, `remote.${name}.promisor`, 'true'], [name, `remote.${name}.partialclonefilter`, 'blob:none'], [name, 'extensions.partialclone', name]])) {
     const s = setup();
     const git = hookFreeGit(s.project);
     const mark = join(s.dir, 'MARK');
-    s.inProject('config', 'remote.evil.url', join(s.dir, 'origin'));
-    s.inProject('config', 'remote.evil.uploadpack', `echo ran >> '${mark}'; git-upload-pack`);
+    s.inProject('config', `remote.${name}.url`, join(s.dir, 'origin'));
+    s.inProject('config', `remote.${name}.uploadpack`, `echo ran >> '${mark}'; git-upload-pack`);
     s.inProject('config', key, value);
     // The branch names a commit the object store never held, written by hand as git refuses to.
     const missing = 'd'.repeat(40);
     writeFileSync(join(s.project, '.git/refs/heads', BRANCH), `${missing}\n`);
     s.gh.answer([s.merged(missing), [REFS, '[]']]);
-    assert.deepEqual(s.run(ON, git), { remote: 'gone', local: 'kept', reasons: ['local: the branch could not be read: git config names a promisor remote or a partial clone filter, whose lazy fetch can run a command'] }, key);
-    assert.equal(existsSync(mark), false, key);
+    assert.deepEqual(s.run(ON, git), { remote: 'gone', local: 'kept', reasons: ['local: the branch could not be read: git config names a promisor remote or a partial clone filter, whose lazy fetch can run a command'] }, `${name}: ${key}`);
+    assert.equal(existsSync(mark), false, `${name}: ${key}`);
   }
 });
 

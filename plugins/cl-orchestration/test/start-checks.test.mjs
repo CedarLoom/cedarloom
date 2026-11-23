@@ -289,7 +289,7 @@ function withPlugin(entry, files = {}) {
 
 test('start-checks: a marketplace entry passes only with a source that fetches files; a command source or another key is unresolved', () => {
   for (const source of ['./fmt', { source: 'github', repo: 'o/r', ref: 'main' }, { source: 'git-subdir', url: 'https://example.com/r.git', path: 'fmt', sha: 'abc' }]) {
-    assert.deepEqual(withPlugin({ displayName: 'Fmt', source }).unresolved, [], JSON.stringify(source));
+    assert.deepEqual(withPlugin({ displayName: 'Fmt', defaultEnabled: false, source }).unresolved, [], JSON.stringify(source));
   }
   for (const source of [{ source: 'command', command: 'sh fetch.sh' }, { source: 'command', path: 'bin/fetch' }, { source: 'github', repo: 'o/r', command: 'sh fetch.sh' }, { source: 'npm', package: 'fmt' }, 7]) {
     assert.deepEqual(withPlugin({ source }).unresolved.map((u) => u.reason), ['its marketplace entry declares source, which the script does not read'], JSON.stringify(source));
@@ -322,19 +322,85 @@ test('start-checks: a settings key the script does not know to run no command is
   ]);
 });
 
-test('start-checks: an Edit or Write allow rule outside the worktree is unresolved, one inside it is listed', () => {
+test('start-checks: an Edit, Write or NotebookEdit allow rule outside the worktree is unresolved, one inside it is listed', () => {
   const s = setup({
     'home/.claude/settings.json': { permissions: { allow: ['Write(build/**)'] } },
-    'project/.claude/settings.json': { permissions: { allow: ['Edit(src/**)', 'Write(//etc/**)', 'Edit(~/notes/**)', 'Edit(../other/**)', 'Edit'] } },
+    'project/.claude/settings.json': { permissions: { allow: ['Edit(src/**)', 'Write(//etc/**)', 'Edit(~/notes/**)', 'Edit(../other/**)', 'Edit', 'NotebookEdit(//etc/**)', 'NotebookEdit(notebooks/**)'] } },
   });
   const r = s.run(), [user, committed] = ['home/.claude/settings.json', 'project/.claude/settings.json'].map((file) => join(s.dir, file));
-  assert.deepEqual(r.allowRules, [{ source: committed, rule: 'Edit(src/**)' }, { source: committed, rule: 'Edit' }]);
+  assert.deepEqual(r.allowRules, [{ source: committed, rule: 'Edit(src/**)' }, { source: committed, rule: 'Edit' }, { source: committed, rule: 'NotebookEdit(notebooks/**)' }]);
   assert.deepEqual(r.unresolved, [
-    { source: user, reason: 'an Edit or Write allow rule outside the worktree: Write(build/**)' },
-    { source: committed, reason: 'an Edit or Write allow rule outside the worktree: Write(//etc/**)' },
-    { source: committed, reason: 'an Edit or Write allow rule outside the worktree: Edit(~/notes/**)' },
-    { source: committed, reason: 'an Edit or Write allow rule outside the worktree: Edit(../other/**)' },
+    { source: user, reason: 'an Edit, Write or NotebookEdit allow rule outside the worktree: Write(build/**)' },
+    { source: committed, reason: 'an Edit, Write or NotebookEdit allow rule outside the worktree: Write(//etc/**)' },
+    { source: committed, reason: 'an Edit, Write or NotebookEdit allow rule outside the worktree: Edit(~/notes/**)' },
+    { source: committed, reason: 'an Edit, Write or NotebookEdit allow rule outside the worktree: Edit(../other/**)' },
+    { source: committed, reason: 'an Edit, Write or NotebookEdit allow rule outside the worktree: NotebookEdit(//etc/**)' },
   ]);
+});
+
+const HOOKS = '---\nname: x\ndescription: x\nhooks:\n  PreToolUse:\n    - hooks:\n        - type: command\n          command: "npx prettier --write ."\n---\nx\n';
+
+test('start-checks: a skill, agent or command file whose frontmatter sets hooks or MCP servers is unresolved, in the worktree, the config dir and a plugin', () => {
+  const plainFile = '---\nname: y\ndescription: >-\n  hooks: none\nallowed-tools:\n- Read\n# hooks: none\nmetadata:\n  hooks: none\n---\nhooks: none\n';
+  const s = setup({
+    'wt/.claude/skills/x/SKILL.md': HOOKS,
+    'wt/.claude/skills/y/SKILL.md': plainFile,
+    'wt/.claude/skills/y/notes.txt': HOOKS,
+    'wt/.claude/agents/a.md': '---\nname: a\ndescription: a\nmcpServers:\n  - s:\n      command: npx\n---\na\n',
+    'wt/.claude/agents/team/b.md': HOOKS,
+    'wt/.claude/commands/c.md': HOOKS,
+    'project/.claude/skills/x/SKILL.md': HOOKS,
+    'home/.claude/skills/x/SKILL.md': HOOKS,
+    'home/.claude/agents/a.md': HOOKS,
+    // A key the script cannot read as a plain one could be hooks in another spelling.
+    'wt/.claude/skills/q/SKILL.md': '---\nname: q\n"hooks": {}\n---\n',
+    'wt/.claude/skills/f/SKILL.md': '---\n{ name: f, hooks: {} }\n---\n',
+    'wt/.claude/skills/open/SKILL.md': '---\nname: open\nhooks: {}\n',
+    'wt/.claude/skills/none/SKILL.md': '# No frontmatter\n\nhooks: none\n',
+  });
+  const sets = (key) => `its frontmatter sets ${key}, which the script does not read`, line = 'its frontmatter holds a line that is no plain key, which the script does not read';
+  assert.deepEqual(s.run().unresolved.map((u) => [u.source.slice(s.dir.length + 1), u.reason]).sort(), [
+    ['home/.claude/agents/a.md', sets('hooks')],
+    ['home/.claude/skills/x/SKILL.md', sets('hooks')],
+    ['project/.claude/skills/x/SKILL.md', sets('hooks')],
+    ['wt/.claude/agents/a.md', sets('mcpServers')],
+    ['wt/.claude/agents/team/b.md', sets('hooks')],
+    ['wt/.claude/commands/c.md', sets('hooks')],
+    ['wt/.claude/skills/f/SKILL.md', line],
+    ['wt/.claude/skills/open/SKILL.md', sets('hooks')],
+    ['wt/.claude/skills/q/SKILL.md', line],
+    ['wt/.claude/skills/x/SKILL.md', sets('hooks')],
+  ]);
+  // A skills folder that is a link is read as well.
+  const linked = setup({ 'elsewhere/x/SKILL.md': HOOKS });
+  mkdirSync(join(linked.dir, 'wt/.claude'));
+  symlinkSync(join(linked.dir, 'elsewhere'), join(linked.dir, 'wt/.claude/skills'));
+  assert.deepEqual(linked.run().unresolved, [{ source: join(linked.dir, 'wt/.claude/skills/x/SKILL.md'), reason: sets('hooks') }]);
+  // A plugin's files, in its default folders and in any other its manifest or marketplace entry can name; a plugin turned off is not read.
+  const cache = 'home/.claude/plugins/cache/m/fmt/1';
+  const files = { [`${cache}/hooks/hooks.json`]: {}, [`${cache}/skills/y/SKILL.md`]: HOOKS, [`${cache}/agents/a.md`]: HOOKS, [`${cache}/custom/z/SKILL.md`]: HOOKS, [`${cache}/skills/y/plain.md`]: plainFile };
+  assert.deepEqual(withPlugin({ source: './fmt' }, files).unresolved.map((u) => [u.source.slice(u.source.indexOf(cache) + cache.length + 1), u.reason]).sort(), [['agents/a.md', sets('hooks')], ['custom/z/SKILL.md', sets('hooks')], ['skills/y/SKILL.md', sets('hooks')]]);
+  assert.deepEqual(withPlugin({ source: './fmt' }, { ...files, 'home/.claude/settings.json': { enabledPlugins: { 'fmt@m': false } } }).unresolved, []);
+});
+
+test('start-checks: a hook of another type than command is listed to read, in the settings and in a plugin', () => {
+  const http = { type: 'http', url: 'https://example.com/hook' }, prompt = { type: 'prompt', prompt: 'Is src/a.js safe?' };
+  const s = setup({ 'wt/.claude/settings.json': { hooks: { PostToolUse: [{ matcher: 'Edit', hooks: [http, { type: 'command', command: '/opt/bin/audit' }] }], Stop: [{ hooks: [prompt] }] } } });
+  const committed = join(s.dir, 'wt/.claude/settings.json');
+  assert.deepEqual(s.run(), { failed: [], read: [{ source: committed, command: '{"type":"http","url":"https://example.com/hook"}' }, { source: committed, command: '{"type":"prompt","prompt":"Is src/a.js safe?"}' }, { source: committed, command: '/opt/bin/audit' }], unresolved: [], allowRules: [], allowedDomains: [] });
+  const r = withPlugin({ source: './fmt' }, { 'home/.claude/plugins/cache/m/fmt/1/hooks/hooks.json': { hooks: { Stop: [{ hooks: [http] }] } }, 'home/.claude/plugins/cache/m/fmt/1/.mcp.json': { mcpServers: { docs: { type: 'http', url: 'https://example.com/mcp' } } } });
+  assert.deepEqual(r, { failed: [], read: [{ source: 'plugin fmt@m', command: '{"type":"http","url":"https://example.com/hook"}' }], unresolved: [], allowRules: [], allowedDomains: [] });
+});
+
+test('start-checks: a wrong type below sandbox or permissions, or a permissions key the script does not know, is unresolved', () => {
+  const reasons = (settings) => setup({ 'wt/.claude/settings.json': settings }).run().unresolved.map((u) => u.reason);
+  assert.deepEqual(reasons({ sandbox: { network: [{ allowUnixSockets: ['/x'] }] } }), ['sandbox.network is no object']);
+  assert.deepEqual(reasons({ sandbox: { filesystem: '/etc' } }), ['sandbox.filesystem is no object']);
+  assert.deepEqual(reasons({ permissions: { allow: { a: 'Edit(//etc/**)' } } }), ['permissions.allow is no list of strings']);
+  assert.deepEqual(reasons({ permissions: { additionalDirectories: [['..']] } }), ['permissions.additionalDirectories is no list of strings']);
+  assert.deepEqual(reasons({ sandbox: { filesystem: { allowWrite: [{ path: '/etc' }], allowRead: [7] } } }), ['sandbox.filesystem.allowRead is no list of strings', 'sandbox.filesystem.allowWrite is no list of strings']);
+  assert.deepEqual(reasons({ permissions: { futureHelper: 'npx x' } }), ['permissions.futureHelper is no key the script knows to run no command']);
+  assert.deepEqual(reasons({ permissions: { allow: ['Read'], deny: ['Bash(curl *)'], ask: [], defaultMode: 'acceptEdits', disableBypassPermissionsMode: 'disable', disableAutoMode: 'disable', additionalDirectories: ['docs'] }, sandbox: { network: {}, filesystem: { allowRead: ['docs'], allowWrite: ['build'] } } }), []);
 });
 
 test('start-checks: a glob in the last part that can match a link out of the worktree fails check 4', () => {

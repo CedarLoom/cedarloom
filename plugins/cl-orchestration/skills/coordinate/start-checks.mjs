@@ -24,14 +24,20 @@ const SANDBOX_KEYS = {
 const SWITCHES = ['allowAppleEvents', 'allowNestedUserNamespaces', 'enableWeakerNestedSandbox', 'enableWeakerNetworkIsolation', 'network.allowLocalBinding', 'filesystem.disabled', 'network.allowAllUnixSockets'];
 // Sandbox keys of check 4 that defeat a bound with any entry or value.
 const ENTRIES = ['excludedCommands', 'network.allowUnixSockets', 'network.allowMachLookup', 'network.httpProxyPort', 'network.socksProxyPort', 'ripgrep', 'bwrapPath', 'socatPath'];
+// The keys of permissions in the same schema.
+const PERMISSION_KEYS = ['allow', 'deny', 'ask', 'defaultMode', 'disableBypassPermissionsMode', 'disableAutoMode', 'additionalDirectories'];
 // Settings keys that must hold an object; another type is a shape the script cannot read.
 const OBJECTS = ['hooks', 'sandbox', 'permissions', 'enabledPlugins', 'env'];
+// The same for the lists check 4 reads entry by entry as text: an entry that is no string would be tested as text it does not hold.
+const LISTS = ['permissions.allow', 'permissions.additionalDirectories', 'sandbox.filesystem.allowRead', 'sandbox.filesystem.allowWrite'];
+// Frontmatter keys of a skill, agent or command file that define hooks or MCP servers, which run outside the sandbox.
+const FRONTMATTER_KEYS = ['hooks', 'mcpServers'];
 // Plugin manifest keys that hold definitions of commands or name files of them, with the file read when the key is absent.
 const PARTS = [['hooks', 'hooks/hooks.json'], ['mcpServers', '.mcp.json'], ['lspServers', '.lsp.json'], ['monitors', 'monitors/monitors.json'], ['experimental.monitors']];
 // Environment variables that add plugins the script does not read.
 const PLUGIN_VARS = ['CLAUDE_CODE_PLUGIN_DIRS', 'CLAUDE_CODE_PLUGIN_CACHE_DIR'];
 // Keys of a marketplace entry that declare no command; any other key can add one to the plugin.
-const ENTRY_KEYS = ['name', 'source', 'displayName', 'description', 'version', 'author', 'homepage', 'repository', 'license', 'keywords', 'category', 'tags', 'strict', 'commands', 'agents', 'skills', 'outputStyles'];
+const ENTRY_KEYS = ['name', 'source', 'displayName', 'defaultEnabled', 'description', 'version', 'author', 'homepage', 'repository', 'license', 'keywords', 'category', 'tags', 'strict', 'commands', 'agents', 'skills', 'outputStyles'];
 // An entry's source the script passes: a path in the marketplace, or one of these types with these keys, which fetch files. Any other, a command source included, is not read.
 const SOURCE_TYPES = ['github', 'url', 'git-subdir'];
 const SOURCE_KEYS = ['source', 'repo', 'url', 'path', 'ref', 'sha'];
@@ -67,6 +73,30 @@ function commands(value, out = []) {
   return out;
 }
 
+// Every hook under value that is no command hook (an http, prompt, agent or mcp_tool hook), as JSON: it acts outside the sandbox as well, and the script judges none.
+function otherHooks(value, out = []) {
+  if (Array.isArray(value)) for (const v of value) otherHooks(v, out);
+  else if (plain(value)) {
+    if (value.type !== undefined && value.command === undefined) out.push(JSON.stringify(value));
+    else for (const v of Object.values(value)) otherHooks(v, out);
+  }
+  return out;
+}
+
+// What the frontmatter of a skill, agent or command file sets that the script does not read: one of FRONTMATTER_KEYS, or a top-level line that is no plain key (a quoted key, a flow mapping, a merge), which could hold one. undefined for neither.
+function frontmatter(text) {
+  const lines = text.replace(/^﻿/, '').split(/\r?\n/);
+  if (lines[0].trimEnd() !== '---') return undefined;
+  const end = lines.findIndex((line, i) => i && /^(---|\.\.\.)\s*$/.test(line));
+  for (const line of lines.slice(1, end < 0 ? undefined : end)) {
+    const key = /^([A-Za-z_][\w-]*)\s*:(\s|$)/.exec(line)?.[1];
+    if (FRONTMATTER_KEYS.includes(key)) return `its frontmatter sets ${key}`;
+    // An indented line, a list entry and a comment belong to the key above them.
+    if (!key && !/^(\s|#|-(\s|$)|$)/.test(line)) return 'its frontmatter holds a line that is no plain key';
+  }
+  return undefined;
+}
+
 // An entry that reaches github.com, one of its subdomains or githubusercontent.com, with a port or as a wildcard that covers one (`*.com`); a wildcard of another form counts too.
 const GITHUB = (domain) => {
   const entry = String(domain).toLowerCase().replace(/:\d+$/, '');
@@ -87,6 +117,13 @@ const real = (path) => {
   const up = dirname(path), r = up === path ? null : real(up);
   return r && join(r, basename(path));
 };
+// Every Markdown file in folder and below, links followed. seen holds the folders read, so a link loop ends and a folder named twice is read once.
+function markdown(folder, seen) {
+  const target = real(folder);
+  if (!target || seen.has(target)) return [];
+  seen.add(target);
+  return names(folder).flatMap((name) => (folderAt(join(folder, name)) ? markdown(join(folder, name), seen) : /\.md$/i.test(name) ? [join(folder, name)] : []));
+}
 
 export function startChecks({ project, worktree, configDir, claudeJson, managedDir, home, platform, domains, env = {} }) {
   const failed = [], toRead = [], unresolved = [], allowRules = [], allowedDomains = [];
@@ -110,7 +147,12 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
     for (const key of COMMAND_KEYS) if (settings[key] !== undefined && typeof settings[key] !== 'string' && !plain(settings[key])) cannot(file, `${key} is no string or object`);
     for (const key of Object.keys(settings)) if (!PLAIN_KEYS.has(key) && !OBJECTS.includes(key) && !COMMAND_KEYS.includes(key)) cannot(file, `${key} is no key the script knows to run no command`);
     const sandbox = object(settings.sandbox);
-    for (const [part, keys] of Object.entries(SANDBOX_KEYS)) for (const key of Object.keys(part ? object(sandbox[part]) : sandbox)) if (!keys.includes(key)) cannot(file, `sandbox.${part && `${part}.`}${key} is no key the script knows to run no command`);
+    for (const [part, keys] of Object.entries(SANDBOX_KEYS)) {
+      if (part && sandbox[part] !== undefined && !plain(sandbox[part])) cannot(file, `sandbox.${part} is no object`);
+      for (const key of Object.keys(part ? object(sandbox[part]) : sandbox)) if (!keys.includes(key)) cannot(file, `sandbox.${part && `${part}.`}${key} is no key the script knows to run no command`);
+    }
+    for (const key of Object.keys(object(settings.permissions))) if (!PERMISSION_KEYS.includes(key)) cannot(file, `permissions.${key} is no key the script knows to run no command`);
+    for (const key of LISTS) { const list = at(settings, key); if (list !== undefined && !(Array.isArray(list) && list.every((e) => typeof e === 'string'))) cannot(file, `${key} is no list of strings`); }
     return true;
   });
   // A file the script reads as an object: another type is a shape it cannot read.
@@ -120,6 +162,7 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
   const found = [];
   for (const { file, settings } of files) {
     for (const c of commands(settings.hooks)) found.push({ source: file, command: c });
+    for (const h of otherHooks(settings.hooks)) toRead.push({ source: file, command: escaped(h) });
     for (const key of COMMAND_KEYS) {
       const listed = typeof settings[key] === 'string' ? [settings[key]] : commands(settings[key]);
       // An object that names its program in another field than command, as policyHelper does in path.
@@ -145,6 +188,15 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
     for (const name of names(folder)) if (existsSync(join(folder, name, '.claude-plugin'))) cannot(join(folder, name), 'a plugin folder the script does not read');
   }
   for (const name of names(join(configDir, 'plugins/synced'))) cannot(join(configDir, 'plugins/synced', name), 'a synced plugin the script does not read');
+  // A skill, agent or command file can define hooks and MCP servers in its frontmatter: the script names the file and reads none of them.
+  const seen = new Set();
+  const instructions = (folders) => {
+    for (const file of folders.flatMap((folder) => markdown(folder, seen))) {
+      const set = frontmatter(readFileSync(file, 'utf8'));
+      if (set) cannot(file, `${set}, which the script does not read`);
+    }
+  };
+  instructions([configDir, ...checkouts.map((root) => join(root, '.claude'))].flatMap((base) => ['skills', 'agents', 'commands'].map((kind) => join(base, kind))));
   // An installed plugin is on unless a file turns it off; one turned on in any file counts: a later scope may turn it off, but failing closed checks it anyway.
   // A worktree session loads the committed settings of its own folder and the local settings of the main checkout: a false in the other two files turns nothing off for it.
   const unloaded = worktree && worktree !== project ? [join(project, '.claude/settings.json'), join(worktree, '.claude/settings.local.json')] : [];
@@ -178,7 +230,7 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
       if (!usable(root)) { cannot(source, `its folder ${root} does not exist`); continue; }
       const manifest = objectIn(join(root, '.claude-plugin/plugin.json'));
       // A manifest key holds the definitions or names files of them, relative to the plugin's folder.
-      const defined = PARTS.flatMap(([key2, file]) => [...(file ? [readJson(join(root, file))] : []), ...entries(at(manifest, key2)).map((v) => {
+      const defined = PARTS.map(([key2, file]) => [...(file ? [readJson(join(root, file))] : []), ...entries(at(manifest, key2)).map((v) => {
         if (plain(v)) return v;
         const text = typeof v === 'string' ? readJson(resolve(root, v)) : undefined;
         if (text === undefined) cannot(source, `${key2} names nothing the script can read: ${JSON.stringify(v)}`);
@@ -186,6 +238,10 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
       })]);
       // Shown with the plugin's folder in place of the variable, so the reader finds the file the command runs.
       for (const c of commands(defined)) found.push({ source, command: c.replaceAll('${CLAUDE_PLUGIN_ROOT}', root).replaceAll('$CLAUDE_PLUGIN_ROOT', root) });
+      // The first of PARTS holds the hooks.
+      for (const h of otherHooks(defined[0])) toRead.push({ source, command: escaped(h) });
+      // A manifest or marketplace entry can name any folder of the plugin as its skills, agents or commands: every Markdown file of the plugin counts.
+      instructions([root]);
     }
   }
   for (const { source, command } of found) {
@@ -247,10 +303,10 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
       const text = String(rule);
       // A WebFetch rule of another form than WebFetch(domain:<host>) may allow any host.
       const webFetch = /^\s*WebFetch\b/.test(text), host2 = /^WebFetch\(domain:(.*)\)$/.exec(text)?.[1];
-      // An Edit or Write allow rule can add its path to the sandbox's write list.
-      const written = /^\s*(?:Edit|Write)\((.*)\)\s*$/s.exec(text)?.[1];
+      // An allow rule of a tool that edits files can add its path to the sandbox's write list.
+      const written = /^\s*(?:Edit|Write|NotebookEdit)\((.*)\)\s*$/s.exec(text)?.[1];
       if (webFetch && host2 === undefined) cannot(file, `a WebFetch allow rule of another form than WebFetch(domain:<host>): ${text}`);
-      else if (written !== undefined && outside(scope, written)) cannot(file, `an Edit or Write allow rule outside the worktree: ${text}`);
+      else if (written !== undefined && outside(scope, written)) cannot(file, `an Edit, Write or NotebookEdit allow rule outside the worktree: ${text}`);
       else if (!webFetch || domain(file, host2, text)) allowRules.push({ source: file, rule: escaped(text) });
     }
   }

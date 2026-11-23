@@ -208,7 +208,7 @@ test('policy: the remote\'s HEAD is fetched into the reader\'s own ref and the f
   const calls = [];
   assert.equal(read('/p', remote('{ "startLabel": "go" }', calls)).policy.startLabel, 'go');
   // No name that the remote or the local origin/HEAD chooses is part of a command.
-  // The two calls that reach the remote set again what the repository's config could make run instead of git.
+  // The calls after the config listing set again what the repository's config could make run instead of git.
   const pinned = 'git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c protocol.ext.allow=never -c core.sshCommand=ssh';
   assert.ok(calls.includes(`${pinned} ls-remote --upload-pack=git-upload-pack origin HEAD`));
   assert.ok(calls.some((call) => call.startsWith(`${pinned} fetch --upload-pack=git-upload-pack `) && call.endsWith(' origin +HEAD:refs/cedarloom/policy')));
@@ -216,7 +216,11 @@ test('policy: the remote\'s HEAD is fetched into the reader\'s own ref and the f
   const own = [];
   read('/p', bare((dir, cmd, args) => (args[0] === 'config' ? 'system\0core.sshcommand\nssh -4\0global\0core.sshcommand\nssh -i key\0' : remote('{}')(dir, cmd, args)), own));
   assert.ok(own.some((call) => call.endsWith(' -c core.sshCommand=ssh -i key ls-remote --upload-pack=git-upload-pack origin HEAD')));
-  assert.ok(calls.includes(`git show ${HEAD}:docs/agents/orchestration.json`));
+  assert.ok(calls.includes(`${pinned} show ${HEAD}:docs/agents/orchestration.json`));
+  // In a partial clone of origin, the id of the file's object is read with the same settings.
+  const partial = [];
+  read('/p', bare((dir, cmd, args) => (args[0] === 'config' ? 'local\0remote.origin.promisor\ntrue\0' : remote('{}')(dir, cmd, args)), partial));
+  assert.ok(partial.includes(`${pinned} rev-parse --verify ${HEAD}:docs/agents/orchestration.json`));
   // A worker that moves the reader's ref after the fetch changes nothing: the read names the remote's commit, not the ref.
   const moved = read('/p', bare((dir, cmd, args) => {
     if (args[0] === 'ls-remote') return `${HEAD}\tHEAD\n`;
@@ -334,6 +338,39 @@ test('policy: a repository whose own git config redirects origin or runs a comma
   try { assert.equal(read(viaSsh, racing('core.sshCommand', `touch '${marker}'; ssh`)).policy, null); } finally { if (before === undefined) delete process.env.GIT_SSH; else process.env.GIT_SSH = before; }
   assert.equal(existsSync(marker), false, 'core.sshCommand');
   assert.equal(existsSync(join(tools, 'used')), true, 'GIT_SSH');
+});
+
+test('policy: with origin as the promisor, a missing tree or file comes through the pinned settings: no hook and no upload-pack command of the shared git directory runs', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cl-policy-'));
+  const origin = join(dir, 'origin'), marker = join(dir, 'ran');
+  mkdirSync(join(origin, 'docs/agents'), { recursive: true });
+  const git = initRepo(origin);
+  const commit = (text) => { writeFileSync(join(origin, 'docs/agents/orchestration.json'), text); git('add', '-A'); git('commit', '-qm', 'policy'); };
+  commit('{ "startLabel": "go" }');
+  // git serves a filter, and an object by its id, only where the remote allows it, as GitHub does.
+  git('config', 'uploadpack.allowFilter', 'true');
+  git('config', 'uploadpack.allowAnySHA1InWant', 'true');
+  const hooked = (project) => {
+    mkdirSync(join(project, '.git/hooks'), { recursive: true });
+    writeFileSync(join(project, '.git/hooks/reference-transaction'), `#!/bin/sh\necho hook >> '${marker}'\n`, { mode: 0o755 });
+    return project;
+  };
+
+  // A full clone that names origin a promisor with a tree filter: the fetch of origin's new commit leaves its tree out, and a git that ignores GIT_NO_LAZY_FETCH (here: the variable removed) fetches it from the local read.
+  const full = join(dir, 'full');
+  git('clone', '-q', origin, full);
+  git('-C', full, 'config', 'remote.origin.promisor', 'true');
+  git('-C', full, 'config', 'remote.origin.partialclonefilter', 'tree:0');
+  commit('{ "startLabel": "next" }');
+  assert.equal(read(hooked(full), (cwd, cmd, args) => sh(cwd, cmd, args, undefined, { GIT_NO_LAZY_FETCH: undefined })).policy.startLabel, 'next');
+  assert.equal(existsSync(marker), false, 'lazy fetch of the tree');
+
+  // A blobless clone: the reader fetches the file's object itself. An upload-pack command written after the check does not serve it, and no hook runs for it.
+  const blobless = join(dir, 'blobless');
+  git('clone', '-q', '--filter=blob:none', '--no-checkout', pathToFileURL(origin).href, blobless);
+  const racing = (cwd, cmd, args) => { const out = sh(cwd, cmd, args); if (args[0] === 'config') git('-C', cwd, 'config', 'remote.origin.uploadpack', `echo upload-pack >> '${marker}'; git-upload-pack`); return out; };
+  assert.equal(read(hooked(blobless), racing).policy.startLabel, 'next');
+  assert.equal(existsSync(marker), false, 'fetch of the file');
 });
 
 test('policy: the command line prints the policy of the default branch and exits 0, or names each error and exits 1', () => {
