@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -292,6 +292,19 @@ test('policy: a repository whose own git config redirects origin or runs a comma
     assert.deepEqual(rules(errors), [['unreadable', '']], config[0]);
     assert.equal(existsSync(marker), false, config[0]);
   }
+  // Origin as the promisor is the blobless scratch clone, in the older spelling too.
+  assert.equal(read(project()('extensions.partialclone', 'origin')).policy.startLabel, 'go');
+  // The user's config can name such a remote as well: the scope does not matter.
+  const userConfig = join(mkdtempSync(join(tmpdir(), 'cl-policy-')), 'gitconfig');
+  writeFileSync(userConfig, `[remote "evil"]\n\turl = ${origin.dir}\n\tpromisor = true\n`);
+  assert.deepEqual(rules(read(project()('user.name', 't'), (dir, cmd, args) => sh(dir, cmd, args, undefined, { GIT_CONFIG_GLOBAL: userConfig })).errors), [['unreadable', '']]);
+  // A promisor written after the check, and the policy file's object removed from the shared store: no lazy fetch runs the promisor's command.
+  const late = project();
+  late('remote.evil.url', origin.dir);
+  const blob = origin.git('rev-parse', 'HEAD:docs/agents/orchestration.json').toString().trim();
+  rmSync(join(late('remote.evil.uploadpack', `touch '${marker}'; git-upload-pack`), '.git/objects', blob.slice(0, 2), blob.slice(2)));
+  assert.equal(read(late('user.name', 't'), (dir, cmd, args) => { const out = sh(dir, cmd, args); if (args[0] === 'config') origin.git('-C', dir, 'config', 'remote.evil.promisor', 'true'); return out; }).policy, null);
+  assert.equal(existsSync(marker), false, 'lazy fetch');
   // git's own file system monitor runs no command of the repository.
   assert.equal(read(project()('core.fsmonitor', 'true')).policy.startLabel, 'go');
   // The fetch writes the reader's ref, and no hook of the shared git directory runs for it. The repository's own core.hooksPath, which the check allows, also overrides one of the user's config.

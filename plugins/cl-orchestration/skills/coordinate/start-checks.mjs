@@ -11,7 +11,15 @@ import { escaped, isMain, json, read } from './policy.mjs';
 // Tools that load the code or configuration of the folder they run in: a formatter, a linter, a package script, a build.
 const TOOLS = new Set(['npm', 'npx', 'pnpm', 'pnpx', 'yarn', 'bun', 'bunx', 'deno', 'make', 'just', 'task', 'prettier', 'eslint', 'biome', 'oxlint', 'dprint', 'stylelint', 'tsc', 'ruff', 'black', 'isort', 'flake8', 'mypy', 'pylint', 'pytest', 'uv', 'uvx', 'poetry', 'pipenv', 'tox', 'nox', 'pre-commit', 'lefthook', 'husky', 'lint-staged', 'cargo', 'rustfmt', 'gofmt', 'goimports', 'golangci-lint', 'go', 'mvn', 'gradle', 'gradlew', 'dotnet', 'composer', 'bundle', 'rake', 'rubocop', 'swiftformat', 'swiftlint', 'ktlint', 'clang-format', 'shfmt', 'terraform', 'direnv']);
 // Settings keys whose value is a command Claude Code runs, besides hooks.
-const COMMAND_KEYS = ['statusLine', 'apiKeyHelper', 'otelHeadersHelper', 'awsAuthRefresh', 'gcpAuthRefresh', 'awsCredentialExport', 'fileSuggestion'];
+const COMMAND_KEYS = ['statusLine', 'subagentStatusLine', 'apiKeyHelper', 'otelHeadersHelper', 'awsAuthRefresh', 'gcpAuthRefresh', 'awsCredentialExport', 'fileSuggestion', 'processWrapper', 'policyHelper'];
+// Settings keys known to run no command, from the published settings schema (SchemaStore, claude-code-settings.json). A key on no list of this file is unresolved, so one that a later Claude Code release adds is never passed unread; left off as not known to run none: managedMcpServers, pluginConfigs, extraKnownMarketplaces, sshConfigs.
+const PLAIN_KEYS = new Set(['$schema', 'advisorModel', 'agent', 'agentPushNotifEnabled', 'allowAllClaudeAiMcps', 'allowManagedHooksOnly', 'allowManagedMcpServersOnly', 'allowManagedPermissionRulesOnly', 'allowedChannelPlugins', 'allowedHttpHookUrls', 'allowedMcpServers', 'alwaysThinkingEnabled', 'askUserQuestionTimeout', 'attribution', 'autoCompactEnabled', 'autoConnectIde', 'autoInstallIdeExtension', 'autoMemoryDirectory', 'autoMemoryEnabled', 'autoMode', 'autoScrollEnabled', 'autoUpdatesChannel', 'availableModels', 'awaySummaryEnabled', 'axScreenReader', 'blockedMarketplaces', 'browserExternalPageTools', 'channelsEnabled', 'claudeMd', 'claudeMdExcludes', 'cleanupPeriodDays', 'companyAnnouncements', 'defaultShell', 'deniedMcpServers', 'diffTool', 'disableAgentView', 'disableAllHooks', 'disableArtifact', 'disableAutoMode', 'disableBrowserExternalNavigation', 'disableBundledSkills', 'disableClaudeAiConnectors', 'disableDeepLinkRegistration', 'disableMobileSimulatorTools', 'disableRemoteControl', 'disableSideloadFlags', 'disableSkillShellExecution', 'disableWorkflows', 'disabledMcpjsonServers', 'editorMode', 'effortLevel', 'emojiCompletionEnabled', 'enableAllProjectMcpServers', 'enableArtifact', 'enabledMcpjsonServers', 'enforceAvailableModels', 'externalEditorContext', 'fallbackModel', 'fastMode', 'fastModePerSessionOptIn', 'feedbackSurveyRate', 'fileCheckpointingEnabled', 'footerLinksRegexes', 'forceLoginGatewayUrl', 'forceLoginMethod', 'forceLoginOrgUUID', 'forceRemoteSettingsRefresh', 'httpHookAllowedEnvVars', 'includeCoAuthoredBy', 'includeGitInstructions', 'inputNeededNotifEnabled', 'language', 'minimumVersion', 'model', 'modelOverrides', 'outputStyle', 'parentSettingsBehavior', 'permissionExplainerEnabled', 'plansDirectory', 'pluginSuggestionMarketplaces', 'pluginTrustMessage', 'prUrlTemplate', 'preferredNotifChannel', 'prefersReducedMotion', 'remoteControlAtStartup', 'requireCoworkFullVmSandbox', 'requiredMaximumVersion', 'requiredMinimumVersion', 'respectGitignore', 'respondToBashCommands', 'showClearContextOnPlanAccept', 'showThinkingSummaries', 'showTurnDuration', 'skillListingBudgetFraction', 'skillListingMaxDescChars', 'skillOverrides', 'skipDangerousModePermissionPrompt', 'skipWebFetchPreflight', 'skippedMarketplaces', 'skippedPlugins', 'spinnerTipsEnabled', 'spinnerTipsOverride', 'spinnerVerbs', 'sshHostAllowlist', 'strictKnownMarketplaces', 'strictPluginOnlyCustomization', 'syntaxHighlightingDisabled', 'teammateDefaultModel', 'teammateMode', 'terminalProgressBarEnabled', 'theme', 'tui', 'useAutoModeDuringPlan', 'verbose', 'viewMode', 'vimInsertModeRemaps', 'voice', 'voiceEnabled', 'wheelScrollAccelerationEnabled', 'workflowKeywordTriggerEnabled', 'workflowSizeGuideline', 'worktree', 'wslInheritsWindowsSettings']);
+// The same for the keys of sandbox, sandbox.network and sandbox.filesystem; check 4 tests those that defeat a bound.
+const SANDBOX_KEYS = {
+  '': ['allowAppleEvents', 'allowUnsandboxedCommands', 'autoAllowBashIfSandboxed', 'bwrapPath', 'credentials', 'enableWeakerNestedSandbox', 'enableWeakerNetworkIsolation', 'enabled', 'enabledPlatforms', 'excludedCommands', 'failIfUnavailable', 'filesystem', 'ignoreViolations', 'network', 'ripgrep', 'socatPath', 'allowNestedUserNamespaces'],
+  network: ['allowAllUnixSockets', 'allowLocalBinding', 'allowMachLookup', 'allowManagedDomainsOnly', 'allowUnixSockets', 'allowedDomains', 'deniedDomains', 'httpProxyPort', 'socksProxyPort', 'strictAllowlist', 'tlsTerminate'],
+  filesystem: ['allowManagedReadPathsOnly', 'allowRead', 'allowWrite', 'denyRead', 'denyWrite', 'disabled'],
+};
 // Sandbox keys of check 4 that defeat a bound whenever they are set to anything but false.
 const SWITCHES = ['allowAppleEvents', 'allowNestedUserNamespaces', 'enableWeakerNestedSandbox', 'enableWeakerNetworkIsolation', 'network.allowLocalBinding', 'filesystem.disabled', 'network.allowAllUnixSockets'];
 // Sandbox keys of check 4 that defeat a bound with any entry or value.
@@ -23,7 +31,11 @@ const PARTS = [['hooks', 'hooks/hooks.json'], ['mcpServers', '.mcp.json'], ['lsp
 // Environment variables that add plugins the script does not read.
 const PLUGIN_VARS = ['CLAUDE_CODE_PLUGIN_DIRS', 'CLAUDE_CODE_PLUGIN_CACHE_DIR'];
 // Keys of a marketplace entry that declare no command; any other key can add one to the plugin.
-const ENTRY_KEYS = ['name', 'source', 'description', 'version', 'author', 'homepage', 'repository', 'license', 'keywords', 'category', 'tags', 'strict', 'commands', 'agents', 'skills', 'outputStyles'];
+const ENTRY_KEYS = ['name', 'source', 'displayName', 'description', 'version', 'author', 'homepage', 'repository', 'license', 'keywords', 'category', 'tags', 'strict', 'commands', 'agents', 'skills', 'outputStyles'];
+// An entry's source the script passes: a path in the marketplace, or one of these types with these keys, which fetch files. Any other, a command source included, is not read.
+const SOURCE_TYPES = ['github', 'url', 'git-subdir'];
+const SOURCE_KEYS = ['source', 'repo', 'url', 'path', 'ref', 'sha'];
+const fetched = (s) => typeof s === 'string' || (plain(s) && SOURCE_TYPES.includes(s.source) && Object.keys(s).every((k) => SOURCE_KEYS.includes(k)));
 const PLATFORMS = { darwin: 'macos', linux: 'linux', win32: 'windows' };
 const MANAGED = { darwin: '/Library/Application Support/ClaudeCode', linux: '/etc/claude-code' };
 
@@ -84,6 +96,7 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
   for (const folder of [configDir, ...checkouts]) if (!existsSync(folder)) cannot(folder, 'the folder does not exist');
 
   const managedD = join(managedDir, 'managed-settings.d');
+  const object = (v) => (plain(v) ? v : {});
   let dropIns = [];
   try { dropIns = readdirSync(managedD).filter((n) => n.endsWith('.json')).sort().map((n) => join(managedD, n)); } catch (e) { if (e.code !== 'ENOENT') throw new Error(`${managedD} could not be listed: ${e.code}`); }
   const files = [
@@ -95,9 +108,11 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
     if (!plain(settings)) { cannot(file, 'holds no JSON object'); return false; }
     for (const key of OBJECTS) if (settings[key] !== undefined && !plain(settings[key])) cannot(file, `${key} is no object`);
     for (const key of COMMAND_KEYS) if (settings[key] !== undefined && typeof settings[key] !== 'string' && !plain(settings[key])) cannot(file, `${key} is no string or object`);
+    for (const key of Object.keys(settings)) if (!PLAIN_KEYS.has(key) && !OBJECTS.includes(key) && !COMMAND_KEYS.includes(key)) cannot(file, `${key} is no key the script knows to run no command`);
+    const sandbox = object(settings.sandbox);
+    for (const [part, keys] of Object.entries(SANDBOX_KEYS)) for (const key of Object.keys(part ? object(sandbox[part]) : sandbox)) if (!keys.includes(key)) cannot(file, `sandbox.${part && `${part}.`}${key} is no key the script knows to run no command`);
     return true;
   });
-  const object = (v) => (plain(v) ? v : {});
   // A file the script reads as an object: another type is a shape it cannot read.
   const objectIn = (file) => { const v = readJson(file); if (v !== undefined && !plain(v)) cannot(file, 'holds no JSON object'); return object(v); };
 
@@ -105,7 +120,12 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
   const found = [];
   for (const { file, settings } of files) {
     for (const c of commands(settings.hooks)) found.push({ source: file, command: c });
-    for (const key of COMMAND_KEYS) for (const c of typeof settings[key] === 'string' ? [settings[key]] : commands(settings[key])) found.push({ source: `${file} ${key}`, command: c });
+    for (const key of COMMAND_KEYS) {
+      const listed = typeof settings[key] === 'string' ? [settings[key]] : commands(settings[key]);
+      // An object that names its program in another field than command, as policyHelper does in path.
+      if (plain(settings[key]) && !listed.length) cannot(file, `${key} holds no command the script reads`);
+      for (const c of listed) found.push({ source: `${file} ${key}`, command: c });
+    }
     // The session's environment reaches every command Claude Code starts (NODE_OPTIONS, PATH).
     const vars = Object.entries(object(settings.env));
     if (vars.length) found.push({ source: `${file} env`, command: vars.map(([k, v]) => `${k}=${v}`).join(' ') });
@@ -120,13 +140,15 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
     for (const c of commands(servers)) found.push({ source, command: c });
   }
   for (const name of PLUGIN_VARS) if (env[name]) cannot(name, 'adds plugins the script does not read');
-  // Plugins no install record names: a plugin folder in a skills folder (one without SKILL.md counts) and a plugin synced from claude.ai.
+  // Plugins no install record names: a folder with .claude-plugin in a skills folder and a plugin synced from claude.ai.
   for (const folder of [join(configDir, 'skills'), ...checkouts.map((root) => join(root, '.claude/skills'))]) {
-    for (const name of names(folder)) if (folderAt(join(folder, name)) && (existsSync(join(folder, name, '.claude-plugin')) || !existsSync(join(folder, name, 'SKILL.md')))) cannot(join(folder, name), 'a plugin folder the script does not read');
+    for (const name of names(folder)) if (existsSync(join(folder, name, '.claude-plugin'))) cannot(join(folder, name), 'a plugin folder the script does not read');
   }
   for (const name of names(join(configDir, 'plugins/synced'))) cannot(join(configDir, 'plugins/synced', name), 'a synced plugin the script does not read');
   // An installed plugin is on unless a file turns it off; one turned on in any file counts: a later scope may turn it off, but failing closed checks it anyway.
-  const switched = files.flatMap(({ settings }) => Object.entries(object(settings.enabledPlugins)));
+  // A worktree session loads the committed settings of its own folder and the local settings of the main checkout: a false in the other two files turns nothing off for it.
+  const unloaded = worktree && worktree !== project ? [join(project, '.claude/settings.json'), join(worktree, '.claude/settings.local.json')] : [];
+  const switched = files.flatMap(({ file, settings }) => Object.entries(object(settings.enabledPlugins)).filter(([, on]) => on !== false || !unloaded.includes(file)));
   const installedFile = join(configDir, 'plugins/installed_plugins.json');
   const installedPlugins = objectIn(installedFile).plugins;
   if (installedPlugins !== undefined && !plain(installedPlugins)) cannot(installedFile, 'plugins is no object');
@@ -140,7 +162,7 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
     const listed = objectIn(file).plugins;
     if (!name || !Array.isArray(listed)) return cannot(source, `${file} lists no plugins`);
     for (const e of listed.filter((p) => p?.name === name)) {
-      const more = Object.keys(object(e)).filter((k) => !ENTRY_KEYS.includes(k));
+      const more = Object.keys(object(e)).filter((k) => !ENTRY_KEYS.includes(k) || (k === 'source' && !fetched(e.source)));
       if (more.length) cannot(source, `its marketplace entry declares ${more.join(', ')}, which the script does not read`);
     }
   };
@@ -200,7 +222,12 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
     if (parts.includes('..') || parts.slice(0, -1).some((part) => /[*?[{]/.test(part))) return true;
     // Both spellings must lie inside: a link in the worktree, at any depth of the path, can lead out of it.
     const r = real(resolve(path)), w = real(worktree);
-    return !inside(worktree, resolve(path)) || !r || !w || !inside(w, r);
+    if (!inside(worktree, resolve(path)) || !r || !w || !inside(w, r)) return true;
+    // A glob in the last part can match a link by its name: every link in the folder counts, at any depth below it for **.
+    if (!/[*?[{]/.test(parts.at(-1))) return false;
+    let below;
+    try { below = readdirSync(dirname(r), { withFileTypes: true, recursive: parts.at(-1).includes('**') }); } catch (e) { return e.code !== 'ENOENT' && e.code !== 'ENOTDIR'; }
+    return below.filter((d) => d.isSymbolicLink()).map((d) => real(join(d.parentPath, d.name))).some((target) => !target || !inside(w, target));
   };
   const domain = (file, d, inRule) => {
     if (GITHUB(d)) fail(4, file, inRule ? `a GitHub host in a WebFetch allow rule: ${inRule}` : `a GitHub host in sandbox.network.allowedDomains: ${d}`);
@@ -220,7 +247,10 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
       const text = String(rule);
       // A WebFetch rule of another form than WebFetch(domain:<host>) may allow any host.
       const webFetch = /^\s*WebFetch\b/.test(text), host2 = /^WebFetch\(domain:(.*)\)$/.exec(text)?.[1];
+      // An Edit or Write allow rule can add its path to the sandbox's write list.
+      const written = /^\s*(?:Edit|Write)\((.*)\)\s*$/s.exec(text)?.[1];
       if (webFetch && host2 === undefined) cannot(file, `a WebFetch allow rule of another form than WebFetch(domain:<host>): ${text}`);
+      else if (written !== undefined && outside(scope, written)) cannot(file, `an Edit or Write allow rule outside the worktree: ${text}`);
       else if (!webFetch || domain(file, host2, text)) allowRules.push({ source: file, rule: escaped(text) });
     }
   }

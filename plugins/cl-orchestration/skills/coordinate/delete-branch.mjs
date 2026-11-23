@@ -81,7 +81,7 @@ export function hookFreeGit(project, program = gitProgram()) {
   if (!program) throw new Error('git is in no absolute folder of PATH');
   const run = (...args) => sh(project, program, ['--no-replace-objects', '-C', project, '-c', `core.hooksPath=${devNull}`, '-c', 'core.fsmonitor=false', ...args], undefined, { LC_ALL: 'C' });
   return (...args) => {
-    // Listed before each call: the config can change between two of them.
+    // Listed before each call: the config can change between two of them. A promisor or a hook written after this listing is the known window (GIT_NO_LAZY_FETCH in policy.mjs): only the variable holds then.
     const listed = settings(run('config', '--show-scope', '-z', '--list'));
     if (partialClone(listed)) throw new Error('git config names a promisor remote or a partial clone filter, whose lazy fetch can run a command');
     const hooks = [...new Set(listed.map(([, key]) => /^hook\.(.+)\.[^.]+$/is.exec(key)?.[1]).filter((name) => name !== undefined))];

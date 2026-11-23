@@ -259,14 +259,14 @@ test('start-checks: a plugin without an install record, or with commands in its 
   const at = (folder) => Object.fromEntries(Object.entries(plugin).map(([path, value]) => [`${folder}/${path}`, value]));
   const s = setup({
     ...at('home/.claude/skills/fmt'), ...at('project/.claude/skills/fmt'), ...at('wt/.claude/skills/fmt'), ...at('home/.claude/plugins/synced/fmt'),
-    'home/.claude/skills/bare/hooks/hooks.json': hook('npx prettier --write .'),
+    // A folder without .claude-plugin is no plugin.
+    'home/.claude/skills/.git/HEAD': 'ref: refs/heads/main\n',
     'home/.claude/skills/ok/SKILL.md': '---\nname: ok\n---\n',
     'home/.claude/plugins/marketplaces/m/.claude-plugin/marketplace.json': { name: 'm', plugins: [{ name: 'fmt', source: './fmt', hooks: hook('npx prettier --write .').hooks }] },
     'home/.claude/plugins/cache/m/fmt/1/skills/x/SKILL.md': 'x',
   });
   writeFileSync(join(s.dir, 'home/.claude/plugins/installed_plugins.json'), JSON.stringify({ plugins: { 'fmt@m': [{ installPath: join(s.dir, 'home/.claude/plugins/cache/m/fmt/1') }], 'gone@n': [{ installPath: join(s.dir, 'home/.claude/plugins/cache/m/fmt/1') }] } }));
   assert.deepEqual(s.run().unresolved.map((u) => `${u.source.replaceAll(s.dir, '<dir>')}: ${u.reason.replaceAll(s.dir, '<dir>')}`), [
-    '<dir>/home/.claude/skills/bare: a plugin folder the script does not read',
     '<dir>/home/.claude/skills/fmt: a plugin folder the script does not read',
     '<dir>/project/.claude/skills/fmt: a plugin folder the script does not read',
     '<dir>/wt/.claude/skills/fmt: a plugin folder the script does not read',
@@ -274,6 +274,76 @@ test('start-checks: a plugin without an install record, or with commands in its 
     'plugin fmt@m: its marketplace entry declares hooks, which the script does not read',
     'plugin gone@n: <dir>/home/.claude/plugins/marketplaces/n/.claude-plugin/marketplace.json lists no plugins',
   ]);
+});
+
+// An installed plugin fmt@m whose hook runs a tool, with this marketplace entry and these other files.
+function withPlugin(entry, files = {}) {
+  const s = setup({
+    'home/.claude/plugins/marketplaces/m/.claude-plugin/marketplace.json': { name: 'm', plugins: [{ name: 'fmt', ...entry }] },
+    'home/.claude/plugins/cache/m/fmt/1/hooks/hooks.json': hook('npx prettier --write .'),
+    ...files,
+  });
+  writeFileSync(join(s.dir, 'home/.claude/plugins/installed_plugins.json'), JSON.stringify({ plugins: { 'fmt@m': [{ installPath: join(s.dir, 'home/.claude/plugins/cache/m/fmt/1') }] } }));
+  return s.run();
+}
+
+test('start-checks: a marketplace entry passes only with a source that fetches files; a command source or another key is unresolved', () => {
+  for (const source of ['./fmt', { source: 'github', repo: 'o/r', ref: 'main' }, { source: 'git-subdir', url: 'https://example.com/r.git', path: 'fmt', sha: 'abc' }]) {
+    assert.deepEqual(withPlugin({ displayName: 'Fmt', source }).unresolved, [], JSON.stringify(source));
+  }
+  for (const source of [{ source: 'command', command: 'sh fetch.sh' }, { source: 'command', path: 'bin/fetch' }, { source: 'github', repo: 'o/r', command: 'sh fetch.sh' }, { source: 'npm', package: 'fmt' }, 7]) {
+    assert.deepEqual(withPlugin({ source }).unresolved.map((u) => u.reason), ['its marketplace entry declares source, which the script does not read'], JSON.stringify(source));
+  }
+  assert.deepEqual(withPlugin({ source: './fmt', futureRunner: {} }).unresolved.map((u) => u.reason), ['its marketplace entry declares futureRunner, which the script does not read']);
+});
+
+test('start-checks: a plugin turned off only in a settings file the worktree session does not load is still checked', () => {
+  const failures = (file) => withPlugin({ source: './fmt' }, { [file]: { enabledPlugins: { 'fmt@m': false } } }).failed.length;
+  // The session loads the worktree's committed settings and the main checkout's local settings.
+  assert.deepEqual(['project/.claude/settings.json', 'wt/.claude/settings.local.json', 'project/.claude/settings.local.json', 'wt/.claude/settings.json'].map(failures), [1, 1, 0, 0]);
+});
+
+test('start-checks: a settings key the script does not know to run no command is unresolved, and each command setting is read', () => {
+  const s = setup({
+    'managed/managed-settings.json': { policyHelper: { path: '/opt/corp/policy' }, extraKnownMarketplaces: {} },
+    'home/.claude/settings.json': { model: 'opus', processWrapper: '/opt/corp/launch', sandbox: { futurePath: '/opt/x', network: { futureProxy: 1 }, filesystem: { allowWrite: [], futureList: [] } } },
+    'wt/.claude/settings.json': { subagentStatusLine: { type: 'command', command: 'node scripts/status.js' }, futureHelper: 'sh run.sh' },
+  });
+  const r = s.run(), [managed, user, committed] = ['managed/managed-settings.json', 'home/.claude/settings.json', 'wt/.claude/settings.json'].map((file) => join(s.dir, file));
+  assert.deepEqual(r.failed, [{ check: 3, source: `${committed} subagentStatusLine`, entry: 'runs a file inside the repository: node scripts/status.js' }]);
+  assert.deepEqual(r.read, [{ source: `${user} processWrapper`, command: '/opt/corp/launch' }]);
+  assert.deepEqual(r.unresolved, [
+    { source: managed, reason: 'extraKnownMarketplaces is no key the script knows to run no command' },
+    { source: user, reason: 'sandbox.futurePath is no key the script knows to run no command' },
+    { source: user, reason: 'sandbox.network.futureProxy is no key the script knows to run no command' },
+    { source: user, reason: 'sandbox.filesystem.futureList is no key the script knows to run no command' },
+    { source: committed, reason: 'futureHelper is no key the script knows to run no command' },
+    { source: managed, reason: 'policyHelper holds no command the script reads' },
+  ]);
+});
+
+test('start-checks: an Edit or Write allow rule outside the worktree is unresolved, one inside it is listed', () => {
+  const s = setup({
+    'home/.claude/settings.json': { permissions: { allow: ['Write(build/**)'] } },
+    'project/.claude/settings.json': { permissions: { allow: ['Edit(src/**)', 'Write(//etc/**)', 'Edit(~/notes/**)', 'Edit(../other/**)', 'Edit'] } },
+  });
+  const r = s.run(), [user, committed] = ['home/.claude/settings.json', 'project/.claude/settings.json'].map((file) => join(s.dir, file));
+  assert.deepEqual(r.allowRules, [{ source: committed, rule: 'Edit(src/**)' }, { source: committed, rule: 'Edit' }]);
+  assert.deepEqual(r.unresolved, [
+    { source: user, reason: 'an Edit or Write allow rule outside the worktree: Write(build/**)' },
+    { source: committed, reason: 'an Edit or Write allow rule outside the worktree: Write(//etc/**)' },
+    { source: committed, reason: 'an Edit or Write allow rule outside the worktree: Edit(~/notes/**)' },
+    { source: committed, reason: 'an Edit or Write allow rule outside the worktree: Edit(../other/**)' },
+  ]);
+});
+
+test('start-checks: a glob in the last part that can match a link out of the worktree fails check 4', () => {
+  const s = setup({ 'wt/build/a.txt': 'a', 'wt/deep/in/a.txt': 'a' });
+  for (const folder of ['wt/build', 'wt/deep/in']) symlinkSync(join(s.dir, 'home'), join(s.dir, folder, 'link'));
+  const wt = join(s.dir, 'wt');
+  writeFileSync(join(s.dir, 'home/.claude/settings.json'), JSON.stringify({ sandbox: { filesystem: { allowWrite: [`${wt}/build/lin*`, `${wt}/deep/**`, `${wt}/deep/*`, `${wt}/src/*`] } } }));
+  // deep/* matches no link, as the link lies one folder below; src does not exist.
+  assert.deepEqual(s.run().failed.map((f) => f.entry.replaceAll(s.dir, '<dir>')), ['sandbox.filesystem.allowWrite outside the worktree: <dir>/wt/build/lin*', 'sandbox.filesystem.allowWrite outside the worktree: <dir>/wt/deep/**']);
 });
 
 test('start-checks: a file or value of another type than the script reads is unresolved, never passed', () => {

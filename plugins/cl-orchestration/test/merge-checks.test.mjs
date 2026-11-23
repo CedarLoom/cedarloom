@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { both, next, ownerOnly, pin, riskClass, risky, sensitive, unsafe } from '../skills/coordinate/merge-checks.mjs';
 import { effective } from '../skills/coordinate/policy.mjs';
 import { facts as riskFacts } from '../skills/coordinate/risk-facts.mjs';
@@ -273,6 +273,33 @@ test('risk facts: risky files set the floor, and manifests, migrations and code 
 
 const FACTS = fileURLToPath(new URL('../skills/coordinate/risk-facts.mjs', import.meta.url));
 const factsCli = (...args) => spawnSync(process.execPath, [FACTS, ...args], { encoding: 'utf8' });
+
+test('merge checks, risk facts: a scratch clone made as review-and-merge.md says, blobless and without a checkout, gives the verdict and the facts', () => {
+  const { origin, git, out, commit } = world({ 'docs/agents/orchestration.json': '{ "merge": { "allowed": true }, "riskyPaths": ["src"] }', 'src/a.txt': '1\n2\n3\n4\n5\n' });
+  // git serves a filter only where the remote allows it, as GitHub does.
+  git('config', 'uploadpack.allowFilter', 'true');
+  git('checkout', '-q', '-b', 'feat/1-first');
+  const reviewed = commit({ 'src/a.txt': 'one\n2\n3\n4\n5\n' });
+  git('checkout', '-q', 'main');
+  commit({ 'src/a.txt': '1\n2\n3\n4\nfive\n' });
+  git('checkout', '-q', 'feat/1-first');
+  git('merge', '-q', '--no-edit', 'main');
+  const head = out('rev-parse', 'HEAD');
+  git('checkout', '-q', 'main');
+  const project = join(folder(), 'project'), scratch = join(folder(), 'scratch');
+  git('clone', '-q', origin, project);
+  git('clone', '-q', '--filter=blob:none', '--no-checkout', pathToFileURL(origin).href, scratch);
+  assert.equal(out('-C', scratch, 'rev-parse', '--git-dir'), '.git');
+  git('-C', scratch, 'fetch', '-q', 'origin');
+  // The clone holds no file yet: the policy file, both sides of the clean merge and the counted lines all come from origin.
+  assert.match(out('-C', scratch, 'rev-list', '--objects', '--missing=print', head), /^\?/m);
+  const facts = factsCli(scratch, 'refs/remotes/origin/main', head);
+  assert.equal(facts.status, 0, facts.stderr);
+  assert.deepEqual(JSON.parse(facts.stdout), { lines: 2, files: 1, risky: ['src/a.txt'], floor: 'medium', dependencies: [], migrations: [], untested: [] });
+  const verdict = cli(project, scratch, 'main', reviewed, head, 'low');
+  assert.equal(verdict.status, 0, verdict.stderr);
+  assert.deepEqual(JSON.parse(verdict.stdout), { next: 'merge', allowed: true, ownerOnly: [], unsafePaths: [], sensitive: ['src/a.txt'], risky: ['src/a.txt'], risk: 'medium', pin: 'clean-merges', upToDate: true, shared: [] });
+});
 
 test('risk facts: the command line reads the diff of a clone and the policy of its origin, and exits 2 on a bad argument', () => {
   const origin = folder();
