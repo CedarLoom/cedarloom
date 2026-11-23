@@ -2,7 +2,7 @@
 // Checks 3 and 4 of Automatic start (modes.md) for an automatic worker of the project checked out at <project>, starting in <worktree>: the settings files are the managed ones (<managed>/managed-settings.json and managed-settings.d/*.json), the user's (<config dir>/settings.json), and .claude/settings.json and .claude/settings.local.json of the main checkout and of the worktree; the MCP servers those of <managed>/managed-mcp.json, <claude json>, .mcp.json of the main checkout and of the worktree, and the installed plugins'. The network allow list adds the policy's sandbox.allowedDomains, read from origin's default branch.
 // --config-dir defaults to $CLAUDE_CONFIG_DIR, else ~/.claude; --claude-json to .claude.json in a config dir that is set, else ~/.claude.json; --managed to the platform's folder. Without --worktree, an absolute allowRead, allowWrite or additionalDirectories entry counts as outside the worktree.
 // Prints { failed, read, unresolved, allowRules, allowedDomains } as JSON. Exit 0: both checks pass for what the script reads. Exit 1: a check failed (failed names each entry) or a file could not be read (one line on stderr). Exit 2: nothing failed, but each command of read runs outside the sandbox and is not one the script can judge, or unresolved names a source or entry the script could not resolve: the checks pass only when your read of each clears it.
-import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -22,6 +22,8 @@ const OBJECTS = ['hooks', 'sandbox', 'permissions', 'enabledPlugins', 'env'];
 const PARTS = [['hooks', 'hooks/hooks.json'], ['mcpServers', '.mcp.json'], ['lspServers', '.lsp.json'], ['monitors', 'monitors/monitors.json'], ['experimental.monitors']];
 // Environment variables that add plugins the script does not read.
 const PLUGIN_VARS = ['CLAUDE_CODE_PLUGIN_DIRS', 'CLAUDE_CODE_PLUGIN_CACHE_DIR'];
+// Keys of a marketplace entry that declare no command; any other key can add one to the plugin.
+const ENTRY_KEYS = ['name', 'source', 'description', 'version', 'author', 'homepage', 'repository', 'license', 'keywords', 'category', 'tags', 'strict', 'commands', 'agents', 'skills', 'outputStyles'];
 const PLATFORMS = { darwin: 'macos', linux: 'linux', win32: 'windows' };
 const MANAGED = { darwin: '/Library/Application Support/ClaudeCode', linux: '/etc/claude-code' };
 
@@ -46,7 +48,9 @@ function commands(value, out = []) {
       out.push([...env, typeof value.command === 'string' ? value.command : JSON.stringify(value.command), ...entries(value.args).map(String)].join(' '));
     }
     if (typeof value.headersHelper === 'string') out.push(value.headersHelper);
-    for (const [k, v] of Object.entries(value)) if (k !== 'command' && k !== 'args' && k !== 'env') commands(v, out);
+    // command, args and env are fields only of an entry whose command is no object: elsewhere they can be the names of servers.
+    const entry = value.command !== undefined && !plain(value.command);
+    for (const [k, v] of Object.entries(value)) if (!entry || !['command', 'args', 'env'].includes(k)) commands(v, out);
   }
   return out;
 }
@@ -60,6 +64,9 @@ const GITHUB = (domain) => {
 };
 // The entry forms the script reads: a host name or `*.` before one, each with an optional port. Another (an address, a trailing dot, a space, a URL, a non-ASCII letter) may name a GitHub host.
 const HOST = /^(\*\.)?([a-z0-9-]+\.)*[a-z][a-z0-9-]*(:\d+)?$/;
+const folderAt = (path) => { try { return statSync(path).isDirectory(); } catch { return false; } };
+// The names in a folder, none when it does not exist.
+const names = (folder) => { try { return readdirSync(folder); } catch (e) { if (e.code === 'ENOENT' || e.code === 'ENOTDIR') return []; throw new Error(`${folder} could not be listed: ${e.code}`); } };
 const inside = (folder, path) => { const r = relative(folder, path); return r === '' || (r !== '..' && !r.startsWith(`..${sep}`) && !isAbsolute(r)); };
 // The real path of the deepest part that exists, the rest appended: a link in any parent is followed. null for a link that leads nowhere, whose target the script cannot test.
 const real = (path) => {
@@ -87,9 +94,12 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
     if (settings === undefined) return false;
     if (!plain(settings)) { cannot(file, 'holds no JSON object'); return false; }
     for (const key of OBJECTS) if (settings[key] !== undefined && !plain(settings[key])) cannot(file, `${key} is no object`);
+    for (const key of COMMAND_KEYS) if (settings[key] !== undefined && typeof settings[key] !== 'string' && !plain(settings[key])) cannot(file, `${key} is no string or object`);
     return true;
   });
   const object = (v) => (plain(v) ? v : {});
+  // A file the script reads as an object: another type is a shape it cannot read.
+  const objectIn = (file) => { const v = readJson(file); if (v !== undefined && !plain(v)) cannot(file, 'holds no JSON object'); return object(v); };
 
   // Check 3: what runs outside the sandbox.
   const found = [];
@@ -101,27 +111,50 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
     if (vars.length) found.push({ source: `${file} env`, command: vars.map(([k, v]) => `${k}=${v}`).join(' ') });
   }
   const repoPaths = checkouts.flatMap((p) => [p, real(p) ?? p]);
-  const user = readJson(claudeJson);
+  const user = objectIn(claudeJson);
   // Local-scope servers sit under the folder they were added in: each folder that holds the project or the worktree counts.
   const local = Object.entries(object(user?.projects)).filter(([folder]) => isAbsolute(folder) && repoPaths.some((p) => inside(folder, p)));
   const mcpFiles = [join(managedDir, 'managed-mcp.json'), ...checkouts.map((root) => join(root, '.mcp.json'))];
-  for (const [source, servers] of [[claudeJson, user?.mcpServers], ...local.map(([folder, p]) => [`${claudeJson} projects ${folder}`, p?.mcpServers]), ...mcpFiles.map((file) => [file, readJson(file)?.mcpServers])]) {
+  for (const [source, servers] of [[claudeJson, user.mcpServers], ...local.map(([folder, p]) => [`${claudeJson} projects ${folder}`, p?.mcpServers]), ...mcpFiles.map((file) => [file, objectIn(file).mcpServers])]) {
+    if (servers !== undefined && !plain(servers)) cannot(source, 'mcpServers is no object');
     for (const c of commands(servers)) found.push({ source, command: c });
   }
   for (const name of PLUGIN_VARS) if (env[name]) cannot(name, 'adds plugins the script does not read');
+  // Plugins no install record names: a plugin folder in a skills folder (one without SKILL.md counts) and a plugin synced from claude.ai.
+  for (const folder of [join(configDir, 'skills'), ...checkouts.map((root) => join(root, '.claude/skills'))]) {
+    for (const name of names(folder)) if (folderAt(join(folder, name)) && (existsSync(join(folder, name, '.claude-plugin')) || !existsSync(join(folder, name, 'SKILL.md')))) cannot(join(folder, name), 'a plugin folder the script does not read');
+  }
+  for (const name of names(join(configDir, 'plugins/synced'))) cannot(join(configDir, 'plugins/synced', name), 'a synced plugin the script does not read');
   // An installed plugin is on unless a file turns it off; one turned on in any file counts: a later scope may turn it off, but failing closed checks it anyway.
   const switched = files.flatMap(({ settings }) => Object.entries(object(settings.enabledPlugins)));
   const installedFile = join(configDir, 'plugins/installed_plugins.json');
-  const installed = object(readJson(installedFile)?.plugins);
+  const installedPlugins = objectIn(installedFile).plugins;
+  if (installedPlugins !== undefined && !plain(installedPlugins)) cannot(installedFile, 'plugins is no object');
+  const installed = object(installedPlugins);
+  const known = objectIn(join(configDir, 'plugins/known_marketplaces.json'));
+  // The plugin's entry in its marketplace can declare commands besides the plugin's own files.
+  const marketplaceEntry = (key, source) => {
+    const [name, market] = [key.slice(0, key.lastIndexOf('@')), key.slice(key.lastIndexOf('@') + 1)];
+    const location = known[market]?.installLocation;
+    const file = join(typeof location === 'string' && isAbsolute(location) ? location : join(configDir, 'plugins/marketplaces', market), '.claude-plugin/marketplace.json');
+    const listed = objectIn(file).plugins;
+    if (!name || !Array.isArray(listed)) return cannot(source, `${file} lists no plugins`);
+    for (const e of listed.filter((p) => p?.name === name)) {
+      const more = Object.keys(object(e)).filter((k) => !ENTRY_KEYS.includes(k));
+      if (more.length) cannot(source, `its marketplace entry declares ${more.join(', ')}, which the script does not read`);
+    }
+  };
   for (const key of new Set([...Object.keys(installed), ...switched.map(([k]) => k)])) {
     const named = switched.filter(([k]) => k === key);
     if (named.length && named.every(([, on]) => on === false)) continue;
     const source = `plugin ${key}`;
     const roots = entries(installed[key]).map((i) => i?.installPath);
+    const usable = (root) => typeof root === 'string' && isAbsolute(root) && folderAt(root);
     if (!roots.length) cannot(source, `${installedFile} names no folder of it`);
+    if (roots.some(usable)) marketplaceEntry(key, source);
     for (const root of roots) {
-      if (typeof root !== 'string' || !isAbsolute(root) || !existsSync(root)) { cannot(source, `its folder ${root} does not exist`); continue; }
-      const manifest = object(readJson(join(root, '.claude-plugin/plugin.json')));
+      if (!usable(root)) { cannot(source, `its folder ${root} does not exist`); continue; }
+      const manifest = objectIn(join(root, '.claude-plugin/plugin.json'));
       // A manifest key holds the definitions or names files of them, relative to the plugin's folder.
       const defined = PARTS.flatMap(([key2, file]) => [...(file ? [readJson(join(root, file))] : []), ...entries(at(manifest, key2)).map((v) => {
         if (plain(v)) return v;
@@ -162,6 +195,9 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
       path = join(worktree, path);
     }
     if (!worktree) return true;
+    // A .. after a link, or a glob before one, leaves the folder its spelling names.
+    const parts = p.split(/[\\/]/);
+    if (parts.includes('..') || parts.slice(0, -1).some((part) => /[*?[{]/.test(part))) return true;
     // Both spellings must lie inside: a link in the worktree, at any depth of the path, can lead out of it.
     const r = real(resolve(path)), w = real(worktree);
     return !inside(worktree, resolve(path)) || !r || !w || !inside(w, r);

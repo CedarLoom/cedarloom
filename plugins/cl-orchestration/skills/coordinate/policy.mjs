@@ -32,12 +32,12 @@ const childEnv = () => {
     GIT_TERMINAL_PROMPT: '0',
     // A worker shares the git directory: a replace ref it wrote must not swap the policy file for another.
     GIT_NO_REPLACE_OBJECTS: '1',
-    // Nor a promisor remote it configured run its transport command to fetch a missing object (git 2.45 and later).
+    // Nor a promisor remote it configured run its transport command to fetch a missing object, where git reads this variable; partialClone refuses such a config for the others.
     GIT_NO_LAZY_FETCH: '1',
   };
 };
-// 64 MB: a thousand pull requests with their bodies do not fit Node's default of 1 MB. Two minutes by default: a stalled transfer or a prompt ssh waits at ends; SIGKILL, since a child that ignores SIGTERM would outlive the timeout.
-export const sh = (cwd, cmd, args, timeout = 120_000) => execFileSync(cmd, args, { cwd, env: childEnv(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20, timeout, killSignal: 'SIGKILL' });
+// 64 MB: a thousand pull requests with their bodies do not fit Node's default of 1 MB. Two minutes by default: a stalled transfer or a prompt ssh waits at ends; SIGKILL, since a child that ignores SIGTERM would outlive the timeout. env adds to the child's environment.
+export const sh = (cwd, cmd, args, timeout = 120_000, env = {}) => execFileSync(cmd, args, { cwd, env: { ...childEnv(), ...env }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20, timeout, killSignal: 'SIGKILL' });
 
 const kind = (v) => (v === null ? 'null' : Array.isArray(v) ? 'array' : Number.isInteger(v) ? 'integer' : typeof v);
 
@@ -167,6 +167,8 @@ export const settings = (output) => output.split('\0').flatMap((entry, i, all) =
 export const OWN = ['local', 'worktree'];
 // A subsection can hold a URL with a token in it, so only the section and the name are shown.
 export const redacted = (key) => escaped(key.replace(/^([^.]+)\..+\.([^.]+)$/s, '$1.*.$2'));
+// A setting that makes a remote a promisor, at any scope and under any remote name: some git releases run its lazy fetch in spite of GIT_NO_LAZY_FETCH, and its missing objects could not be read anyway.
+export const partialClone = (found) => found.some(([, key]) => /^(remote\..+\.(promisor|partialclonefilter)|extensions\.partialclone)$/is.test(key));
 export const redirecting = (found) => [...new Set(found.filter(([scope, key, value = '']) => OWN.includes(scope) && (REDIRECTS.test(key) || (/^core\.fsmonitor$/i.test(key) && !BOOLEAN.test(value)))).map(([, key]) => redacted(key)))];
 // Set again for the two calls that reach the remote, as a worker could write the config between the check and the call: no hook (the fetch writes a ref, which runs reference-transaction), no ext:: command as the remote, and git's own monitor. core.sshCommand keeps the user's or system's value, else GIT_SSH, which git ranks below any core.sshCommand, quoted for the shell git runs it with.
 const pinned = (found) => {
@@ -184,6 +186,7 @@ export function read(dir, run = sh) {
   }
   const refused = redirecting(found);
   if (refused.length) return unreadable(`the repository's own git config sets ${refused.join(', ')}, which can send the reader to another repository or run a command: remove it from the repository's git config`);
+  if (partialClone(found)) return unreadable('git config names a promisor remote or a partial clone filter, whose fetch of a missing object can run a command: read the policy in a full clone');
   const pins = pinned(found);
   let commit;
   try {

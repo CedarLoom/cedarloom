@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { deleteBranch, hookFreeGit } from '../skills/coordinate/delete-branch.mjs';
+import { gitProgram } from '../hooks/git-program.mjs';
 import { fakeGh } from './fake-gh.mjs';
 import { initRepo } from './git-repo.mjs';
 
@@ -150,22 +151,41 @@ test('delete-branch: a hook whose name holds = keeps the local branch', () => {
   assert.equal(s.local(), s.head);
 });
 
-test('delete-branch: a promisor remote runs no command, and git before 2.45 keeps the branch', () => {
+test('delete-branch: a promisor remote or partial clone filter of any remote name keeps the local branch and runs no command, also one set after the runner was made', () => {
+  for (const [key, value] of [['remote.evil.promisor', 'true'], ['remote.evil.partialclonefilter', 'blob:none'], ['extensions.partialclone', 'evil']]) {
+    const s = setup();
+    const git = hookFreeGit(s.project);
+    const mark = join(s.dir, 'MARK');
+    s.inProject('config', 'remote.evil.url', join(s.dir, 'origin'));
+    s.inProject('config', 'remote.evil.uploadpack', `echo ran >> '${mark}'; git-upload-pack`);
+    s.inProject('config', key, value);
+    // The branch names a commit the object store never held, written by hand as git refuses to.
+    const missing = 'd'.repeat(40);
+    writeFileSync(join(s.project, '.git/refs/heads', BRANCH), `${missing}\n`);
+    s.gh.answer([s.merged(missing), [REFS, '[]']]);
+    assert.deepEqual(s.run(ON, git), { remote: 'gone', local: 'kept', reasons: ['local: the branch could not be read: git config names a promisor remote or a partial clone filter, whose lazy fetch can run a command'] }, key);
+    assert.equal(existsSync(mark), false, key);
+  }
+});
+
+test('delete-branch: a translated git message names no false removed commit', () => {
   const s = setup();
-  const mark = join(s.dir, 'MARK');
-  s.inProject('config', 'remote.evil.url', join(s.dir, 'origin'));
-  s.inProject('config', 'remote.evil.promisor', 'true');
-  s.inProject('config', 'remote.evil.uploadpack', `echo ran >> '${mark}'; git-upload-pack`);
-  // The branch names a commit the object store never held, written by hand as git refuses to.
-  const missing = 'd'.repeat(40);
-  writeFileSync(join(s.project, '.git/refs/heads', BRANCH), `${missing}\n`);
-  s.gh.answer([s.merged(missing), [REFS, '[]']]);
-  assert.deepEqual(s.run(ON, hookFreeGit(s.project, undefined, 'git version 2.39.5')), { remote: 'gone', local: 'kept', reasons: ['local: the branch could not be read: git config names a promisor remote, whose lazy fetch git before 2.45 cannot turn off'] });
-  // The git that runs the tests: from 2.45 GIT_NO_LAZY_FETCH holds, before it the branch is kept as above.
-  const [major, minor] = /(\d+)\.(\d+)/.exec(s.inProject('version')).slice(1).map(Number);
-  const modern = major > 2 || (major === 2 && minor >= 45);
-  assert.deepEqual(s.run(ON).local, modern ? 'deleted' : 'kept');
-  assert.equal(existsSync(mark), false);
+  // A git whose messages follow the locale unless LC_ALL is C, as with the zh_CN catalog.
+  const program = join(s.dir, 'git');
+  writeFileSync(program, `#!/bin/sh\n[ "$LC_ALL" = C ] && exec '${gitProgram()}' "$@"\nfor a in "$@"; do [ "$a" = -D ] && { '${gitProgram()}' "$@" > /dev/null && echo '\u5df2\u5220\u9664\u5206\u652f x\uff08\u66fe\u4e3a abc1234\uff09\u3002'; exit; }; done\nexec '${gitProgram()}' "$@"\n`, { mode: 0o755 });
+  s.gh.answer([s.merged(), s.remoteAt(s.head), [DELETE, '']]);
+  assert.deepEqual(s.run(ON, hookFreeGit(s.project, program)), { remote: 'deleted', local: 'deleted', reasons: [] });
+});
+
+test('delete-branch: a local branch that moved between the read and the delete exits 1, from the command line', () => {
+  const s = setup();
+  const bin = join(s.dir, 'wrapper');
+  mkdirSync(bin);
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\nfor a in "$@"; do [ "$a" = -D ] && '${gitProgram()}' -C '${s.project}' branch -f '${BRANCH}' main; done\nexec '${gitProgram()}' "$@"\n`, { mode: 0o755 });
+  s.gh.answer([s.merged(), s.remoteAt(s.head), [DELETE, '']]);
+  const done = spawnSync(process.execPath, [SCRIPT, '--repo', 'owner/project', '--pr', '7', '--branch', BRANCH, '--project', s.project], { encoding: 'utf8', env: { ...process.env, PATH: `${bin}:${s.gh.bin}:${process.env.PATH}` } });
+  assert.equal(done.status, 1, done.stderr);
+  assert.deepEqual([JSON.parse(done.stdout).remote, JSON.parse(done.stdout).local], ['deleted', 'deleted']);
 });
 
 test('delete-branch: a failed remote delete keeps the remote branch', () => {
@@ -182,8 +202,11 @@ test('delete-branch: a pull request without a well-formed head commit, or from a
     s.gh.answer([s.merged(sha), [REFS, '[]'], [DELETE, '']]);
     assert.deepEqual(s.run(ON), { remote: 'kept', local: 'kept', reasons: ['pull request 7 names no head commit'] });
   }
-  s.gh.answer([s.merged(s.head, { isCrossRepository: true }), s.remoteAt(s.head), [DELETE, '']]);
-  assert.deepEqual(s.run(ON), { remote: 'kept', local: 'kept', reasons: ['pull request 7 comes from another repository'] });
+  // A view without the field counts as a fork too.
+  for (const isCrossRepository of [true, undefined]) {
+    s.gh.answer([s.merged(s.head, { isCrossRepository }), s.remoteAt(s.head), [DELETE, '']]);
+    assert.deepEqual(s.run(ON), { remote: 'kept', local: 'kept', reasons: ['pull request 7 comes from another repository'] });
+  }
   assert.equal(deletes(s), 0);
   assert.equal(s.local(), s.head);
 });

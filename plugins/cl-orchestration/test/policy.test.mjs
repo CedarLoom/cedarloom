@@ -282,6 +282,16 @@ test('policy: a repository whose own git config redirects origin or runs a comma
     assert.ok(!errors[0].message.includes(other.dir), config[0]);
     assert.equal(existsSync(marker), false, config[0]);
   }
+  // A promisor remote of any name could fetch a missing object through its command, on a git that ignores GIT_NO_LAZY_FETCH.
+  for (const config of [['remote.evil.promisor', 'true'], ['remote.evil.partialclonefilter', 'blob:none'], ['extensions.partialclone', 'evil']]) {
+    const set = project();
+    set('remote.evil.url', origin.dir);
+    set('remote.evil.uploadpack', `touch '${marker}'; git-upload-pack`);
+    const { policy, errors } = read(set(...config));
+    assert.equal(policy, null, config[0]);
+    assert.deepEqual(rules(errors), [['unreadable', '']], config[0]);
+    assert.equal(existsSync(marker), false, config[0]);
+  }
   // git's own file system monitor runs no command of the repository.
   assert.equal(read(project()('core.fsmonitor', 'true')).policy.startLabel, 'go');
   // The fetch writes the reader's ref, and no hook of the shared git directory runs for it. The repository's own core.hooksPath, which the check allows, also overrides one of the user's config.

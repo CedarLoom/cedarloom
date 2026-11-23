@@ -162,6 +162,8 @@ test('start-checks: a plugin source the script cannot resolve is unresolved, and
   writeFileSync(join(plugin, '.claude-plugin/plugin.json'), JSON.stringify({ hooks: './missing.json', experimental: { monitors: [{ command: 'node "${CLAUDE_PLUGIN_ROOT}/watch.mjs"' }] } }));
   mkdirSync(join(s.dir, 'home/.claude/plugins'));
   writeFileSync(join(s.dir, 'home/.claude/plugins/installed_plugins.json'), JSON.stringify({ plugins: { 'a@m': [{}], 'b@m': [{ installPath: join(s.dir, 'gone') }], 'd@m': [{ installPath: 'relative' }], 'e@m': [{ installPath: plugin }] } }));
+  mkdirSync(join(s.dir, 'home/.claude/plugins/marketplaces/m/.claude-plugin'), { recursive: true });
+  writeFileSync(join(s.dir, 'home/.claude/plugins/marketplaces/m/.claude-plugin/marketplace.json'), JSON.stringify({ name: 'm', plugins: [{ name: 'e', source: './e', description: 'e' }] }));
   assert.deepEqual(reasons(), ['plugin a@m: its folder undefined does not exist', 'plugin b@m: its folder <dir>/gone does not exist', 'plugin d@m: its folder relative does not exist', 'plugin e@m: hooks names nothing the script can read: "./missing.json"', 'plugin c@m: <dir>/home/.claude/plugins/installed_plugins.json names no folder of it']);
   // e@m is named in no file and runs its monitor.
   assert.deepEqual(s.run().read, [{ source: 'plugin e@m', command: `node "${plugin}/watch.mjs"` }]);
@@ -244,4 +246,75 @@ test('start-checks: a value of a shape the script cannot read is unresolved or l
   assert.deepEqual(result.failed.map((f) => f.entry), ['runs a file inside the repository: ["/opt/fmt","."]']);
   // A mistyped --config-dir or --worktree.
   assert.deepEqual(s.run({ configDir: join(s.dir, 'none'), worktree: join(s.dir, 'wt2') }).unresolved.slice(0, 2).map((u) => `${u.source.slice(s.dir.length + 1)}: ${u.reason}`), ['none: the folder does not exist', 'wt2: the folder does not exist']);
+});
+
+test('start-checks: MCP servers named env, args or command are read as any other', () => {
+  const s = setup({ 'wt/.mcp.json': { mcpServers: { env: { command: 'npx', args: ['prettier', '--write', '.'] }, args: { command: 'node', args: ['./server.js'] }, command: { command: 'make', args: ['serve'] } } } });
+  const entries = s.run().failed.map((f) => f.entry);
+  for (const entry of ["runs a tool that loads the repository's code or configuration: npx prettier --write .", 'runs a file inside the repository: node ./server.js', "runs a tool that loads the repository's code or configuration: make serve"]) assert.ok(entries.includes(entry), entry);
+});
+
+test('start-checks: a plugin without an install record, or with commands in its marketplace entry, is unresolved', () => {
+  const plugin = { '.claude-plugin/plugin.json': { name: 'fmt' }, 'hooks/hooks.json': hook('npx prettier --write .') };
+  const at = (folder) => Object.fromEntries(Object.entries(plugin).map(([path, value]) => [`${folder}/${path}`, value]));
+  const s = setup({
+    ...at('home/.claude/skills/fmt'), ...at('project/.claude/skills/fmt'), ...at('wt/.claude/skills/fmt'), ...at('home/.claude/plugins/synced/fmt'),
+    'home/.claude/skills/bare/hooks/hooks.json': hook('npx prettier --write .'),
+    'home/.claude/skills/ok/SKILL.md': '---\nname: ok\n---\n',
+    'home/.claude/plugins/marketplaces/m/.claude-plugin/marketplace.json': { name: 'm', plugins: [{ name: 'fmt', source: './fmt', hooks: hook('npx prettier --write .').hooks }] },
+    'home/.claude/plugins/cache/m/fmt/1/skills/x/SKILL.md': 'x',
+  });
+  writeFileSync(join(s.dir, 'home/.claude/plugins/installed_plugins.json'), JSON.stringify({ plugins: { 'fmt@m': [{ installPath: join(s.dir, 'home/.claude/plugins/cache/m/fmt/1') }], 'gone@n': [{ installPath: join(s.dir, 'home/.claude/plugins/cache/m/fmt/1') }] } }));
+  assert.deepEqual(s.run().unresolved.map((u) => `${u.source.replaceAll(s.dir, '<dir>')}: ${u.reason.replaceAll(s.dir, '<dir>')}`), [
+    '<dir>/home/.claude/skills/bare: a plugin folder the script does not read',
+    '<dir>/home/.claude/skills/fmt: a plugin folder the script does not read',
+    '<dir>/project/.claude/skills/fmt: a plugin folder the script does not read',
+    '<dir>/wt/.claude/skills/fmt: a plugin folder the script does not read',
+    '<dir>/home/.claude/plugins/synced/fmt: a synced plugin the script does not read',
+    'plugin fmt@m: its marketplace entry declares hooks, which the script does not read',
+    'plugin gone@n: <dir>/home/.claude/plugins/marketplaces/n/.claude-plugin/marketplace.json lists no plugins',
+  ]);
+});
+
+test('start-checks: a file or value of another type than the script reads is unresolved, never passed', () => {
+  const s = setup({
+    'wt/.mcp.json': [{ command: 'npx x' }],
+    'home/.claude.json': [{ mcpServers: { a: { command: 'npx x' } } }],
+    'project/.mcp.json': { mcpServers: [{ command: 'npx x' }] },
+    'home/.claude/settings.json': { statusLine: ['npx x'] },
+    'home/.claude/plugins/installed_plugins.json': { plugins: [{ installPath: '/x' }] },
+  });
+  assert.deepEqual(s.run().unresolved.map((u) => `${u.source.slice(s.dir.length + 1)}: ${u.reason}`), [
+    'home/.claude/settings.json: statusLine is no string or object',
+    'home/.claude.json: holds no JSON object',
+    'wt/.mcp.json: holds no JSON object',
+    'project/.mcp.json: mcpServers is no object',
+    'home/.claude/plugins/installed_plugins.json: plugins is no object',
+  ]);
+  const file = join(s.dir, 'afile'), manifestList = join(s.dir, 'listed');
+  writeFileSync(file, 'x');
+  mkdirSync(join(manifestList, '.claude-plugin'), { recursive: true });
+  writeFileSync(join(manifestList, '.claude-plugin/plugin.json'), '[]');
+  writeFileSync(join(s.dir, 'home/.claude/plugins/installed_plugins.json'), JSON.stringify({ plugins: { 'f@m': [{ installPath: file }], 'l@m': [{ installPath: manifestList }] } }));
+  writeFileSync(join(s.dir, 'home/.claude/plugins/known_marketplaces.json'), JSON.stringify({ m: { installLocation: s.dir } }));
+  mkdirSync(join(s.dir, '.claude-plugin'));
+  writeFileSync(join(s.dir, '.claude-plugin/marketplace.json'), JSON.stringify({ plugins: [] }));
+  assert.deepEqual(s.run().unresolved.slice(4).map((u) => `${u.source.replaceAll(s.dir, '<dir>')}: ${u.reason.replaceAll(s.dir, '<dir>')}`), [
+    'plugin f@m: its folder <dir>/afile does not exist',
+    '<dir>/listed/.claude-plugin/plugin.json: holds no JSON object',
+  ]);
+});
+
+test('start-checks: a .. after a link or a glob before one fails check 4', () => {
+  const s = setup();
+  mkdirSync(join(s.dir, 'shared/deep'), { recursive: true });
+  symlinkSync(join(s.dir, 'shared'), join(s.options.worktree, 'out'));
+  const wt = s.options.worktree;
+  mkdirSync(join(s.dir, 'project/.claude'));
+  writeFileSync(join(s.dir, 'project/.claude/settings.json'), JSON.stringify({ sandbox: { filesystem: { allowWrite: [`${wt}/*/deep`, '*/deep', 'out/deep/../../x', 'build/**'] } } }));
+  assert.deepEqual(s.run().failed.map((f) => f.entry.replaceAll(wt, '<wt>')), [
+    'sandbox.filesystem.allowWrite outside the worktree: <wt>/*/deep',
+    'sandbox.filesystem.allowWrite outside the worktree: */deep',
+    'sandbox.filesystem.allowWrite outside the worktree: out/deep/../../x',
+  ]);
 });

@@ -6,7 +6,7 @@ import { isAbsolute } from 'node:path';
 import { parseArgs } from 'node:util';
 import { gitProgram } from '../../hooks/git-program.mjs';
 import { REPO } from './approval.mjs';
-import { errorLine, escaped, isMain, json, read, settings, sh } from './policy.mjs';
+import { errorLine, escaped, isMain, json, partialClone, read, settings, sh } from './policy.mjs';
 
 const BRANCH = /^(?!-)(?!.*\.\.)(?!.*\/\.)(?!.*\.lock$)(?!HEAD$)[A-Za-z0-9._/-]+$/;
 const COMMIT = /^[0-9a-f]{40}$/;
@@ -76,17 +76,14 @@ export function optionsOf(argv) {
   return { repo: values.repo, pr: Number(values.pr), branch: values.branch, project: values.project };
 }
 
-// git in the project with no hook, no fsmonitor and no lazy fetch, which a worker sharing this git directory could have configured. core.hooksPath does not reach a hook that git config defines (git 2.54), so each hook.<name> is turned off as well. version is `git version`'s output.
-export function hookFreeGit(project, program = gitProgram(), version = undefined) {
+// git in the project with no hook, no fsmonitor and no lazy fetch, which a worker sharing this git directory could have configured, and in the C locale, as the delete's output is parsed. core.hooksPath does not reach a hook that git config defines (git 2.54), so each hook.<name> is turned off as well.
+export function hookFreeGit(project, program = gitProgram()) {
   if (!program) throw new Error('git is in no absolute folder of PATH');
-  const run = (...args) => sh(project, program, ['--no-replace-objects', '-C', project, '-c', `core.hooksPath=${devNull}`, '-c', 'core.fsmonitor=false', ...args]);
-  const [major, minor] = (/(\d+)\.(\d+)/.exec(version ?? run('version')) ?? ['', '0', '0']).slice(1).map(Number);
-  // GIT_NO_LAZY_FETCH (childEnv) arrived in git 2.45; before it a promisor remote can run its transport command.
-  const lazyFetch = major < 2 || (major === 2 && minor < 45);
+  const run = (...args) => sh(project, program, ['--no-replace-objects', '-C', project, '-c', `core.hooksPath=${devNull}`, '-c', 'core.fsmonitor=false', ...args], undefined, { LC_ALL: 'C' });
   return (...args) => {
     // Listed before each call: the config can change between two of them.
     const listed = settings(run('config', '--show-scope', '-z', '--list'));
-    if (lazyFetch && listed.some(([, key]) => /^(remote\..+\.promisor|extensions\.partialclone)$/is.test(key))) throw new Error('git config names a promisor remote, whose lazy fetch git before 2.45 cannot turn off');
+    if (partialClone(listed)) throw new Error('git config names a promisor remote or a partial clone filter, whose lazy fetch can run a command');
     const hooks = [...new Set(listed.map(([, key]) => /^hook\.(.+)\.[^.]+$/is.exec(key)?.[1]).filter((name) => name !== undefined))];
     // -c splits at the first =, so such a name could not be turned off.
     if (hooks.some((name) => name.includes('='))) throw new Error('git config defines a hook whose name holds =, which -c cannot turn off');
