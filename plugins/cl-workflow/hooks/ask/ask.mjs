@@ -9,12 +9,16 @@ import { logFile, logRun } from './questions-log.mjs';
 const dir = windowDir();
 const file = windowFile();
 
-// Why the input shows a session nobody may answer in, else null. A mode the hook cannot read refuses too.
+// The permission modes a person can answer in. Any other value, a mode added later too, refuses until it is judged.
+const ATTENDED = new Set(['default', 'acceptEdits', 'plan', 'auto', 'bypassPermissions']);
+
+// Why the input shows a session nobody may answer in, else null.
 function unattended(input) {
   const mode = input.permission_mode;
-  if (typeof mode !== 'string' || mode === '') return 'the hook input names no permission mode';
   if (mode === 'dontAsk') return 'the session runs in dontAsk mode, which asks nobody';
-  if (process.env.CLAUDE_CODE_ENTRYPOINT === 'sdk-cli') return 'the session runs headless (CLAUDE_CODE_ENTRYPOINT=sdk-cli, as claude -p sets it)';
+  if (!ATTENDED.has(mode)) return 'the hook input names no permission mode a person answers in';
+  // claude -p sets sdk-cli and the Agent SDKs sdk-py and sdk-ts; a launcher can set any other value.
+  if (process.env.CLAUDE_CODE_ENTRYPOINT?.startsWith('sdk-')) return 'the session runs headless or under an Agent SDK (CLAUDE_CODE_ENTRYPOINT starts with sdk-)';
   return null;
 }
 

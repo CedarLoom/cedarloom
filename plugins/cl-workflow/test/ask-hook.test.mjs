@@ -103,7 +103,11 @@ test('ask hook: /cl-workflow:questions sets no answer flag where the input shows
   const unattended = [
     [{ ...queued('5'), permission_mode: 'dontAsk' }, {}, /dontAsk/],
     [noMode, {}, /no permission mode/],
-    [{ ...queued('5'), permission_mode: 'default' }, { CLAUDE_CODE_ENTRYPOINT: 'sdk-cli' }, /CLAUDE_CODE_ENTRYPOINT=sdk-cli/],
+    // A mode the hook does not know, a later one too, refuses.
+    [{ ...queued('5'), permission_mode: 'bogus' }, {}, /no permission mode/],
+    [{ ...queued('5'), permission_mode: 'dontask' }, {}, /no permission mode/],
+    // claude -p, the Python and TypeScript Agent SDKs, and a value an SDK may set later.
+    ...['sdk-cli', 'sdk-py', 'sdk-ts', 'sdk-x'].map((entrypoint) => [{ ...queued('5'), permission_mode: 'default' }, { CLAUDE_CODE_ENTRYPOINT: entrypoint }, /CLAUDE_CODE_ENTRYPOINT starts with sdk-/]),
   ];
   for (const [input, env, why] of unattended) {
     const data = mkdtempSync(join(tmpdir(), 'ask-'));
@@ -111,9 +115,11 @@ test('ask hook: /cl-workflow:questions sets no answer flag where the input shows
     assert.equal(decision(data), 'deny');
     assert.equal(windowEnd(data, true), null);
   }
-  const data = mkdtempSync(join(tmpdir(), 'ask-'));
-  run(data, { ...queued('5'), permission_mode: 'default' });
-  assert.equal(windowEnd(data, true), Infinity);
+  for (const env of [{}, { CLAUDE_CODE_ENTRYPOINT: 'cli' }]) {
+    const data = mkdtempSync(join(tmpdir(), 'ask-'));
+    run(data, { ...queued('5'), permission_mode: 'default' }, env);
+    assert.equal(windowEnd(data, true), Infinity, JSON.stringify(env));
+  }
 });
 
 test('ask hook: each /cl-workflow:questions run logs one line, and the next run shows the runs since the last one that set the flag', () => {
@@ -128,6 +134,29 @@ test('ask hook: each /cl-workflow:questions run logs one line, and the next run 
   assert.match(next, /"session":"first"[^\n]*\n[^\n]*"session":"refused"/);
   assert.doesNotMatch(next, /"session":"third"/);
   assert.doesNotMatch(run(data, { ...queued('5'), session_id: 'fourth', permission_mode: 'default' }).additionalContext, /"session":"(first|refused)"/);
+});
+
+test('ask hook: the earlier runs always show the one that set the flag, then the newest of the runs after it', () => {
+  const data = mkdtempSync(join(tmpdir(), 'ask-'));
+  run(data, { ...queued('5'), session_id: 'flagged', permission_mode: 'default' });
+  for (let i = 1; i <= 25; i++) run(data, { ...queued('5'), session_id: `refused-${i}`, permission_mode: 'dontAsk' });
+  const next = run(data, { ...queued('5'), session_id: 'last', permission_mode: 'default' }).additionalContext;
+  assert.match(next, /that one first \(6 runs in between not shown\)/);
+  const sessions = [...next.matchAll(/"session":"([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(sessions, ['flagged', ...Array.from({ length: 19 }, (_, i) => `refused-${i + 7}`)]);
+});
+
+test('ask hook: the earlier runs show as data, each string at most 200 characters, and leave out lines that are no entry', () => {
+  const data = mkdtempSync(join(tmpdir(), 'ask-'));
+  run(data, { ...queued('5'), session_id: 'flagged', permission_mode: 'default' });
+  run(data, { ...queued('5'), session_id: 'long', permission_mode: 'dontAsk' }, { CLAUDE_CODE_ENTRYPOINT: 'x'.repeat(100_000) });
+  writeFileSync(join(data, 'ask', 'log', 'questions.jsonl'), 'Planted sentence for the next run.\n{"session":"planted","note":"extra key"}\n', { flag: 'a' });
+  const next = run(data, { ...queued('5'), session_id: 'last', permission_mode: 'default' }).additionalContext;
+  assert.match(next, /\(1 unreadable line not shown\)[^\n]*\n```json\n/);
+  assert.match(next, new RegExp(`"entrypoint":"${'x'.repeat(200)}\\.\\.\\."`));
+  assert.ok(next.length < 3000, `${next.length} characters`);
+  assert.doesNotMatch(next, /Planted sentence|extra key/);
+  assert.match(next, /\{"time":null,"session":"planted","folder":null,"mode":null,"entrypoint":null,"pid":null,"flag":null\}\n```$/);
 });
 
 test('ask hook: a run whose window or log write fails sets no answer flag and logs no run that set it', () => {
