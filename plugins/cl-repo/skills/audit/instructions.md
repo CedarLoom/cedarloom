@@ -21,11 +21,13 @@ Size is a signal for where to look, not a finding: a CLAUDE.md above 200 lines, 
 
 ## One rule file
 
-When the target is one rule file (CLAUDE.md, AGENTS.md, a rule file), collect its candidates for contradiction, vague, enforceable and restates with this pass first, then go on with the other patterns. The pass reads only the file, so the later pass also checks for restates against the docs the file links:
+When the target is one rule file (CLAUDE.md, AGENTS.md, a rule file), collect its candidates for contradiction, vague, enforceable and restates with this pass first, then go on with the other patterns:
 
 1. Number every line from 1, blank lines included (`nl -ba`).
 2. Apply the prompt below to the numbered text, using only that text: the line numbers in findings are those numbers. One line can carry more than one kind.
 3. Each item of the answer is a candidate for step 5 of the skill, its kind the pattern; a finding carries its `why` and its `fix` on its Why line.
+
+This pass reads only the file, so the later pass also checks for restates against the docs the file links.
 
 ```text
 Below is one instruction file that a coding agent loads at the start of every session, with line numbers. Review it; do not read files or run commands.
