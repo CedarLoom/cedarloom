@@ -31,9 +31,10 @@ const MAX_FOLDERS = 64;
 
 const ROLE = 'CEDARLOOM_ROLE';
 // The bots of a repository take the guarded rules and these on top: none merges but through merge.mjs, which runs gh as a child
-// process no hook reads. The project bot and the reviewer bot never push; fixer and worker bots push only the branch checked out.
-const BOTS = new Set(['project-bot', 'reviewer-bot', 'fixer-bot', 'worker-bot']);
-const ROLE_BOTS = new Set(['reviewer-bot', 'fixer-bot', 'worker-bot']);
+// process no hook reads. The project, planner, reviewer and maintainer bots never push; fixer and worker bots push only the branch
+// checked out.
+const BOTS = new Set(['project-bot', 'planner-bot', 'reviewer-bot', 'fixer-bot', 'worker-bot', 'maintainer-bot']);
+const ROLE_BOTS = new Set(['planner-bot', 'reviewer-bot', 'fixer-bot', 'worker-bot', 'maintainer-bot']);
 const OWN_BRANCH = new Set(['fixer-bot', 'worker-bot']);
 // Role bots post nothing on GitHub but their push: per gh command the verbs they may run, null for any; gh api only with GET.
 const BOT_GH_READS = new Map([['repo', ['clone', 'view', 'list']], ['pr', ['view', 'diff', 'list', 'checks', 'status']], ['issue', ['view', 'list', 'status']], ['run', ['view', 'list', 'watch']], ['search', null]]);
