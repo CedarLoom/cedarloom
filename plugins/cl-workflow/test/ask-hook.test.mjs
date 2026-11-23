@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -128,4 +128,20 @@ test('ask hook: each /cl-workflow:questions run logs one line, and the next run 
   assert.match(next, /"session":"first"[^\n]*\n[^\n]*"session":"refused"/);
   assert.doesNotMatch(next, /"session":"third"/);
   assert.doesNotMatch(run(data, { ...queued('5'), session_id: 'fourth', permission_mode: 'default' }).additionalContext, /"session":"(first|refused)"/);
+});
+
+test('ask hook: a run whose window or log write fails sets no answer flag and logs no run that set it', () => {
+  const failing = (prepare) => {
+    const data = mkdtempSync(join(tmpdir(), 'ask-'));
+    prepare(join(data, 'ask'));
+    const r = spawnSync(process.execPath, [HOOK], { input: JSON.stringify({ ...queued('5'), permission_mode: 'default' }), env: { ...ENV, CLAUDE_PLUGIN_DATA: data, CLAUDE_PID: '4242' }, encoding: 'utf8' });
+    assert.notEqual(r.status, 0);
+    return data;
+  };
+  // The window file's path is a folder, so its write fails.
+  const window = failing((ask) => mkdirSync(join(ask, '4242.json'), { recursive: true }));
+  assert.equal(existsSync(join(window, 'ask', 'log', 'questions.jsonl')), false);
+  // The log folder's path is a file, so the log write fails.
+  const log = failing((ask) => { mkdirSync(ask); writeFileSync(join(ask, 'log'), ''); });
+  assert.equal(windowEnd(log, true), null);
 });

@@ -55,11 +55,9 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
   const queue = questions && !refused ? queueArgs(args) : undefined;
   // Running the question queue with arguments it reads in an attended session allows terminal questions for the rest of the session.
   const end = queue ? Infinity : questions ? undefined : askUntil(args, now);
-  // The log entry comes first: where it cannot be written, the hook fails and sets no flag.
   const entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT ?? null;
-  const earlier = questions
-    ? logRun(logFile(dir), { time: new Date(now).toISOString(), session: input.session_id ?? null, folder: input.cwd ?? null, mode: input.permission_mode ?? null, entrypoint, pid: processId(), flag: end === Infinity })
-    : null;
+  const log = (flag) => logRun(logFile(dir), { time: new Date(now).toISOString(), session: input.session_id ?? null, folder: input.cwd ?? null, mode: input.permission_mode ?? null, entrypoint, pid: processId(), flag });
+  if (questions && end !== Infinity) log(false);
   if (refused) {
     say(event, { additionalContext: `/cl-workflow:questions set no answer flag and allowed no terminal questions: ${refused}. Typed into an interactive terminal session, it can set the flag. ${line(now)}` });
   } else if (end === undefined) {
@@ -74,6 +72,14 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
     mkdirSync(dir, { recursive: true });
     // The flag lets this session, and no other, write answers into the local question queue (role-guard.mjs).
     writeFileSync(file, `${JSON.stringify({ askUntil: end === Infinity ? SESSION : new Date(end).toISOString(), questions: questions || undefined })}\n`);
+    // A run logs as one that set the flag only once the flag is written; where the log cannot be written, the flag goes again.
+    let earlier;
+    try {
+      earlier = queue ? log(true) : null;
+    } catch (error) {
+      rmSync(file, { force: true });
+      throw error;
+    }
     say(event, { additionalContext: queue ? `${allowed(end, now)}\n${queueLine(queue)}\n${earlier}` : allowed(end, now) });
   }
 }
