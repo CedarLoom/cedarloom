@@ -4,8 +4,8 @@ This brief holds for every run of a repository's project bot and of its role bot
 
 | Automation | Procedure |
 |---|---|
-| Project bot: pick sweep, pull request events, mail, weekly maintenance, daily reconciliation | `bot-project.md` |
 | Project bot: catch-up sweep | `bot-catch-up.md` |
+| Project bot: every other automation | `bot-project.md` |
 | Role bot runs | `bot-<role>.md` |
 
 ## Rules
