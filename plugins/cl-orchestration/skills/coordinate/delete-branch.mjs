@@ -1,5 +1,5 @@
 // Usage: node delete-branch.mjs --repo <owner/name> --pr <number> --branch <name> --project <path>, the path absolute: a checkout of the project, whose origin's default branch holds the policy.
-// Step 3 of Clean up (SKILL.md): deletes the pull request's branch on GitHub and in <project> only when the policy's deleteMergedBranch is true, `gh pr view` reads the pull request as MERGED with <branch> as its head, and each ref still points at its headRefOid. A ref already gone needs nothing. Every other case keeps that ref: a moved ref, a failed read, a local branch checked out in a worktree.
+// Step 3 of Clean up (SKILL.md): deletes the pull request's branch on GitHub and in <project> only when the policy's deleteMergedBranch is true, `gh pr view` reads the pull request as MERGED with <branch> as its head, and each ref still points at its headRefOid. A ref already gone needs nothing. Every other case keeps that ref: a moved ref, a failed read, a local branch that a worktree, a rebase or a bisect uses.
 // Prints { remote, local, reasons } as JSON, remote and local each deleted, gone or kept, and exits 0 when neither is kept, 1 when one is (reasons names why), 2 for a bad argument.
 import { devNull } from 'node:os';
 import { isAbsolute } from 'node:path';
@@ -50,11 +50,8 @@ export function deleteBranch({ repo, pr, branch, policy, exec, git }) {
     const sha = listed.out.split('\n').find((line) => line.startsWith(`${ref} `))?.slice(ref.length + 1);
     if (sha === undefined) return 'gone';
     if (sha !== headRefOid) return keep('local', `the branch moved to ${escaped(sha)}`);
-    const worktrees = attempt(() => git('worktree', 'list', '--porcelain'));
-    if (worktrees.error) return keep('local', `the worktrees could not be listed: ${worktrees.error}`);
-    if (worktrees.out.split('\n').includes(`branch ${ref}`)) return keep('local', 'the branch is checked out in a worktree');
-    // The old value makes the delete fail when the branch moved after the read; a squash merge leaves the branch unmerged for git, which update-ref does not ask.
-    const deleted = attempt(() => git('update-ref', '-d', ref, headRefOid));
+    // branch -D refuses a branch that a worktree has checked out or that a rebase or bisect uses, and deletes a symbolic ref, never its target. -D, as a squash merge leaves the branch unmerged for git; a commit made between the read and the delete goes with the branch.
+    const deleted = attempt(() => git('branch', '-D', '--', branch));
     return deleted.error ? keep('local', `the delete failed: ${deleted.error}`) : 'deleted';
   })();
 

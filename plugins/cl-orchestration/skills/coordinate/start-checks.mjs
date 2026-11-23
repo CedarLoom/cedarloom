@@ -41,9 +41,12 @@ function commands(value, out = []) {
   return out;
 }
 
+// An entry that reaches github.com, one of its subdomains or githubusercontent.com, with a port or as a wildcard that covers one (`*.com`); a wildcard of another form counts too.
 const GITHUB = (domain) => {
-  const host = String(domain).toLowerCase().replace(/^\*\./, '');
-  return host === '*' || ['github.com', 'githubusercontent.com'].some((d) => host === d || host.endsWith(`.${d}`));
+  const entry = String(domain).toLowerCase().replace(/:\d+$/, '');
+  const wild = entry.startsWith('*.') ? entry.slice(2) : null;
+  if (entry.slice(wild === null ? 0 : 2).includes('*')) return true;
+  return ['github.com', 'githubusercontent.com'].some((d) => entry === d || entry.endsWith(`.${d}`) || (wild !== null && (d === wild || d.endsWith(`.${wild}`))));
 };
 const inside = (folder, path) => { const r = relative(folder, path); return r === '' || (r !== '..' && !r.startsWith(`..${sep}`) && !isAbsolute(r)); };
 const real = (path) => { try { return realpathSync(path); } catch { return path; } };
@@ -68,7 +71,13 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
     for (const c of commands(settings.hooks)) found.push({ source: file, command: c });
     for (const key of COMMAND_KEYS) for (const c of typeof settings[key] === 'string' ? [settings[key]] : commands(settings[key])) found.push({ source: `${file} ${key}`, command: c });
   }
-  for (const file of [claudeJson, join(project, '.mcp.json')]) for (const c of commands(readJson(file)?.mcpServers)) found.push({ source: file, command: c });
+  const repoPaths = [project, real(project), ...(worktree ? [worktree, real(worktree)] : [])];
+  const user = readJson(claudeJson);
+  // Local-scope servers sit under the folder they were added in: each folder that holds the project or the worktree counts.
+  const local = Object.entries(user?.projects ?? {}).filter(([folder]) => isAbsolute(folder) && repoPaths.some((p) => inside(folder, p)));
+  for (const [source, servers] of [[claudeJson, user?.mcpServers], ...local.map(([folder, p]) => [`${claudeJson} projects ${folder}`, p?.mcpServers]), [join(project, '.mcp.json'), readJson(join(project, '.mcp.json'))?.mcpServers]]) {
+    for (const c of commands(servers)) found.push({ source, command: c });
+  }
   // A plugin enabled in any of the files counts: a later scope may turn it off, but failing closed checks it anyway.
   const enabled = new Set(files.flatMap(({ settings }) => Object.entries(settings.enabledPlugins ?? {}).filter(([, on]) => on !== false).map(([key]) => key)));
   const installed = readJson(join(configDir, 'plugins/installed_plugins.json'))?.plugins ?? {};
@@ -80,12 +89,11 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
       for (const c of commands([...part('hooks', 'hooks/hooks.json'), ...part('mcpServers', '.mcp.json'), ...part('lspServers', '.lsp.json'), ...part('monitors', 'monitors/monitors.json')])) found.push({ source: `plugin ${key}`, command: c });
     }
   }
-  const repoPaths = [project, real(project), ...(worktree ? [worktree, real(worktree)] : [])];
   for (const { source, command } of found) {
     // Quotes and a redirection's operator off each word, so `2>/dev/null` reads as the path it names.
     const words = command.replace(/&&|\|\||[;|]/g, ' ; ').split(/\s+/).map((w) => w.replace(/^\d*[<>]+&?/, '').replace(/^['"(]+|['")]+$/g, '')).filter(Boolean);
-    // A relative path runs from the session's folder, the repository; a URL is no path.
-    const relativePath = words.some((w) => w.includes('/') && !/^([/~$]|[a-z][a-z0-9+.-]*:)/i.test(w));
+    // A relative path runs from the session's folder, the repository; a URL is no path. An option's value (`--config=x/y`) is tested on its own.
+    const relativePath = words.map((w) => w.replace(/^-[^=]*=/, '')).some((w) => w.includes('/') && !/^([/~$]|[a-z][a-z0-9+.-]*:)/i.test(w));
     // A program: the first word, or the first after a separator, past variable assignments and env, exec or command.
     const programs = [];
     let next = true;
@@ -105,7 +113,8 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
     const path = p.startsWith('~') ? join(home, p.slice(1)) : p.startsWith('//') ? p.slice(1) : p;
     // A relative entry of the committed settings resolves in the worker's own checkout; of any other file, elsewhere.
     if (!isAbsolute(path)) return scope !== 'project' || path.split(/[\\/]/).includes('..');
-    return !worktree || !inside(worktree, resolve(path));
+    // Both spellings must lie inside: a link in the worktree can lead out of it.
+    return !worktree || !inside(worktree, resolve(path)) || !inside(real(worktree), real(resolve(path)));
   };
   for (const { file, scope, settings } of files) {
     const sandbox = settings.sandbox ?? {};

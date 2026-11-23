@@ -104,8 +104,20 @@ test('delete-branch: a branch checked out in a worktree is kept', () => {
   const s = setup();
   s.inProject('worktree', 'add', '-q', join(s.dir, 'wt'), BRANCH);
   s.gh.answer([s.merged(), s.remoteAt(s.head), [DELETE, '']]);
-  assert.deepEqual(s.run(ON), { remote: 'deleted', local: 'kept', reasons: ['local: the branch is checked out in a worktree'] });
+  const result = s.run(ON);
+  assert.deepEqual([result.remote, result.local], ['deleted', 'kept']);
+  assert.match(result.reasons[0], /^local: the delete failed: /);
   assert.equal(s.local(), s.head);
+});
+
+test('delete-branch: a branch that is a symbolic ref goes alone, and the branch it names stays', () => {
+  const s = setup();
+  s.inProject('branch', '-D', BRANCH);
+  s.inProject('symbolic-ref', `refs/heads/${BRANCH}`, 'refs/heads/main');
+  const main = s.inProject('rev-parse', 'refs/heads/main');
+  s.gh.answer([s.merged(main), [REFS, '[]']]);
+  assert.deepEqual(s.run(ON), { remote: 'gone', local: 'deleted', reasons: [] });
+  assert.equal(s.inProject('rev-parse', 'refs/heads/main'), main);
 });
 
 test('delete-branch: refs already gone need nothing', () => {

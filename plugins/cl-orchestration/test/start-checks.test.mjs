@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
@@ -39,17 +39,21 @@ test('start-checks: a command that runs a repository file or a tool that loads i
     'project/.mcp.json': { mcpServers: { db: { command: 'npx', args: ['db-mcp'] } } },
     'managed/managed-settings.json': hook('cd /tmp && FORCE=1 prettier --write .'),
   });
+  // A local-scope server of a folder that holds the project; the one of another folder is not loaded there.
+  mkdirSync(s.options.home);
+  writeFileSync(s.options.claudeJson, JSON.stringify({ projects: { [s.dir]: { mcpServers: { srv: { command: 'node', args: ['server/index.mjs'] } } }, [join('/', 'elsewhere')]: { mcpServers: { a: { command: 'npm', args: ['start'] } } } } }));
   assert.deepEqual(s.run().failed.map((f) => [f.check, f.source.slice(s.dir.length + 1), f.entry]), [
     [3, 'managed/managed-settings.json', "runs a tool that loads the repository's code or configuration: cd /tmp && FORCE=1 prettier --write ."],
     [3, 'project/.claude/settings.json', 'runs a file inside the repository: "$CLAUDE_PROJECT_DIR"/.claude/hooks/format.sh'],
     [3, 'project/.claude/settings.local.json statusLine', 'runs a file inside the repository: node scripts/status.js'],
+    [3, `home/.claude.json projects ${s.dir}`, 'runs a file inside the repository: node server/index.mjs'],
     [3, 'project/.mcp.json', "runs a tool that loads the repository's code or configuration: npx db-mcp"],
   ]);
 });
 
 test('start-checks: other commands, of an enabled plugin and of the user, are listed to read, and a disabled plugin is not', () => {
   const s = setup({
-    'home/.claude/settings.json': { enabledPlugins: { 'guard@market': true, 'off@market': false }, apiKeyHelper: '/usr/local/bin/key-helper 2>/dev/null' },
+    'home/.claude/settings.json': { enabledPlugins: { 'guard@market': true, 'off@market': false }, apiKeyHelper: '/usr/local/bin/key-helper --endpoint=https://keys.example.com/v1 2>/dev/null' },
     'home/.claude.json': { mcpServers: { web: { type: 'http', url: 'https://example.com/mcp', headersHelper: '/opt/h.sh' } } },
   });
   // The install paths lie in the test's folder, known once it exists.
@@ -65,7 +69,7 @@ test('start-checks: other commands, of an enabled plugin and of the user, are li
   const result = s.run();
   assert.deepEqual(result.failed, []);
   assert.deepEqual(result.read.map((r) => r.command), [
-    '/usr/local/bin/key-helper 2>/dev/null',
+    '/usr/local/bin/key-helper --endpoint=https://keys.example.com/v1 2>/dev/null',
     '/opt/h.sh',
     'node "${CLAUDE_PLUGIN_ROOT}/hooks/guard.mjs"',
     'typescript-language-server --stdio',
@@ -78,7 +82,7 @@ test('start-checks: each entry that defeats a bound fails check 4', () => {
       permissions: { allow: ['WebFetch(domain:raw.githubusercontent.com)'], additionalDirectories: ['~/notes'] },
       sandbox: {
         excludedCommands: ['docker'], allowAppleEvents: true, enabledPlatforms: ['macos'], bwrapPath: '/opt/bwrap',
-        network: { allowUnixSockets: ['/var/run/docker.sock'], allowLocalBinding: true, httpProxyPort: 8080, allowedDomains: ['*.github.com'] },
+        network: { allowUnixSockets: ['/var/run/docker.sock'], allowLocalBinding: true, httpProxyPort: 8080, allowedDomains: ['*.github.com', 'github.com:443', '*.com', 'pypi.org'] },
         filesystem: { allowRead: [join('/', 'etc')], allowWrite: ['../shared'] },
       },
     },
@@ -95,6 +99,8 @@ test('start-checks: each entry that defeats a bound fails check 4', () => {
     'sandbox.filesystem.allowWrite outside the worktree: ../shared',
     'permissions.additionalDirectories outside the worktree: ~/notes',
     'a GitHub host in sandbox.network.allowedDomains: *.github.com',
+    'a GitHub host in sandbox.network.allowedDomains: github.com:443',
+    'a GitHub host in sandbox.network.allowedDomains: *.com',
     'a GitHub host in a WebFetch allow rule: WebFetch(domain:raw.githubusercontent.com)',
     'a GitHub host: github.com',
   ]);
@@ -109,6 +115,11 @@ test('start-checks: an entry inside the worktree, or relative in the committed s
   writeFileSync(join(s.dir, 'home/.claude/settings.json'), JSON.stringify({ permissions: { additionalDirectories: [`/${join(s.options.worktree, 'cache')}`] } }));
   assert.deepEqual(s.run().failed, []);
   assert.deepEqual(s.run({ worktree: undefined }).failed.map((f) => f.entry), [`permissions.additionalDirectories outside the worktree: /${join(s.options.worktree, 'cache')}`]);
+  // A link in the worktree that leads out of it.
+  mkdirSync(s.options.worktree);
+  mkdirSync(join(s.dir, 'shared'));
+  symlinkSync(join(s.dir, 'shared'), join(s.options.worktree, 'cache'));
+  assert.deepEqual(s.run().failed.map((f) => f.entry), [`permissions.additionalDirectories outside the worktree: /${join(s.options.worktree, 'cache')}`]);
 });
 
 test('start-checks: the command line exits 0 on a pass, 2 with commands to read, 1 on a failure or an unreadable file', () => {
