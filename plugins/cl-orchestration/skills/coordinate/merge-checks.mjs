@@ -67,8 +67,8 @@ function verdict(project, scratch, branch, reviewed, head, stated) {
   if (!RISKS.includes(stated)) throw new Error(`the risk class must be one of ${RISKS.join(', ')}`);
   if (!BRANCH.test(branch)) throw new Error('the default branch is no plain name: letters, digits, . _ / and -, no - at the start, no .., not HEAD');
   if (!COMMIT.test(reviewed) || !COMMIT.test(head)) throw new Error('the reviewed head and the head must be full commit ids, 40 hex characters each');
-  // Every git call runs in the clone: the project's checkout shares its git directory with the workers.
-  const git = (...args) => sh(scratch, 'git', args);
+  // Every git call runs in the clone: the project's checkout shares its git directory with the workers. The clone is blobless and no worker writes it, so a merge-tree may fetch the files it compares from origin.
+  const git = (...args) => sh(scratch, 'git', args, undefined, { GIT_NO_LAZY_FETCH: '0' });
   // In a folder without a repository of its own, a clone that failed, git answers from the repository above it.
   if (git('rev-parse', '--git-dir').trim() !== '.git') throw new Error('the scratch path is not the top folder of a clone of its own');
   // The project's checkout passes that test too, and so does a folder whose repository the project path lies in.

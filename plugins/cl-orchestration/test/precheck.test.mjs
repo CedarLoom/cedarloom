@@ -102,7 +102,7 @@ test('precheck: a policy that names another repository lists the project\'s own 
 test('precheck: reads the policy from the default branch, skips a project without one and names why the reader rejects one', () => {
   calls.length = 0;
   assert.deepEqual(check('/p', stub(POLICY)), [7]);
-  assert.ok(calls.includes('git show c0ffee0000000000000000000000000000000001:docs/agents/orchestration.json'));
+  assert.ok(calls.some((call) => call.endsWith(' show c0ffee0000000000000000000000000000000001:docs/agents/orchestration.json')));
   // The issues and pull requests are origin's, whatever gh would resolve through an upstream remote or a set default.
   assert.ok(calls.includes('gh api --paginate --slurp repos/owner/project/issues?state=open&per_page=100&labels=agent-ready'));
   assert.ok(calls.includes('gh pr list -R owner/project --state all --limit 1000 --json headRefName,state,isCrossRepository'));
