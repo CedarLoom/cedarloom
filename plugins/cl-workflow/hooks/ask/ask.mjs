@@ -17,8 +17,8 @@ function unattended(input) {
   const mode = input.permission_mode;
   if (mode === 'dontAsk') return 'the session runs in dontAsk mode, which asks nobody';
   if (!ATTENDED.has(mode)) return 'the hook input names no permission mode a person answers in';
-  // The Agent SDKs set sdk-py and sdk-ts; claude -p sets sdk-cli only where the variable is unset or cli.
-  // A value a parent session set (an IDE, an orchestrator) stays: its headless child is not refused, and the window lasts that child's session.
+  // Python Agent SDK: sdk-py over any value. TypeScript SDK: sdk-ts only where unset. claude -p: sdk-cli only where unset or cli.
+  // Those two keep an IDE or orchestrator parent's value: that child is not refused, and the window lasts its session.
   if (process.env.CLAUDE_CODE_ENTRYPOINT?.startsWith('sdk-')) return 'the session runs headless or under an Agent SDK (CLAUDE_CODE_ENTRYPOINT starts with sdk-)';
   return null;
 }
