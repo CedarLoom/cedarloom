@@ -17,7 +17,7 @@ The reviewer is a fresh session that does not edit (a subagent; Claude Code: `cl
 
 Findings carry a class:
 - **Blocking**: wrong behavior, security, data loss, an acceptance row unmet.
-- **Important**: a likely defect, a missing test the [test rule](SKILL.md#verify) calls for, or code the code rules in the repository's instructions (the CedarLoom block or an `AGENTS.md` Code section) reject: a guard for a case that cannot happen, a layer or option for one user that the task does not call for, a parallel copy of existing logic, code under a new test that reaches for time, randomness or I/O directly.
+- **Important**: a likely defect, a missing test the [test rule](SKILL.md#verify) calls for, or code the code rules in the repository's instructions (the CedarLoom block or an `AGENTS.md` Code section) reject: a guard for a case that cannot happen, a layer or option for one user that the task does not call for, a parallel copy of existing logic, code under a new test that reaches for time, randomness or I/O directly; in code the change writes, a second source of truth, dead code it leaves, a use of another module's internals past its interface.
 - **Minor**: style, naming. Minor findings are listed in the pull request, not fixed in a round.
 
 A round is one remediation and its re-review. A review or re-review with a Blocking or Important finding starts the next round:
