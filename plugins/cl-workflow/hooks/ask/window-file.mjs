@@ -5,7 +5,8 @@ import { SESSION } from './window.mjs';
 
 // One file per Claude Code process (CLAUDE_PID, which it sets for hook commands): /clear and compaction keep the window.
 export const windowDir = () => (process.env.CLAUDE_PLUGIN_DATA ? join(process.env.CLAUDE_PLUGIN_DATA, 'ask') : null);
-export const windowFile = () => { const dir = windowDir(); return dir && join(dir, `${process.env.CLAUDE_PID ?? process.ppid}.json`); };
+export const processId = () => process.env.CLAUDE_PID ?? String(process.ppid);
+export const windowFile = () => { const dir = windowDir(); return dir && join(dir, `${processId()}.json`); };
 
 // A window file's end while it is open (Infinity for the session), else null; with questions, only a window /cl-workflow:questions opened.
 export function openUntil(path, now, questions = false) {

@@ -70,11 +70,20 @@ function walk(root, dir = '') {
 // git from a system folder, so the PATH search does not decide which program runs.
 const GIT = ['/usr/bin/git', '/usr/local/bin/git', '/opt/homebrew/bin/git', join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'cmd', 'git.exe')].find((p) => existsSync(p));
 
+// Started from a hook or `git rebase --exec`, these variables name another repository or index and carry that command's -c settings;
+// outside a hook the GIT_CONFIG_* ones are the caller's own settings (safe.directory of a checkout another user owns) and reach git.
+const REPO_VARS = /^GIT_(DIR|WORK_TREE|COMMON_DIR|INDEX_FILE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|NAMESPACE|PREFIX)$/i;
+const CONFIG_VARS = /^GIT_CONFIG_(PARAMETERS|COUNT|KEY_\d+|VALUE_\d+)$/i;
+const gitEnv = () => {
+  const fromHook = Object.keys(process.env).some((k) => REPO_VARS.test(k));
+  return Object.fromEntries(Object.entries(process.env).filter(([k]) => !REPO_VARS.test(k) && !(fromHook && CONFIG_VARS.test(k))));
+};
+
 // Tracked and untracked files that git does not ignore; outside a git repository or without git, every file.
 function repoFiles(root) {
   if (!GIT) return walk(root);
   try {
-    return execFileSync(GIT, ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0').filter(Boolean);
+    return execFileSync(GIT, ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: root, env: gitEnv(), encoding: 'utf8', maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0').filter(Boolean);
   } catch {
     return walk(root);
   }
@@ -84,7 +93,7 @@ function repoFiles(root) {
 function ignored(root, path) {
   if (!GIT) return false;
   try {
-    execFileSync(GIT, ['check-ignore', '-q', '--', path], { cwd: root, stdio: 'ignore' });
+    execFileSync(GIT, ['check-ignore', '-q', '--', path], { cwd: root, env: gitEnv(), stdio: 'ignore' });
     return true;
   } catch {
     return false;
@@ -447,6 +456,7 @@ function budgetErrors(budget, files) {
   if (!isObject(budget.files)) return [...out, 'budget.files is not an object'];
   for (const [p, max] of Object.entries(budget.files)) {
     if (!isNumber(max)) out.push(`budget.files ${p} is not a number`);
+    else if (max < 0) out.push(`budget.files ${p} is negative`);
     if (!Object.hasOwn(files, p)) out.push(`budget.files ${p} is not a measured file`);
   }
   return out;
@@ -477,7 +487,7 @@ export function check(root, cfg, against, budgetOnly = false) {
     ...(budgetOnly ? [] : broken),
     ...(cfg.budget.total != null && now.total > cfg.budget.total ? [`total ${now.total} is above the budget ${cfg.budget.total}`] : []),
     ...(cfg.budget.alwaysLoaded != null && now.alwaysLoaded > cfg.budget.alwaysLoaded ? [`always loaded ${now.alwaysLoaded} is above the budget ${cfg.budget.alwaysLoaded}`] : []),
-    ...Object.entries(cfg.budget.files ?? {}).filter(([p, max]) => (now.files[p]?.tokens ?? 0) > max).map(([p, max]) => `${p}: ${now.files[p].tokens} is above its budget ${max}`),
+    ...Object.entries(cfg.budget.files ?? {}).filter(([p, max]) => max >= 0 && Object.hasOwn(now.files, p) && now.files[p].tokens > max).map(([p, max]) => `${p}: ${now.files[p].tokens} is above its budget ${max}`),
   ];
   const warnings = [...(budgetOnly ? broken : []), ...refs.filter((r) => r.level === 'warning').map((r) => `${r.file}:${r.line}: path ${r.target} not found`)];
   // Against the stored baseline (path to tokens) or an older measure file there is no earlier always-loaded sum.
