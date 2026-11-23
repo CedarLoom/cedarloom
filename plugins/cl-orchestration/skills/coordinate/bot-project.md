@@ -53,7 +53,7 @@ A merge command that is held or has no merge log line (`mergeCommandAt` set) pau
 
 The weekly automation, where a maintainer bot or its fallback exists:
 
-1. **Answer.** On a `maintain` approval the owner answered (`approval.mjs answer`) that `<state>/maintain.json` does not name, file each approved finding as an issue without `startLabel`, which stays the owner's: a behavior-preserving change, the tests unchanged and passing, through the normal review (a public repository: list them for the owner). Then name the approval there with `writeState`.
+1. **Answer.** On a `maintain` approval the owner answered (`approval.mjs answer`), file each approved finding that `<state>/maintain.json` does not name as an issue without `startLabel`, which stays the owner's: a behavior-preserving change, the tests unchanged and passing, through the normal review (a public repository: list them for the owner). With `writeState`, name each finding there before its issue and the issue's number after: one named without a number is reported, never filed again.
 2. **Findings.** A maintainer result: its ranked findings, if any, as one `maintain` approval ([approvals.md](approvals.md)), options (a) all, (b) those the answer lists, (c) Hold. Delete its prompt file.
 3. **Start.** No unanswered `maintain` approval and no maintainer prompt file: one maintainer run ([Start](#start)) at `models.worker` for `deep`; it counts as a worker start.
 
