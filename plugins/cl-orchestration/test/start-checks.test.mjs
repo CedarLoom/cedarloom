@@ -200,7 +200,7 @@ test('start-checks: an entry that a link at any depth leads out of the worktree 
 });
 
 test('start-checks: a network entry of another form than a host name is unresolved, never passed', () => {
-  const odd = ['github.com.', ' github.com', 'https://github.com', 'github.com/', 'user@github.com', 'ｇithub.com', '140.82.112.3', '[::1]'];
+  const odd = ['github.com.', ' github.com', 'https://github.com', 'github.com/', 'user@github.com', '\uff47ithub.com', '140.82.112.3', '[::1]'];
   const s = setup({ 'home/.claude/settings.json': { sandbox: { network: { allowedDomains: [...odd, 'pypi.org:443'] } }, permissions: { allow: ['WebFetch(domain: github.com)', 'WebFetch', 'Bash(ls)'] } } });
   const result = s.run({ domains: ['api.github.com.'] });
   assert.deepEqual(result.failed, []);
