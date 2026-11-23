@@ -21,7 +21,7 @@ Size is a signal for where to look, not a finding: a CLAUDE.md above 200 lines, 
 
 ## One rule file
 
-When the target is one rule file (CLAUDE.md, AGENTS.md, a rule file), collect its candidates for contradiction, vague, enforceable and restates with this pass first, then go on with the other patterns:
+When the target is one rule file (CLAUDE.md, AGENTS.md, a rule file), collect its candidates for contradiction, vague, enforceable and restates with this pass first, then go on with the other patterns. The pass reads only the file, so the later pass also checks for restates against the docs the file links:
 
 1. Number every line from 1, blank lines included (`nl -ba`).
 2. Apply the prompt below to the numbered text, using only that text: the line numbers in findings are those numbers. One line can carry more than one kind.
@@ -34,7 +34,7 @@ Report only these problems:
 - vague: a line an agent cannot act on or check, because it names no concrete action, file, command or threshold.
 - enforceable: a line a formatter, linter, hook or CI check could enforce instead of the agent.
 - restates: a line that only describes what the agent can read from the code or config itself (languages, versions, folders, scripts), with no instruction.
-A line that is specific and gives its reason is fine; report nothing for it. Report nothing else.
+A line that is specific and gives its reason is not vague, enforceable or restates; still report a contradiction it is part of. Report nothing else.
 Answer with one JSON object and nothing else: {"findings": [{"kind": "...", "lines": [n], "why": "one short sentence", "fix": "one short sentence"}]}. An empty list when nothing applies.
 
 FILE
