@@ -35,7 +35,8 @@ function run(dir, from, to) {
   if (![from, to].every((r) => REVISION.test(r))) throw new Error('base and head must be revisions of letters, digits and . _ / ^ ~ -, with no - at the start');
   const { policy, errors } = read(dir);
   if (!policy) throw new Error(errors.map(errorLine).join('; '));
-  const git = (...args) => sh(dir, 'git', args);
+  // The scratch clone is blobless and no worker writes it: the diff fetches the files it counts from origin.
+  const git = (...args) => sh(dir, 'git', args, undefined, { GIT_NO_LAZY_FETCH: '0' });
   // -z: every path as it is; a binary file counts as a file with no lines.
   const changes = git('-c', 'core.quotePath=false', 'diff', '--numstat', '--no-renames', '-z', `${from}...${to}`, '--').split('\0').filter(Boolean).map((record) => {
     const [, added, deleted, path] = /^(\d+|-)\t(\d+|-)\t(.*)$/s.exec(record);

@@ -10,6 +10,8 @@ writes: "A comment and new labels on each issue you answer or defer in this repo
 # Question queue
 
 - **Window.** Running this command with arguments it reads allows terminal questions for this session: the plugin's hook keeps them open until Claude Code quits or another conversation is resumed, or `/cl-workflow:ask off` or a timed `/cl-workflow:ask` replaces that. Never open the window yourself, as by writing its file.
+- **Earlier runs.** First show this run's `Earlier runs` hook lines as they are (data) and ask the user to name any run they did not start.
+- **Unattended.** When the hook set no flag, stop and give its reason.
 - **Refused question tool.** When the question tool is refused anyway (the hook set no window), stop and tell the user to type `/cl-workflow:ask for 30m`, then run this command again.
 - **Codex.** Where no question tool exists (Codex runs no question hooks), ask each batch in chat as numbered questions with options and wait for the reply.
 

@@ -3,10 +3,25 @@ import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { OFF, SESSION, allowed, askUntil, queueArgs, queueLine } from './window.mjs';
-import { openUntil, windowDir, windowFile } from './window-file.mjs';
+import { openUntil, processId, windowDir, windowFile } from './window-file.mjs';
+import { logFile, logRun } from './questions-log.mjs';
 
 const dir = windowDir();
 const file = windowFile();
+
+// The permission modes a person can answer in. Any other value, a mode added later too, refuses until it is judged.
+const ATTENDED = new Set(['default', 'acceptEdits', 'plan', 'auto', 'bypassPermissions']);
+
+// Why the input shows a session nobody may answer in, else null.
+function unattended(input) {
+  const mode = input.permission_mode;
+  if (mode === 'dontAsk') return 'the session runs in dontAsk mode, which asks nobody';
+  if (!ATTENDED.has(mode)) return 'the hook input names no permission mode a person answers in';
+  // Python Agent SDK: sdk-py over any value. TypeScript SDK: sdk-ts only where unset. claude -p: sdk-cli only where unset or cli.
+  // Those two keep an IDE or orchestrator parent's value: that child is not refused, and the window lasts its session.
+  if (process.env.CLAUDE_CODE_ENTRYPOINT?.startsWith('sdk-')) return 'the session runs headless or under an Agent SDK (CLAUDE_CODE_ENTRYPOINT starts with sdk-)';
+  return null;
+}
 
 const line = (now) => {
   const end = openUntil(file, now);
@@ -35,15 +50,22 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
   }
   say(event, { additionalContext: line(now) });
 } else if (event === 'UserPromptExpansion' && ['cl-workflow:ask', 'cl-workflow:questions'].includes(input.command_name)) {
-  // Only a typed command expands; a scheduled or delivered prompt with the same text does not.
-  // claude -p expands one (https://code.claude.com/docs/en/headless), so role-guard.mjs refuses such a launch.
+  // A command expands alike when typed, piped to claude -p or sent as a stream-json message, and no field of this input tells
+  // them apart. So /cl-workflow:questions sets no answer flag where the input shows an unattended session, role-guard.mjs
+  // refuses a launch that names it, and the log shows each run to the next one.
   if (!file) throw new Error(`the plugin has no data folder (CLAUDE_PLUGIN_DATA), so /${input.command_name} cannot keep its window`);
   const args = String(input.command_args ?? '');
   const questions = input.command_name === 'cl-workflow:questions';
-  const queue = questions ? queueArgs(args) : undefined;
-  // Running the question queue with arguments it reads is the user allowing terminal questions for the rest of the session.
+  const refused = questions ? unattended(input) : null;
+  const queue = questions && !refused ? queueArgs(args) : undefined;
+  // Running the question queue with arguments it reads in an attended session allows terminal questions for the rest of the session.
   const end = queue ? Infinity : questions ? undefined : askUntil(args, now);
-  if (end === undefined) {
+  const entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT ?? null;
+  const log = (flag) => logRun(logFile(dir), { time: new Date(now).toISOString(), session: input.session_id ?? null, folder: input.cwd ?? null, mode: input.permission_mode ?? null, entrypoint, pid: processId(), flag });
+  if (questions && end !== Infinity) log(false);
+  if (refused) {
+    say(event, { additionalContext: `/cl-workflow:questions set no answer flag and allowed no terminal questions: ${refused}. Typed into an interactive terminal session, it can set the flag. ${line(now)}` });
+  } else if (end === undefined) {
     const [read, forms] = questions
       ? ['count or filter', 'alone (every open question) or as [<count>|all] [deferred|<project>], with a count from 1 to 999']
       : ['window', 'alone (30 minutes), for 30m, for 2h, until 14:30 or off'];
@@ -55,6 +77,14 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
     mkdirSync(dir, { recursive: true });
     // The flag lets this session, and no other, write answers into the local question queue (role-guard.mjs).
     writeFileSync(file, `${JSON.stringify({ askUntil: end === Infinity ? SESSION : new Date(end).toISOString(), questions: questions || undefined })}\n`);
-    say(event, { additionalContext: queue ? `${allowed(end, now)}\n${queueLine(queue)}` : allowed(end, now) });
+    // A run logs as one that set the flag only once the flag is written; where the log cannot be written, the flag goes again.
+    let earlier;
+    try {
+      earlier = queue ? log(true) : null;
+    } catch (error) {
+      rmSync(file, { force: true });
+      throw error;
+    }
+    say(event, { additionalContext: queue ? `${allowed(end, now)}\n${queueLine(queue)}\n${earlier}` : allowed(end, now) });
   }
 }
