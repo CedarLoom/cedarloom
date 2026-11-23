@@ -17,8 +17,8 @@ function setup(files = {}) {
     mkdirSync(dirname(join(dir, path)), { recursive: true });
     writeFileSync(join(dir, path), typeof value === 'string' ? value : JSON.stringify(value));
   }
-  mkdirSync(join(dir, 'project'), { recursive: true });
-  const options = { project: join(dir, 'project'), worktree: join(dir, 'wt'), configDir: join(dir, 'home/.claude'), claudeJson: join(dir, 'home/.claude.json'), managedDir: join(dir, 'managed'), home: join(dir, 'home'), platform: 'linux', domains: ['registry.npmjs.org'] };
+  for (const folder of ['project', 'wt', 'home/.claude']) mkdirSync(join(dir, folder), { recursive: true });
+  const options = { project: join(dir, 'project'), worktree: join(dir, 'wt'), configDir: join(dir, 'home/.claude'), claudeJson: join(dir, 'home/.claude.json'), managedDir: join(dir, 'managed'), home: join(dir, 'home'), platform: 'linux', domains: ['registry.npmjs.org'], env: {} };
   return { dir, options, run: (more = {}) => startChecks({ ...options, ...more }) };
 }
 const hook = (command) => ({ hooks: { PostToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command }] }] } });
@@ -26,7 +26,7 @@ const hook = (command) => ({ hooks: { PostToolUse: [{ matcher: 'Edit', hooks: [{
 test('start-checks: settings with no command and no entry that defeats a bound pass, naming the other allow rules and domains', () => {
   const s = setup({ 'home/.claude/settings.json': { permissions: { allow: ['Bash(ls *)'] }, sandbox: { network: { allowedDomains: ['pypi.org'] }, filesystem: { allowWrite: [] } } } });
   assert.deepEqual(s.run(), {
-    failed: [], read: [],
+    failed: [], read: [], unresolved: [],
     allowRules: [{ source: join(s.dir, 'home/.claude/settings.json'), rule: 'Bash(ls *)' }],
     allowedDomains: [{ source: join(s.dir, 'home/.claude/settings.json'), domain: 'pypi.org' }],
   });
@@ -40,7 +40,7 @@ test('start-checks: a command that runs a repository file or a tool that loads i
     'managed/managed-settings.json': hook('cd /tmp && FORCE=1 prettier --write .'),
   });
   // A local-scope server of a folder that holds the project; the one of another folder is not loaded there.
-  mkdirSync(s.options.home);
+  mkdirSync(s.options.home, { recursive: true });
   writeFileSync(s.options.claudeJson, JSON.stringify({ projects: { [s.dir]: { mcpServers: { srv: { command: 'node', args: ['server/index.mjs'] } } }, [join('/', 'elsewhere')]: { mcpServers: { a: { command: 'npm', args: ['start'] } } } } }));
   assert.deepEqual(s.run().failed.map((f) => [f.check, f.source.slice(s.dir.length + 1), f.entry]), [
     [3, 'managed/managed-settings.json', "runs a tool that loads the repository's code or configuration: cd /tmp && FORCE=1 prettier --write ."],
@@ -71,7 +71,7 @@ test('start-checks: other commands, of an enabled plugin and of the user, are li
   assert.deepEqual(result.read.map((r) => r.command), [
     '/usr/local/bin/key-helper --endpoint=https://keys.example.com/v1 2>/dev/null',
     '/opt/h.sh',
-    'node "${CLAUDE_PLUGIN_ROOT}/hooks/guard.mjs"',
+    `node "${plugin}/hooks/guard.mjs"`,
     'typescript-language-server --stdio',
   ]);
 });
@@ -116,7 +116,6 @@ test('start-checks: an entry inside the worktree, or relative in the committed s
   assert.deepEqual(s.run().failed, []);
   assert.deepEqual(s.run({ worktree: undefined }).failed.map((f) => f.entry), [`permissions.additionalDirectories outside the worktree: /${join(s.options.worktree, 'cache')}`]);
   // A link in the worktree that leads out of it.
-  mkdirSync(s.options.worktree);
   mkdirSync(join(s.dir, 'shared'));
   symlinkSync(join(s.dir, 'shared'), join(s.options.worktree, 'cache'));
   assert.deepEqual(s.run().failed.map((f) => f.entry), [`permissions.additionalDirectories outside the worktree: /${join(s.options.worktree, 'cache')}`]);
@@ -144,8 +143,105 @@ test('start-checks: the command line exits 0 on a pass, 2 with commands to read,
   assert.deepEqual(JSON.parse(listed.stdout).read, [{ source: `${settings} apiKeyHelper`, command: '/usr/local/bin/key-helper' }]);
   writeFileSync(settings, JSON.stringify({ sandbox: { excludedCommands: ['git'] } }));
   assert.equal(run().status, 1);
+  writeFileSync(settings, JSON.stringify({ enabledPlugins: { 'fmt@market': true } }));
+  const unresolved = run();
+  assert.equal(unresolved.status, 2);
+  assert.deepEqual(JSON.parse(unresolved.stdout).unresolved, [{ source: 'plugin fmt@market', reason: `${join(s.dir, 'home/.claude/plugins/installed_plugins.json')} names no folder of it` }]);
   writeFileSync(settings, '{ not json');
   const unreadable = run();
   assert.equal(unreadable.status, 1);
   assert.equal(unreadable.stderr.trim(), `${settings} is not valid JSON`);
+});
+
+test('start-checks: a plugin source the script cannot resolve is unresolved, and an installed plugin no file names counts', () => {
+  const s = setup({ 'home/.claude/settings.json': { enabledPlugins: { 'a@m': true, 'b@m': true, 'c@m': true, 'd@m': true } } });
+  const reasons = () => s.run().unresolved.map((u) => `${u.source}: ${u.reason.replaceAll(s.dir, '<dir>')}`);
+  assert.deepEqual(reasons(), ['plugin a@m: <dir>/home/.claude/plugins/installed_plugins.json names no folder of it', 'plugin b@m: <dir>/home/.claude/plugins/installed_plugins.json names no folder of it', 'plugin c@m: <dir>/home/.claude/plugins/installed_plugins.json names no folder of it', 'plugin d@m: <dir>/home/.claude/plugins/installed_plugins.json names no folder of it']);
+  const plugin = join(s.dir, 'e');
+  mkdirSync(join(plugin, '.claude-plugin'), { recursive: true });
+  writeFileSync(join(plugin, '.claude-plugin/plugin.json'), JSON.stringify({ hooks: './missing.json', experimental: { monitors: [{ command: 'node "${CLAUDE_PLUGIN_ROOT}/watch.mjs"' }] } }));
+  mkdirSync(join(s.dir, 'home/.claude/plugins'));
+  writeFileSync(join(s.dir, 'home/.claude/plugins/installed_plugins.json'), JSON.stringify({ plugins: { 'a@m': [{}], 'b@m': [{ installPath: join(s.dir, 'gone') }], 'd@m': [{ installPath: 'relative' }], 'e@m': [{ installPath: plugin }] } }));
+  assert.deepEqual(reasons(), ['plugin a@m: its folder undefined does not exist', 'plugin b@m: its folder <dir>/gone does not exist', 'plugin d@m: its folder relative does not exist', 'plugin e@m: hooks names nothing the script can read: "./missing.json"', 'plugin c@m: <dir>/home/.claude/plugins/installed_plugins.json names no folder of it']);
+  // e@m is named in no file and runs its monitor.
+  assert.deepEqual(s.run().read, [{ source: 'plugin e@m', command: `node "${plugin}/watch.mjs"` }]);
+  assert.deepEqual(s.run({ env: { CLAUDE_CODE_PLUGIN_DIRS: '/opt/plugins' } }).unresolved.at(0), { source: 'CLAUDE_CODE_PLUGIN_DIRS', reason: 'adds plugins the script does not read' });
+});
+
+test("start-checks: the worktree's settings and .mcp.json are read as the main checkout's", () => {
+  const s = setup({
+    'wt/.claude/settings.json': hook('npx prettier --write .'),
+    'wt/.claude/settings.local.json': { sandbox: { excludedCommands: ['docker'] } },
+    'wt/.mcp.json': { mcpServers: { srv: { command: 'node', args: ['./server.js'] } } },
+    'managed/managed-mcp.json': { mcpServers: { corp: { command: 'npx', args: ['corp-mcp'] } } },
+  });
+  assert.deepEqual(s.run().failed.map((f) => [f.check, f.source.slice(s.dir.length + 1), f.entry]), [
+    [3, 'wt/.claude/settings.json', "runs a tool that loads the repository's code or configuration: npx prettier --write ."],
+    [3, 'managed/managed-mcp.json', "runs a tool that loads the repository's code or configuration: npx corp-mcp"],
+    [3, 'wt/.mcp.json', 'runs a file inside the repository: node ./server.js'],
+    [4, 'wt/.claude/settings.local.json', 'sandbox.excludedCommands'],
+  ]);
+});
+
+test('start-checks: an entry that a link at any depth leads out of the worktree fails check 4', () => {
+  const s = setup();
+  mkdirSync(join(s.dir, 'shared'));
+  symlinkSync(join(s.dir, 'shared'), join(s.options.worktree, 'out'));
+  symlinkSync(join(s.dir, 'nowhere'), join(s.options.worktree, 'dangling'));
+  const wt = s.options.worktree;
+  mkdirSync(join(s.dir, 'project/.claude'));
+  writeFileSync(join(s.dir, 'project/.claude/settings.json'), JSON.stringify({ sandbox: { filesystem: { allowWrite: ['out/cache', 'build', `${wt}/out/missing`, `${wt}/out/**`, `${wt}/dangling`, `${wt}/new/dir`] } } }));
+  assert.deepEqual(s.run().failed.map((f) => f.entry.replaceAll(wt, '<wt>')), [
+    'sandbox.filesystem.allowWrite outside the worktree: out/cache',
+    'sandbox.filesystem.allowWrite outside the worktree: <wt>/out/missing',
+    'sandbox.filesystem.allowWrite outside the worktree: <wt>/out/**',
+    'sandbox.filesystem.allowWrite outside the worktree: <wt>/dangling',
+  ]);
+});
+
+test('start-checks: a network entry of another form than a host name is unresolved, never passed', () => {
+  const odd = ['github.com.', ' github.com', 'https://github.com', 'github.com/', 'user@github.com', 'ｇithub.com', '140.82.112.3', '[::1]'];
+  const s = setup({ 'home/.claude/settings.json': { sandbox: { network: { allowedDomains: [...odd, 'pypi.org:443'] } }, permissions: { allow: ['WebFetch(domain: github.com)', 'WebFetch', 'Bash(ls)'] } } });
+  const result = s.run({ domains: ['api.github.com.'] });
+  assert.deepEqual(result.failed, []);
+  assert.deepEqual(result.unresolved.map((u) => u.reason), [
+    ...odd.map((d) => `no plain host name: ${d}`),
+    'no plain host name: WebFetch(domain: github.com)',
+    'a WebFetch allow rule of another form than WebFetch(domain:<host>): WebFetch',
+    'no plain host name: api.github.com.',
+  ]);
+  assert.deepEqual(result.allowedDomains.map((d) => d.domain), ['pypi.org:443']);
+  assert.deepEqual(result.allowRules.map((r) => r.rule), ['Bash(ls)']);
+});
+
+test('start-checks: an environment of a server or of the settings is tested and listed with the command', () => {
+  const s = setup({
+    'home/.claude.json': { mcpServers: {
+      a: { command: 'node', args: ['/opt/server.js'], env: { NODE_OPTIONS: `--require=${join('/', 'x')}` } },
+      b: { command: '/opt/b', env: { PATH: './node_modules/.bin' } },
+    } },
+    'home/.claude/settings.json': { env: { NODE_OPTIONS: '--max-old-space-size=4096' } },
+  });
+  const result = s.run();
+  assert.deepEqual(result.failed.map((f) => f.entry), ['runs a file inside the repository: PATH=./node_modules/.bin /opt/b']);
+  assert.deepEqual(result.read.map((r) => [r.source.slice(s.dir.length + 1), r.command]), [
+    ['home/.claude/settings.json env', 'NODE_OPTIONS=--max-old-space-size=4096'],
+    ['home/.claude.json', 'NODE_OPTIONS=--require=/x node /opt/server.js'],
+  ]);
+});
+
+test('start-checks: a value of a shape the script cannot read is unresolved or listed, never passed', () => {
+  const s = setup({
+    'home/.claude/settings.json': [],
+    'project/.claude/settings.json': { sandbox: 'on', enabledPlugins: ['x@m'], ...hook(['/opt/fmt', '.']) },
+  });
+  const result = s.run();
+  assert.deepEqual(result.unresolved.map((u) => `${u.source.slice(s.dir.length + 1)}: ${u.reason}`), [
+    'home/.claude/settings.json: holds no JSON object',
+    'project/.claude/settings.json: sandbox is no object',
+    'project/.claude/settings.json: enabledPlugins is no object',
+  ]);
+  assert.deepEqual(result.failed.map((f) => f.entry), ['runs a file inside the repository: ["/opt/fmt","."]']);
+  // A mistyped --config-dir or --worktree.
+  assert.deepEqual(s.run({ configDir: join(s.dir, 'none'), worktree: join(s.dir, 'wt2') }).unresolved.slice(0, 2).map((u) => `${u.source.slice(s.dir.length + 1)}: ${u.reason}`), ['none: the folder does not exist', 'wt2: the folder does not exist']);
 });

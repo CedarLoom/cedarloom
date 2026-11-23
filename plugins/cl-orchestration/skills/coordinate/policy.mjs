@@ -32,6 +32,8 @@ const childEnv = () => {
     GIT_TERMINAL_PROMPT: '0',
     // A worker shares the git directory: a replace ref it wrote must not swap the policy file for another.
     GIT_NO_REPLACE_OBJECTS: '1',
+    // Nor a promisor remote it configured run its transport command to fetch a missing object (git 2.45 and later).
+    GIT_NO_LAZY_FETCH: '1',
   };
 };
 // 64 MB: a thousand pull requests with their bodies do not fit Node's default of 1 MB. Two minutes by default: a stalled transfer or a prompt ssh waits at ends; SIGKILL, since a child that ignores SIGTERM would outlive the timeout.
