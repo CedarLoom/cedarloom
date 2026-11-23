@@ -15,7 +15,7 @@
 - One job per function, module and file, named after it; never `utils`, `helpers`, `common`, `misc` or `shared`. A unit that wants such a name has two jobs: split it.
 - Keep the repository's layers: imports point down, never up. Code that gets a test takes the time, randomness and I/O it uses as parameters.
 - Code your change writes keeps module boundaries and interfaces clear, one source of truth, and names and structure a reader follows without the history.
-- Remove what your change made unused. Leave other code, comments and formatting as they are: dead code or a structural problem found outside the task becomes an issue for the maintenance pass in the tracker the project names, else a line in the report, so the change stays small and reviewable.
+- Remove what your change made unused. Leave other code, comments and formatting as they are: dead code or a structural problem found outside the task becomes an issue whose text names the maintenance pass, in the tracker the project names, else a line in the report, so the change stays small and reviewable.
 - Comments only where the code cannot say it: one line, the why, not the how.
 - In docs, comments, commits, issues, pull requests and UI text, write what the reader needs to use, build, change or decide. Leave out restated headings, code or labels (a tooltip that repeats its button), feature counts, recaps, offers, hedging and history unless asked. Uncertainty goes in a confidence level.
 - In docs, code comments and UI text, state what holds, in a neutral tone. Never record who decided, when, or tracker references: decisions live in the tracker.
