@@ -16,7 +16,7 @@ function clock(at, now) {
 export const SESSION = 'session';
 const lasting = (until, now) => (until === Infinity ? 'for this session' : `until ${clock(until, now)}`);
 
-export const allowed = (until, now) => `Terminal questions are allowed ${lasting(until, now)}: the user opened them with /cl-workflow:ask or /cl-workflow:questions, and the question tool and plan mode are refused again after that.`;
+export const allowed = (until, now) => `Terminal questions are allowed ${lasting(until, now)}: /cl-workflow:ask or /cl-workflow:questions opened them, and the question tool and plan mode are refused again after that.`;
 
 // The window's end in epoch ms: none 30 minutes, `for <n>m|h`, `until HH:MM` (next such local time); null off, undefined unread.
 export function askUntil(args, now) {

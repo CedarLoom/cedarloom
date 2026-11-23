@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const HOOK = fileURLToPath(new URL('../hooks/role-guard/role-guard.mjs', import.meta.url));
 const ASK = fileURLToPath(new URL('../hooks/ask/ask.mjs', import.meta.url));
 // The hook asks git about the folder it runs in; a GIT_DIR of a surrounding git hook must not answer for it.
-const ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_') && key !== 'CEDARLOOM_ROLE'));
+const ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_') && !['CEDARLOOM_ROLE', 'CLAUDE_CODE_ENTRYPOINT'].includes(key)));
 
 // trunk: checked out, the remote's default branch (origin/HEAD), with the tag release-candidate and the branch deps-1.2.3.
 // feature: a repository on the branch feat/x whose remote's default branch is trunk.
@@ -419,10 +419,10 @@ test('role guard: the project bot deletes a head branch of the bot shape, never 
   for (const role of [undefined, ...ROLE_BOTS]) assert.equal(decision('gh api -X DELETE repos/o/r/git/refs/heads/feat/37-bot-roles', { role }), 'deny', role);
 });
 
-test('role guard: only the session where the user typed /cl-workflow:questions writes into the local question queue', () => {
+test('role guard: only the session where /cl-workflow:questions set the answer flag writes into the local question queue', () => {
   const data = mkdtempSync(join(tmpdir(), 'role-guard-'));
   const env = { CLAUDE_PLUGIN_DATA: data, CLAUDE_PID: '4242' };
-  const typed = (command_name) => spawnSync(process.execPath, [ASK], { input: JSON.stringify({ hook_event_name: 'UserPromptExpansion', command_name, command_args: '', session_id: 's', cwd: trunk }), env: { ...ENV, ...env }, encoding: 'utf8' }).status;
+  const typed = (command_name) => spawnSync(process.execPath, [ASK], { input: JSON.stringify({ hook_event_name: 'UserPromptExpansion', command_name, command_args: '', session_id: 's', cwd: trunk, permission_mode: 'default' }), env: { ...ENV, ...env }, encoding: 'utf8' }).status;
   const answer = { file_path: '.cedarloom/questions/project-1.md', old_string: 'Status: open', new_string: 'Status: answered' };
   const calls = [
     ['Edit', answer],
