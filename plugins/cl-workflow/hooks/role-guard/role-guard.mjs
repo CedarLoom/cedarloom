@@ -6,8 +6,8 @@
 // the boundary is a gh token without those rights.
 // For Write, Edit, MultiEdit and NotebookEdit too: an answer in the local question queue counts as the owner's, so every session, the
 // coordinator's included, may only write there or reach it in a command (a word, a redirection or a cd, read from the session folder)
-// after the user typed /cl-workflow:questions in that session; no session writes the window files that record that or starts a
-// session with that command.
+// after /cl-workflow:questions set the answer flag in that session (ask.mjs: an expansion whose input shows no unattended session);
+// no session writes the window files that record that or starts a session with that command.
 import { spawnSync } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
@@ -20,10 +20,11 @@ const QUEUE = ['.cedarloom', 'questions'];
 const EDITS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 // The path fields of the edit tools: Write, Edit and MultiEdit carry file_path, NotebookEdit notebook_path.
 const EDIT_PATHS = ['file_path', 'notebook_path'];
-// A session started with /cl-workflow:questions as its prompt (claude -p expands it, https://code.claude.com/docs/en/headless) would
-// hold the flag, and no hook input or variable Claude Code documents tells such a session from a typed one.
+// A session started with /cl-workflow:questions as its prompt (claude -p expands it, https://code.claude.com/docs/en/headless) or
+// handed it by an orchestrator could hold the flag where its hook input shows no unattended session.
 const QUESTIONS = /(^|[^\w-])\/(cl-workflow:)?questions(?![\w.-])/i;
-// The program names that start such a session: claude, and claude-code as npx runs the package.
+// The program names that start such a session: claude, and claude-code as npx runs the package. The orchestrator plugin's own hook
+// refuses its dispatch command.
 const LAUNCHERS = new Set(['claude', 'claude-code']);
 // Folders the guard follows in one command: the session folder and one per cd.
 const MAX_FOLDERS = 64;
@@ -563,7 +564,7 @@ else {
       : unknownBot ? `a command in the unknown role ${role}`
       : coordinator ? (adminMerge(input) ? 'a merge with --admin' : null)
       : reason(input, cwd, role);
-    if (owners) line = `CedarLoom role guard: ${owners} is the owner's step: only a session where the user typed /cl-workflow:questions writes answers there. File a question with approval.mjs file and read answers with approval.mjs queue. Text that only mentions the folder goes in a file (-F, --body-file).`;
+    if (owners) line = `CedarLoom role guard: ${owners} is the owner's step: only a session where /cl-workflow:questions set the answer flag, which the ask hook refuses in a session it reads as unattended, writes answers there. File a question with approval.mjs file and read answers with approval.mjs queue. Text that only mentions the folder goes in a file (-F, --body-file).`;
     else if (why && coordinator) line = `CedarLoom role guard: ${why}, which passes branch protection, is no role's step. Merge without --admin, or leave the pull request to the owner. Text that only mentions such a command goes in a file (-F, --body-file).`;
     else if (why && unknownBot) line = `CedarLoom role guard: ${why} is refused: the bot roles are ${[...BOTS].join(', ')}. Report the role to the user who starts this session.`;
     else if (why && BOTS.has(role)) line = `CedarLoom role guard: ${why} is no step of the ${role} (${ROLE}=${role}).${!why.startsWith('a push') && /merge/i.test(why) ?' Merges go only through merge.mjs.' : ''} Leave the step out and name it in your report. Text that only mentions such a command goes in a file (-F, --body-file).`;
