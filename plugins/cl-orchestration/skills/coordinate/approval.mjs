@@ -220,20 +220,23 @@ export function readQueue() {
 }
 
 // A fenced code block, up to its closing fence or the end of the text: it shows its lines as code, not as lines of the body.
-const FENCED = /^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[^\n]*$|(?![\s\S]))/gm;
+// A line with a further backtick after its opening backticks is a code span, no fence (CommonMark: a backtick fence's info string holds no backtick).
+const FENCED = /^ {0,3}(`{3,}(?![^\n]*`)|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[^\n]*$|(?![\s\S]))/gm;
 
 // The work issue a question holds back from Pick, from its line `Issue: <owner/repo>#<n>` (approvals.md, Labels and title), or null; a line in a comment or code block is none.
-const named = (text) => /^Issue: ([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#[1-9]\d*)\r?$/m.exec(String(text).replace(COMMENT, '').replace(FENCED, ''))?.[1] ?? null;
+// Only a closed comment hides a line: an unclosed "<!--" may sit in a code span, and naming an issue only holds it back.
+const named = (text) => /^Issue: ([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#[1-9]\d*)\r?$/m.exec(String(text).replace(/<!--[\s\S]*?-->/g, '').replace(FENCED, ''))?.[1] ?? null;
 
 // Whether an answer keeps the work its question holds back: it does unless its option names exactly one option row of body that is no Hold,
 // by label ("b" or "(b)"), by text, or both, as the questions skill records the option it offered; "(Recommended)" is no part of the name.
+// An option that starts with a row's label and a space names that row: a full stop in the row's text cuts the option there (fullAnswer).
 export function holds(option, body = '') {
   const plain = (text) => text.replace(/\(recommended\)/gi, '').replace(/\s+/g, ' ').trim().toLowerCase();
   const said = plain(String(option).replace(/\.$/, ''));
   const textOf = (cell) => plain(cell.slice(labelOf(cell)?.length ?? 0));
   const rows = (tables(body.replace(COMMENT, ''), 'Option')[0] ?? []).map(([cell]) => shown(cell)).filter((cell) => {
     const label = labelOf(cell)?.toLowerCase() ?? '';
-    return said !== '' && [plain(cell), label, label.slice(1, -1), textOf(cell)].includes(said);
+    return said !== '' && ([plain(cell), label, label.slice(1, -1), textOf(cell)].includes(said) || (label !== '' && said.startsWith(`${label} `)));
   });
   return /\bhold\b/.test(said) || rows.length !== 1 || /^hold\b/.test(textOf(rows[0]));
 }

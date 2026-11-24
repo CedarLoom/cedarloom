@@ -269,6 +269,10 @@ test('precheck: Pick leaves an issue while a question that names it waits for th
   for (const quoted of ['<!--\nIssue: owner/project#7\n-->', '```\nIssue: owner/project#7\n```', '~~~~\nIssue: owner/project#7\n']) {
     assert.deepEqual(check('/p', run([question([], quoted)]), {}, none), [7], quoted);
   }
+  // GitHub shows the Issue line below a code span that starts with three backticks or holds "<!--": the question names #7.
+  for (const span of ['```gh issue list``` prints the author as app/slug.\nIssue: owner/project#7\n', 'A `<!--` starts a comment.\nIssue: owner/project#7\n']) {
+    assert.deepEqual(check('/p', run([question([], span)]), {}, none), [], span);
+  }
   assert.deepEqual(check('/p', run([question([], 'Issue: owner/other#7')]), {}, none), [7]);
   // An answer releases the issue only when it names one option row that is no Hold, by label, text or both; anything else holds it.
   const options = 'Issue: owner/project#7\n\n| Option | Impact |\n|---|---|\n| (a) Stream it (Recommended) | x |\n| (c) Hold | Nothing changes |\n';
@@ -278,6 +282,10 @@ test('precheck: Pick leaves an issue while a question that names it waits for th
   for (const said of ['c', 'Owner answer (2026-11-20): (c) Hold. Later.', 'Owner answer (2026-11-20): Wait until the audit is done.']) {
     assert.deepEqual(check('/p', run([question([{ ...answered[0], body: said }], options)]), {}, none), [], said);
   }
+  // A full stop in the row's text cuts the answer's option after the label: the label still names the row.
+  const node = 'Issue: owner/project#7\n\n| Option | Impact |\n|---|---|\n| (a) Upgrade to Node.js 24 (Recommended) | x |\n| (b) Hold | Nothing changes |\n';
+  assert.deepEqual(check('/p', run([question([{ ...answered[0], body: 'Owner answer (2026-11-20): (a) Upgrade to Node.js 24. Go.' }], node)]), {}, none), [7]);
+  assert.deepEqual(check('/p', run([question([{ ...answered[0], body: 'Owner answer (2026-11-20): (b) Hold off. Later.' }], node)]), {}, none), []);
   // Without option rows, no answer names one.
   assert.deepEqual(check('/p', run([question(answered)]), {}, none), []);
   // A local question holds it while open, deferred or held by its answer; a file that is no question starts nothing.
