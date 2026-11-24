@@ -47,7 +47,7 @@ These hold in every step and for every outcome.
 
 Every session of a run has one role: the owner, the coordinator (this session), a worker (the phase orchestrator of its issue at standard and deep), a worker's phase subagent, a reviewer (also a re-reviewer and a verifier) and a headless job. All of them may share one GitHub login, so each line below holds by these steps, not by a permission: the [Reconciliation](#reconciliation) finds a breach after the fact. Setup steps that make some of them technical are the user's.
 
-A repository run by bots maps these roles: the coordinator's rows are its project bot's, and reviewers, workers and the follow-up worker are runs of its reviewer, worker and fixer bots. Their brief and roles table are in [SOUL.md](SOUL.md), each automation's steps in the `bot-*.md` procedure its prompt names.
+A repository run by bots maps these roles: the coordinator's rows are its project bot's, and reviewers, workers and the follow-up worker are runs of its role bots. Their brief and roles table are in [SOUL.md](SOUL.md), each automation's steps in the `bot-*.md` procedure its prompt names.
 
 | Action | Who | Never |
 |---|---|---|

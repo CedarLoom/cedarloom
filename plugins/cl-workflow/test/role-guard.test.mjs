@@ -294,10 +294,10 @@ test('role guard: refuses a merge with --admin in every role, the coordinator in
   }
 });
 
-const ROLE_BOTS = ['reviewer-bot', 'fixer-bot', 'worker-bot'];
+const ROLE_BOTS = ['planner-bot', 'reviewer-bot', 'fixer-bot', 'worker-bot', 'maintainer-bot'];
 
-test('role guard: the project bot and the reviewer bot never push', () => {
-  for (const role of ['project-bot', 'reviewer-bot']) {
+test('role guard: the project, planner, reviewer and maintainer bots never push', () => {
+  for (const role of ['project-bot', 'planner-bot', 'reviewer-bot', 'maintainer-bot']) {
     for (const command of ['git push origin feat/x', 'git push']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
   }
 });
@@ -318,7 +318,7 @@ test('role guard: a fixer or worker bot never force-pushes or deletes its branch
   for (const role of ['fixer-bot', 'worker-bot']) for (const command of forced) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
 });
 
-test('role guard: a reviewer, fixer or worker bot runs only gh commands that read', () => {
+test('role guard: a role bot runs only gh commands that read', () => {
   const writes = [
     'gh pr comment 12 --body-file c.md',
     'gh pr review 12 --approve',
