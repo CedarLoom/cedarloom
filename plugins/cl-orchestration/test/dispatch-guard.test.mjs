@@ -24,6 +24,8 @@ test('dispatch guard: an Orca dispatch that hands a session /cl-workflow:away of
     'orca orchestration send --to dispatch:d1 --body "/cl-workflow:away"\' off\'',
     'orca orchestration send --to dispatch:d1 --body /cl-workflow:away\\ off',
     'orca orchestration send --to dispatch:d1 --body "/cl-workflow:away o""ff"',
+    'orca orchestration send --to dispatch:d1 --body "/cl-workflow:away"$\' off\'',
+    'orca orchestration send --to dispatch:d1 --body "/cl-workflow:away"$" off"',
   ];
   for (const command of dispatched) assert.equal(decision(command), 'deny', command);
   assert.equal(decision('orca.exe orchestration send --to dispatch:d1 --body "/questions"', 'PowerShell'), 'deny');

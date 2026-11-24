@@ -173,6 +173,22 @@ test('ask hook: a folder in the ask folder does not stop the start, which exits 
   run(data, start('startup'));
 });
 
+test('ask hook: a start removes only the files of quit processes that hold no away', () => {
+  const data = scratch();
+  // This test process runs; a finished child's id no longer does.
+  const live = String(process.pid);
+  const [flag, away] = [0, 1].map(() => String(spawnSync(process.execPath, ['-e', '']).pid));
+  mkdirSync(join(data, 'ask'));
+  writeFileSync(join(data, 'ask', `${live}.json`), '{"awayUntil":"2000-01-01T00:00:00.000Z"}');
+  writeFileSync(join(data, 'ask', `${flag}.json`), '{"answers":true}');
+  writeFileSync(join(data, 'ask', `${away}.json`), '{"awayUntil":"session"}');
+  run(data, start('startup'));
+  // A mode away session whose span ended stays here; a missing file would read as away until off.
+  assert.equal(decision(data, {}, { ...mode('away'), CLAUDE_PID: live }), 'none');
+  assert.equal(existsSync(join(data, 'ask', `${flag}.json`)), false);
+  assert.equal(existsSync(join(data, 'ask', `${away}.json`)), true);
+});
+
 test('ask hook: input it cannot read exits 2, which blocks the question tool', () => {
   for (const input of ['', 'not json', 'null']) {
     const r = spawnSync(process.execPath, [HOOK], { input, env: { ...process.env, CLAUDE_PLUGIN_DATA: scratch(), CLAUDE_PID: '4242' }, encoding: 'utf8' });
@@ -189,9 +205,8 @@ test('ask hook: where the input shows an unattended session, off sets no answer 
     [{ permission_mode: 'bogus' }, {}, /no permission mode/],
     [{ permission_mode: 'dontask' }, {}, /no permission mode/],
     // claude -p, the Python and TypeScript Agent SDKs, and a value an SDK may set later.
-    ...['sdk-cli', 'sdk-py', 'sdk-ts', 'sdk-x'].map((entrypoint) => [{ permission_mode: 'default' }, { CLAUDE_CODE_ENTRYPOINT: entrypoint }, /CLAUDE_CODE_ENTRYPOINT starts with sdk-/]),
-    // No entrypoint, or one the hook does not know, refuses.
-    ...[undefined, 'something', 'SDK-CLI'].map((entrypoint) => [{ permission_mode: 'default' }, { CLAUDE_CODE_ENTRYPOINT: entrypoint }, /CLAUDE_CODE_ENTRYPOINT names no entrypoint/]),
+    ...['sdk-cli', 'SDK-CLI', 'sdk-py', 'sdk-ts', 'sdk-x'].map((entrypoint) => [{ permission_mode: 'default' }, { CLAUDE_CODE_ENTRYPOINT: entrypoint }, /CLAUDE_CODE_ENTRYPOINT starts with sdk-/]),
+    [{ permission_mode: 'default' }, { CLAUDE_CODE_ENTRYPOINT: undefined }, /CLAUDE_CODE_ENTRYPOINT is unset/],
   ];
   for (const [fields, env, why] of unattended) {
     const data = scratch();
@@ -201,7 +216,8 @@ test('ask hook: where the input shows an unattended session, off sets no answer 
     assert.notEqual(awayEnd(file(data), Date.now()), null);
     assert.equal(decision(scratch(), fields, env), 'deny', JSON.stringify([fields, env]));
   }
-  for (const env of ['cli', 'claude-vscode', 'claude-desktop'].map((entrypoint) => ({ CLAUDE_CODE_ENTRYPOINT: entrypoint }))) {
+  // A host's own name is attended, as Claude Code keeps it.
+  for (const env of ['cli', 'claude-vscode', 'local-agent', 'claude-desktop-3p', 'remote', 'something'].map((entrypoint) => ({ CLAUDE_CODE_ENTRYPOINT: entrypoint }))) {
     const data = scratch();
     run(data, { ...off, permission_mode: 'default' }, env);
     assert.equal(flagged(data), true, JSON.stringify(env));

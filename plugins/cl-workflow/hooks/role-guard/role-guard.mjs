@@ -177,6 +177,9 @@ function commands(source, powershell, nested = false) {
     } else if (c === '"' || c === "'") {
       quote = c;
       started = quoted = true;
+    } else if (c === '$' && !powershell && (s[i + 1] === '"' || s[i + 1] === "'")) {
+      // bash drops the $ of $'...' and $"..."; escape codes in them stay as written.
+      started = true;
     } else if (c === escape) {
       word += s[++i] ?? '';
       started = quoted = true;

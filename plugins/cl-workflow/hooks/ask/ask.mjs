@@ -4,7 +4,7 @@ import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { FORMS, HERE, QUEUE_LINE, SESSION, alone, away, awayUntil } from './window.mjs';
-import { answerFlag, awayEnd, optionMode, processId, startsAway, windowDir, windowFile } from './window-file.mjs';
+import { awayEnd, optionMode, processId, startsAway, windowDir, windowFile } from './window-file.mjs';
 import { logFile, logRun } from './questions-log.mjs';
 
 const dir = windowDir();
@@ -12,18 +12,25 @@ const file = windowFile();
 
 // The permission modes a person can answer in. Any other value, a mode added later too, refuses until it is judged.
 const ATTENDED = new Set(['default', 'acceptEdits', 'plan', 'auto', 'bypassPermissions']);
-// The entrypoints a person answers in: the terminal, the VS Code extension and the desktop app; unset or any other value refuses.
-const ENTRYPOINTS = new Set(['cli', 'claude-vscode', 'claude-desktop']);
-
 // Why CLAUDE_CODE_ENTRYPOINT shows a session nobody may answer in, else null. SessionStart reads only this: its input has no permission mode.
+// Claude Code sets it before hooks run and keeps a host's own name. Python Agent SDK: sdk-py over any value. TypeScript SDK: sdk-ts
+// only where unset. claude -p: sdk-cli only where unset or cli, so a child of an IDE or orchestrator keeps the parent's value.
 function unattendedEntrypoint() {
   const entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT;
-  // Python Agent SDK: sdk-py over any value. TypeScript SDK: sdk-ts only where unset. claude -p: sdk-cli only where unset or cli.
-  // Those two keep an IDE or orchestrator parent's value: that child is not refused.
-  if (ENTRYPOINTS.has(entrypoint)) return null;
-  if (entrypoint?.startsWith('sdk-')) return 'the session runs headless or under an Agent SDK (CLAUDE_CODE_ENTRYPOINT starts with sdk-)';
-  return 'CLAUDE_CODE_ENTRYPOINT names no entrypoint a person answers in';
+  if (!entrypoint) return 'CLAUDE_CODE_ENTRYPOINT is unset, which no Claude Code session leaves';
+  if (/^sdk-/i.test(entrypoint)) return 'the session runs headless or under an Agent SDK (CLAUDE_CODE_ENTRYPOINT starts with sdk-)';
+  return null;
 }
+
+// Whether no process has this id (ESRCH); a process of another user (EPERM) runs.
+const quit = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    return error.code === 'ESRCH';
+  }
+};
 
 // Why the input shows a session nobody may answer in, else null.
 function unattended(input) {
@@ -59,8 +66,8 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
 } else if (event === 'SessionStart') {
   const mode = optionMode();
   let note = '';
-  // A new process or a resumed conversation starts in the mode; ended away spans of earlier processes go too.
-  // shortcut: a quit process's answer flag stays (a few bytes) until a process with its id starts; prune by age if they pile up.
+  // A new process or a resumed conversation starts in the mode. A quit process's file goes too, unless it holds an away: a live
+  // session in another process id namespace keeps it (that file stays until a process with its id starts).
   if (input.source === 'startup' || input.source === 'resume') {
     if (dir) {
       rmSync(file, { force: true });
@@ -68,8 +75,9 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
       try { entries = readdirSync(dir, { withFileTypes: true }); } catch { /* no window was ever written */ }
       // Window files only: rmSync without recursive throws on a folder.
       for (const entry of entries) {
+        const pid = /^(\d+)\.json$/.exec(entry.name)?.[1];
         const path = join(dir, entry.name);
-        if (entry.isFile() && awayEnd(path, now) === null && !answerFlag(path)) rmSync(path, { force: true });
+        if (entry.isFile() && pid && quit(Number(pid)) && awayEnd(path, now) === null) rmSync(path, { force: true });
       }
     }
     // A start that cannot write the state still ends away: with no file, awayEnd reads a mode other than here as away.

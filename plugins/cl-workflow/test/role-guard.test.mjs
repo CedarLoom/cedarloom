@@ -491,6 +491,8 @@ test('role guard: a command reaches the queue or the window files through a cd, 
     assert.equal(decision("echo '/questions' | claude -p", { cwd: session, env, role }), 'deny', role);
     assert.equal(decision('claude -p "/cl-workflow:away off"', { cwd: session, env, role }), 'deny', role);
     assert.equal(decision("echo '/away  OFF' | claude -p", { cwd: session, env, role }), 'deny', role);
+    assert.equal(decision('claude -p "/cl-workflow:away"$\' off\'', { cwd: session, env, role }), 'deny', role);
+    assert.equal(decision('claude -p "/cl-workflow:away"$" off"', { cwd: session, env, role }), 'deny', role);
     // npx names the package with a version, and a Windows npm install starts claude through a script file.
     for (const command of versioned) assert.equal(decision(command, { cwd: session, env, role }), 'deny', `${role}: ${command}`);
     for (const command of ['claude.cmd -p /questions', 'claude.ps1 -p /questions', 'claude.bat -p /questions']) assert.equal(decision(command, { tool: 'PowerShell', cwd: session, env, role }), 'deny', `${role}: ${command}`);
