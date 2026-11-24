@@ -35,12 +35,14 @@ To fix the kind, type `/cl-workflow:dev` or `/cl-workflow:research`. `/cl-workfl
 
 ## Phases
 
-At standard and deep depth, the workflow hands its steps to phase agents, each a fresh subagent with its own tools and effort:
+At standard and deep depth, the session orchestrates the phases of the change. A phase agent is a fresh subagent with its own tools and effort:
 
-- **plan**, **implement**, **test** and **review** build the change.
+- **plan**, **plan check**, **implement**, **test** and **review** build the change.
 - **verify** checks review findings, a plan or a research answer before it is used.
 - **recheck** re-reviews a fix against the earlier findings.
 - **gather** runs read-only lookups.
+
+A routine standard change (not risky, and not touching CI, data formats, guards or money) runs plan and implement in the session itself; plan check, test and review stay subagents. Every other change runs every phase as a subagent.
 
 The task ends with a report that names each check's command and result, and the steps it skipped.
 
