@@ -435,6 +435,11 @@ test('role guard: the maintainer bot writes with a file tool only below results/
       assert.equal(write(path), 'deny', path);
     }
     assert.equal(write(join(home, 'results', 'r.md'), { env: {} }), 'deny');
+    // The refusal sends the knowledge base write to the shell instead of telling the run to leave the step out.
+    const clone = { hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: join(home, 'clones', 'maintain', '.cedarloom', 'knowledge', 'k.md'), content: 'x' }, tool_use_id: 'toolu_01', cwd: home };
+    const reason = JSON.parse(run(JSON.stringify(clone), 'maintainer-bot', undefined, { CLAUDE_PROJECT_DIR: home }).stdout).hookSpecificOutput.permissionDecisionReason;
+    assert.match(reason, /write the knowledge base and the clone from the shell\.$/);
+    assert.doesNotMatch(reason, /Leave the step out/);
     assert.equal(decision(undefined, { role: 'maintainer-bot', cwd: home, env: { CLAUDE_PROJECT_DIR: home }, tool: 'NotebookEdit', toolInput: { notebook_path: join(home, 'clones', 'n.ipynb'), new_source: 'x' } }), 'deny');
     // The other roles keep their file tools wherever the settings let them.
     for (const role of ['worker-bot', 'project-bot', 'coordinator']) assert.equal(write(join(home, 'clones', 'r.md'), { role }), 'none', role);
