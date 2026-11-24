@@ -1,7 +1,8 @@
 // Structural checks for CedarLoom's plugin skills and the plugin's agents.
-// Usage: node .github/scripts/skill-lint.mjs [skill folders...]   (default: every own skill and agent), exit 1 on any error.
+// Usage: node .github/scripts/skill-lint.mjs [skill folders...]   (default: every own skill, agent and rules file), exit 1 on
+// any error; over a soft word or description budget it warns.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, join, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMain } from './main.mjs';
 
@@ -101,8 +102,60 @@ export function lintAgent(file) {
   const fm = agentFields(block);
   if (!fm) return [...ignored, `${file}: front matter missing, or not "key: value" lines with a plain or complete quoted value`];
   const missing = ['name', 'description'].filter((key) => !fm[key]).map((key) => `${file}: ${key} missing`);
+  const long = fm.description?.length > 1024 ? [`${file}: description longer than 1024 characters`] : [];
   const model = fm.model === undefined || MODELS.includes(fm.model) ? [] : [`${file}: model "${fm.model}" is not one of ${MODELS.join(', ')}`];
-  return [...ignored, ...missing, ...model];
+  return [...ignored, ...missing, ...long, ...model];
+}
+
+// Word budgets for the body after front matter, soft (a warning) and hard (an error), in docs/authoring.md. The first class
+// whose pattern matches a file's path relative to the repository applies.
+const BUDGETS = [
+  { kind: 'cl-workflow entry skill file', path: /(^|\/)cl-workflow\/skills\/workflow\/[^/]+\.md$/, soft: 450, hard: 900 },
+  { kind: 'bot brief', path: /\/skills\/[^/]+\/SOUL\.md$/, soft: 600, hard: 800 },
+  { kind: 'bot procedure', path: /\/skills\/coordinate\/bot-[^/]+\.md$/, soft: 450, hard: 900 },
+  { kind: 'SKILL.md', path: /\/skills\/[^/]+\/SKILL\.md$/, soft: 1200, hard: 3000 },
+  { kind: 'skill reference file', path: /\/skills\/[^/]+\/.+\.md$/, soft: 1500, hard: 3000 },
+  { kind: 'subagent prompt', path: /(^|\/)plugins\/[^/]+\/agents\/.+\.md$/, soft: 400, hard: 600 },
+  { kind: 'rules file', path: /(^|\/)plugins\/[^/]+\/rules\/.+\.md$/, soft: 450, hard: 600 },
+];
+
+// Files that were over their hard cap when the budgets began, capped at that size: they may shrink, never grow.
+const AT_SIZE = {
+  'plugins/cl-orchestration/skills/coordinate/SKILL.md': 6344,
+  'plugins/cl-orchestration/skills/coordinate/SOUL.md': 1412,
+  'plugins/cl-orchestration/skills/coordinate/bot-project.md': 2064,
+  'plugins/cl-orchestration/skills/coordinate/modes.md': 5215,
+  'plugins/cl-orchestration/skills/coordinate/orca.md': 9008,
+  'plugins/cl-orchestration/skills/coordinate/review-and-merge.md': 6459,
+  'plugins/cl-orchestration/skills/coordinate/spec-template.md': 4114,
+  'plugins/cl-repo/rules/project.md': 915,
+  'plugins/cl-workflow/agents/review.md': 715,
+  'plugins/cl-workflow/skills/workflow/SKILL.md': 1869,
+  'plugins/cl-workflow/skills/workflow/software.md': 1118,
+};
+
+// The word budget of one instruction file (path relative to the repository, with / separators) and its text.
+export function wordBudget(path, text, atSize = AT_SIZE) {
+  const budget = BUDGETS.find((b) => b.path.test(path));
+  if (!budget) return { errors: [], warnings: [] };
+  const words = text.replace(/^---\n[\s\S]*?\n---\n/, '').split(/\s+/).filter(Boolean).length;
+  const hard = Math.max(budget.hard, atSize[path] ?? 0);
+  if (words > hard) {
+    const cap = hard > budget.hard ? `its at-size cap of ${hard} (a ${budget.kind} allows ${budget.hard})` : `the ${hard}-word cap of a ${budget.kind}`;
+    return { errors: [`${path}: ${words} words, over ${cap}`], warnings: [] };
+  }
+  const warnings = words > budget.soft ? [`${path}: ${words} words, over the ${budget.soft}-word budget of a ${budget.kind}`] : [];
+  return { errors: [], warnings };
+}
+
+// A listed description, of a skill folder or an agent file, warns above 300 characters; above 1024 lintSkill and lintAgent fail.
+export function descriptionWarnings(path) {
+  const skill = !path.endsWith('.md');
+  const file = skill ? join(path, 'SKILL.md') : path;
+  if (!existsSync(file)) return [];
+  const text = readFileSync(file, 'utf8');
+  const description = skill ? frontMatter(text)?.description?.slice(1, -1) : agentFields(/^---\n([\s\S]*?)\n---\n/.exec(text)?.[1])?.description;
+  return description?.length > 300 ? [`${file}: description of ${description.length} characters, over the 300-character budget`] : [];
 }
 
 // The folder named part of each plugin under plugins/ that has one.
@@ -208,8 +261,12 @@ if (isMain(import.meta.url)) {
   const agents = process.argv.length > 2 ? [] : ownAgents();
   const files = process.argv.length > 2 ? [] : pluginFiles();
   const launches = [...bareLaunches(files), ...launchModes(files)];
-  const errors = [...dirs.flatMap(lintSkill), ...agents.flatMap(lintAgent), ...launches];
+  const instructions = process.argv.length > 2 ? dirs.flatMap(markdownFiles) : [...pluginParts('skills'), ...pluginParts('agents'), ...pluginParts('rules')].flatMap(markdownFiles);
+  const budgets = instructions.map((f) => wordBudget(relative(root, f).split(sep).join('/'), readFileSync(f, 'utf8')));
+  const errors = [...dirs.flatMap(lintSkill), ...agents.flatMap(lintAgent), ...launches, ...budgets.flatMap((b) => b.errors)];
+  const warnings = [...[...dirs, ...agents].flatMap(descriptionWarnings), ...budgets.flatMap((b) => b.warnings)];
   for (const e of errors) console.log(`::error::${e.replace(root + '/', '')}`);
-  console.log(`${agents.length} agents, ${dirs.length} skills checked, ${errors.length} errors`);
+  for (const w of warnings) console.log(`::warning::${w.replace(root + '/', '')}`);
+  console.log(`${agents.length} agents, ${dirs.length} skills checked, ${errors.length} errors, ${warnings.length} warnings`);
   process.exit(errors.length ? 1 : 0);
 }
