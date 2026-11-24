@@ -26,3 +26,19 @@
   margin-bottom: var(--ifm-spacing-vertical);
   text-align: center;
 }
+
+/* Links in running text differ from the body text by colour alone, so they carry an underline (WCAG 2.2 1.4.1). */
+.theme-doc-markdown :is(p, li) a:not(.button),
+main.container :is(p, li) a:not(.button) {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+/* Mermaid's dark theme sets edge labels #ccc on #585858 (4.43:1); a darker label keeps 4.5:1 (about 8.8:1 here). */
+[data-theme='dark'] .docusaurus-mermaid-container :is(.edgeLabel, .edgeLabel p, .edgeLabel span, .labelBkg) {
+  background-color: #2b2b2b !important;
+}
+
+[data-theme='dark'] .docusaurus-mermaid-container .edgeLabel rect {
+  fill: #2b2b2b !important;
+}
