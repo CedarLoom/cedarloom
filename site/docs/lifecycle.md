@@ -20,11 +20,11 @@ flowchart TD
 
 ## Card
 
-An issue is the unit of work. Label it `cl:plan` to let CedarLoom read, plan and ask on it without starting work, or `cl:ready-for-agent` to let the coordinator start it. The coordinator starts nothing until the repository's policy file, written by `/cl-repo:setup`, is on the default branch. An issue whose result cannot be stated as a check is listed for you, not started.
+An issue is the unit of work. Label it `cl:plan` to let CedarLoom read, plan and ask on it without starting work, or with the policy's start label (`cl:ready-for-agent` by default) to let the coordinator start it. The coordinator starts nothing until the repository's policy file, written by `/cl-repo:setup`, is on the default branch. An issue whose result cannot be stated as a check is listed for you, not started.
 
 ## Refine
 
-Refining settles the goal, scope, depth and risk, the steps and an acceptance table. `/cl-workflow:plan` does it with you before the issue starts; otherwise the worker's plan phase does it at standard and deep depth. Deep or high-risk work waits for your approval of its design before a worker starts. Questions reach you as `cl:needs-human` issues; an answered one gets `cl:ready-for-agent`.
+Refining settles the goal, scope, depth and risk, the steps and an acceptance table. `/cl-workflow:plan` does it with you before the issue starts; otherwise the worker's plan phase does it at standard and deep depth. Deep or high-risk work waits for your approval of its design before a worker starts. Questions reach you as `cl:needs-human` issues, or in a local queue when the repository has issues off; `/cl-workflow:away off` asks them.
 
 ## Build to merge
 

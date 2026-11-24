@@ -104,7 +104,7 @@ export default function Home(): ReactNode {
             </li>
             <li>Per task, describe it. The workflow picks the depth and the checks.</li>
             <li>
-              Per issue, label it <code>cl:ready-for-agent</code> and start the coordinator. It runs the{' '}
+              Per issue, add the start label (<code>cl:ready-for-agent</code> by default) and start the coordinator. It runs the{' '}
               <Link to="/lifecycle">lifecycle</Link> up to the merge; releases stay yours.
             </li>
           </ol>
