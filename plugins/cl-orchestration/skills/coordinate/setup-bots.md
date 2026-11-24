@@ -54,7 +54,7 @@ Per bot:
 
 `<project home>/pre-merge.json`, only when the user names a command: `{ "command": ["<program>", "<args>"] }`, the program by its absolute path. It gets each merge's and each post's text on stdin and must exit 0; none by default.
 
-Owner questions go where `<skill folder>/approvals.md` (Where it goes) says; the local queue is `<project home>/.cedarloom/questions/`, answered with `/cl-workflow:questions` there.
+Owner questions go where `<skill folder>/approvals.md` (Where it goes) says; the local queue is `<project home>/.cedarloom/questions/`, answered with `/cl-workflow:away off` there.
 
 ## Automations
 

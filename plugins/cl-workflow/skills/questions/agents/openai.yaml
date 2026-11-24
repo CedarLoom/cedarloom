@@ -1,5 +1,5 @@
 interface:
   display_name: "Questions"
-  short_description: "Answer the open question issues"
+  short_description: "Replaced by away off"
 policy:
   allow_implicit_invocation: false

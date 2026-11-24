@@ -9,7 +9,7 @@ Copy [approval-template.md](approval-template.md) into the run folder and fill e
 - What: the decision in one sentence, starting with its gate and subject: `design` with the issue as `<owner/repo>#<number>` (an issue held before its worker starts, [SKILL.md](SKILL.md#risk-class)); `merge` or `owner-only` (an owner-only file or a release) with the pull request as `<owner/repo>#<n>`; any other owner decision with one word of your own and its issue or pull request.
 - Runs on: the reader's `models` for the worker at the task's depth and each phase (a sensitive change: plan and review from `models.sensitive`), a phase it omits by the field table ([policy.md](policy.md)), `inherit` as the worker's. Review: `review.*`. Merges: `merge.*`.
 - Recommended: starts with the label of the first option row, `(a)`.
-- Answer: what is true where the issue lands. In the local queue: `run /cl-workflow:questions` (in <working folder>, from a session other than the coordinator's). In a repository: `run /cl-workflow:questions` in a clone of it, or `comment on this issue "a" or "b" alone, or "Owner answer (date): a." with "b" in place of "a" and your own text after it` (only these forms are read, [The answer](#the-answer)).
+- Answer: what is true where the issue lands. In the local queue: `run /cl-workflow:away off` (in <working folder>, from a session other than the coordinator's). In a repository: `run /cl-workflow:away off` in a clone of it, or `comment on this issue "a" or "b" alone, or "Owner answer (date): a." with "b" in place of "a" and your own text after it` (only these forms are read, [The answer](#the-answer)).
 
 Run `node <skill folder>/approval.mjs <file>` from your working directory until it exits 0: it names each part that is missing, unfilled or at odds with the options. It exits 2 for a path outside `.cedarloom/runs/` of that directory.
 
@@ -17,7 +17,7 @@ Run `node <skill folder>/approval.mjs <file>` from your working directory until 
 
 1. **The project's repository**: `<owner/repo>` and nothing else.
 2. **A private repository is recommended.** An approval names the plan, the models, the cost and the owner-only paths, which anyone can read on a public repository. `gh repo view <repository> --json visibility,hasIssuesEnabled` must show issues on: then file it there. Run that command when the run starts: when it shows `PUBLIC` with issues on, say in the session, before the first approval is filed, that approvals for that repository will be public issues. The run report repeats the warning as the record. With issues off, or when the command fails, file no issue there: the text goes into the local queue.
-3. **The local queue**: `node <skill folder>/approval.mjs file <file> <name of <owner/repo>>` checks the text, writes a new `.cedarloom/questions/<project>-<n>.md`, kept out of git, and prints `{ file }`. The role guard refuses other edit-tool writes to that folder, and commands that reach it, except in the session where the user typed `/cl-workflow:questions`.
+3. **The local queue**: `node <skill folder>/approval.mjs file <file> <name of <owner/repo>>` checks the text, writes a new `.cedarloom/questions/<project>-<n>.md`, kept out of git, and prints `{ file }`. The role guard refuses other edit-tool writes to that folder, and commands that reach it, except in the session where the user typed `/cl-workflow:away off`.
 
 ## Labels and title
 

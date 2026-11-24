@@ -10,5 +10,13 @@
   "homepage": "https://github.com/CedarLoom/cedarloom#readme",
   "repository": "https://github.com/CedarLoom/cedarloom",
   "license": "ISC",
-  "hooks": "./hooks/claude-code.json"
+  "hooks": "./hooks/claude-code.json",
+  "userConfig": {
+    "mode": {
+      "type": "string",
+      "title": "How a session starts: here or away",
+      "description": "here (default): the agent may ask you with the question tool and plan mode. away: both are refused from the start, the agent takes safe defaults and files the rest, until /cl-workflow:away off. Applies to each new Claude Code process and resumed conversation.",
+      "default": "here"
+    }
+  }
 }

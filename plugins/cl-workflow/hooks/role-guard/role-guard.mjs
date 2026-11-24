@@ -7,13 +7,13 @@
 // the boundary is a gh token without those rights.
 // For Write, Edit, MultiEdit and NotebookEdit too: an answer in the local question queue counts as the owner's, so every session, the
 // coordinator's included, may only write there or reach it in a command (a word, a redirection or a cd, read from the session folder)
-// after /cl-workflow:questions set the answer flag in that session (ask.mjs: an expansion whose input shows no unattended session);
+// after /cl-workflow:away off set the answer flag in that session (ask.mjs: an expansion whose input shows no unattended session);
 // no session writes the window files that record that or starts a session with that command.
 import { spawnSync } from 'node:child_process';
 import { lstatSync, realpathSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { text } from 'node:stream/consumers';
-import { openUntil, windowFile } from '../ask/window-file.mjs';
+import { answerFlag, windowFile } from '../ask/window-file.mjs';
 import { gitProgram } from '../git-program.mjs';
 
 // The local question queue in any folder, as a folder and the folder inside it.
@@ -21,9 +21,9 @@ const QUEUE = ['.cedarloom', 'questions'];
 const EDITS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 // The path fields of the edit tools: Write, Edit and MultiEdit carry file_path, NotebookEdit notebook_path.
 const EDIT_PATHS = ['file_path', 'notebook_path'];
-// A session started with /cl-workflow:questions as its prompt (claude -p expands it, https://code.claude.com/docs/en/headless) or
+// A session started with /cl-workflow:away off (or the /cl-workflow:questions it replaces) as its prompt (claude -p expands it, https://code.claude.com/docs/en/headless) or
 // handed it by an orchestrator could hold the flag where its hook input shows no unattended session.
-const QUESTIONS = /(^|[^\w-])\/(cl-workflow:)?questions(?![\w.-])/i;
+const QUESTIONS = /(^|[^\w-])\/(cl-workflow:)?(questions|away\s+off)(?![\w.-])/i;
 // The program names that start such a session: claude, and claude-code as npx runs the package. The orchestrator plugin's own hook
 // refuses its dispatch command.
 const LAUNCHERS = new Set(['claude', 'claude-code']);
@@ -178,6 +178,9 @@ function commands(source, powershell, nested = false) {
     } else if (c === '"' || c === "'") {
       quote = c;
       started = quoted = true;
+    } else if (c === '$' && !powershell && (s[i + 1] === '"' || s[i + 1] === "'")) {
+      // bash drops the $ of $'...' and $"..."; escape codes in them stay as written.
+      started = true;
     } else if (c === escape) {
       word += s[++i] ?? '';
       started = quoted = true;
@@ -516,7 +519,7 @@ function reached(parsed, cwd) {
 
 // The coordinator files a question through approval.mjs, which writes a new file; changing one, its answer included, is the owner's.
 function queue({ tool_name: tool, tool_input: toolInput, agent_id: agent }, cwd) {
-  // Only the ask hook writes the window files: a session that wrote one could open the window for itself.
+  // Only the ask hook writes the window files: a session that wrote one could set the answer flag or end its away span itself.
   const data = process.env.CLAUDE_PLUGIN_DATA;
   const window = data ? [basename(resolve(data)), 'ask'] : null;
   let texts = [];
@@ -533,13 +536,13 @@ function queue({ tool_name: tool, tool_input: toolInput, agent_id: agent }, cwd)
     paths = reached(parsed, cwd);
     if (!paths) return `a command with more than ${MAX_FOLDERS} folders to follow, which may name the local question queue (.cedarloom/questions/),`;
     if (QUESTIONS.test(texts.join('\n')) && parsed.some(({ words }) => words.some((word) => LAUNCHERS.has(launcher(word))))) {
-      return 'a session started with /cl-workflow:questions, which could write into the local question queue (.cedarloom/questions/),';
+      return 'a session started with /cl-workflow:away off or /cl-workflow:questions, which could write into the local question queue (.cedarloom/questions/),';
     }
   }
   const hits = (folder) => texts.some((text) => names(text, folder)) || paths.some((path) => inside(path, folder));
-  if (window && hits(window)) return 'a write into the question window files of /cl-workflow:ask, or a command that names them,';
+  if (window && hits(window)) return 'a write into the window files of /cl-workflow:away, or a command that names them,';
   // The window is the Claude Code process's: a subagent of the session that answers writes nothing there.
-  if (!agent && openUntil(windowFile(), Date.now(), true) !== null) return null;
+  if (!agent && answerFlag(windowFile())) return null;
   return hits(QUEUE) ? 'a write into the local question queue (.cedarloom/questions/), or a command that names it,' : null;
 }
 
@@ -598,7 +601,7 @@ else {
       : EDITS.has(input.tool_name) ? (role === 'maintainer-bot' ? outsideResults(input, cwd) : null)
       : coordinator ? (adminMerge(input) ? 'a merge with --admin' : null)
       : reason(input, cwd, role);
-    if (owners) line = `CedarLoom role guard: ${owners} is the owner's step: only a session where /cl-workflow:questions set the answer flag, which the ask hook refuses in a session it reads as unattended, writes answers there. File a question with approval.mjs file and read answers with approval.mjs queue. Text that only mentions the folder goes in a file (-F, --body-file).`;
+    if (owners) line = `CedarLoom role guard: ${owners} is the owner's step: only a session where /cl-workflow:away off set the answer flag, which the ask hook refuses in a session it reads as unattended, writes answers there. File a question with approval.mjs file and read answers with approval.mjs queue. Text that only mentions the folder goes in a file (-F, --body-file).`;
     else if (why && coordinator) line = `CedarLoom role guard: ${why}, which passes branch protection, is no role's step. Merge without --admin, or leave the pull request to the owner. Text that only mentions such a command goes in a file (-F, --body-file).`;
     else if (why && unknown) line = `CedarLoom role guard: ${why} is refused: the roles are coordinator, ${[...BOTS].join(', ')}. Report the role to the user who starts this session.`;
     // The maintainer's knowledge base is a step of its procedure: the refusal names the shell, so the run keeps that step.

@@ -1,16 +1,11 @@
 ---
 name: ask
-description: "Allows terminal questions (the question tool and plan mode) in this Claude Code session for a while: 30 minutes, a span, until a time, or off again."
+description: "Replaced by /cl-workflow:away: names its forms and changes nothing."
 disable-model-invocation: true
-argument-hint: "[45|45m|2h|for 45|until HH:MM|off]"
-when: "On request, while you sit at the terminal and want the agent to ask you, for example to grill a plan."
-writes: "One file per Claude Code process in the plugin's data folder (ask/<process id>.json, the window's end); off deletes it."
+when: "Not needed: terminal questions are open unless /cl-workflow:away or the plugin option mode is away."
+writes: "Nothing."
 ---
 
-# Terminal questions
+# Replaced
 
-By default the plugin's hook refuses the question tool and plan mode, and open questions go into the issue tracker the project names, else the report. This command opens a window for them: alone for 30 minutes, `<n>` or `<n>m` minutes or `<n>h` hours (with or without `for` before it), `until HH:MM` (local time, the next such time), or `off` to end it early. The window ends at that time or when Claude Code quits; `/clear`, compaction and a fork keep it, a resumed conversation starts with it closed.
-
-The plugin's hook has already set the window and added the mode above as context. Answer with that line alone. When no such line is there, the hook did not run: say so in one line.
-
-Codex runs none of the question hooks, so there this command changes nothing.
+Answer with this run's hook line alone (it names the `/cl-workflow:away` forms) and do nothing else. Without one, say: use `/cl-workflow:away [30|30m|2h|until HH:MM]` to work alone and `/cl-workflow:away off` to come back.
