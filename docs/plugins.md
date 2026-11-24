@@ -4,7 +4,7 @@ What the CedarLoom plugins add to a Claude Code session besides their skills: ho
 
 | Plugin | Hooks | Settings |
 |---|---|---|
-| `cl-workflow` | [Terminal questions](#terminal-questions), [role guard](#role-guard) | none |
+| `cl-workflow` | [Terminal questions](#terminal-questions), [role guard](#role-guard) | `mode` |
 | `cl-orchestration` | [Coordinator context rotation](#coordinator-context-rotation) | `rotateAtTokens`, `rotateAtPercent` |
 | `cl-repo` | none | none |
 
@@ -12,17 +12,17 @@ Every hook runs `node`, so Node.js must be on the PATH. Set a plugin's options w
 
 ## Terminal questions
 
-In a Claude Code session with the cl-workflow plugin on, a hook refuses the question tool (`AskUserQuestion`) and plan mode (`EnterPlanMode`) by default.
+In a Claude Code session with the cl-workflow plugin on, the agent may ask you with the question tool (`AskUserQuestion`) and plan mode (`EnterPlanMode`) until you go away.
 
-- The plugin's `PreToolUse` hook refuses both with the rule as its reason: open questions with recommendations go into one issue per task in the issue tracker the project names, else the report; safe, reversible recommendations are taken and the work goes on; no chat-text interviews either.
-- A `SessionStart` hook adds that rule as one line at start, resume, `/clear`, compaction and fork.
-- `/cl-workflow:ask` allows both for 30 minutes, `<n>` or `<n>m` minutes or `<n>h` hours (with or without `for`), or `until HH:MM` (local time); `off` ends the window early.
-- `/cl-workflow:questions` (the [owner questions](#owner-questions) queue) allows both for the rest of the session, unless it cannot read its arguments; `/cl-workflow:ask off` or a timed `/cl-workflow:ask` replaces that.
-- A window ends at its time or when Claude Code quits. `/clear`, compaction and a fork keep it; a new Claude Code process or a resumed conversation starts with questions off.
-- A `UserPromptExpansion` hook sets the window; that event fires when a prompt's command expands ([hooks reference](https://code.claude.com/docs/en/hooks#userpromptexpansion)). By that reference the same text in a scheduled task, a `/loop` iteration or a message from another session sets nothing; the skill is user-only.
-- The window is one file per Claude Code process in the plugin's data folder (`ask/<CLAUDE_PID>.json`, the window's end). `CLAUDE_PID` is set in the Bash tool too, so a model that writes that file opens the window.
-- When the refusal hook cannot start, both stay refused ([`onFailure: "block"`](https://code.claude.com/docs/en/hooks#block-the-action-when-a-hook-fails)).
-- On Windows (untested) the hooks start `node` without a shell, so `node.exe` itself must be on the PATH: with only a `.cmd` or `.bat` shim the refusal holds but `/cl-workflow:ask` cannot open the window.
+- The plugin option `mode` sets how a session starts: `here` (default) or `away`. A job or bot sets `away` in its settings: `"pluginConfigs": { "cl-workflow@cedarloom": { "options": { "mode": "away" } } }` in user settings or a `--settings` file (project settings do not set plugin options).
+- `/cl-workflow:away` goes away at once, until `/cl-workflow:away off`; `30` or `30m` (minutes), `2h` or `until 07:30` (local time, the next such time) end it sooner. Text it cannot read changes nothing, and it names the forms in one line.
+- While away, the plugin's `PreToolUse` hook refuses both with the rule as its reason: open questions with recommendations go into one issue per task in the issue tracker the project names, else the report; safe, reversible recommendations are taken and the work goes on; no chat-text interviews either. It refuses both in a session nobody answers in too ([owner questions](#owner-questions)).
+- `/cl-workflow:away off` comes back and asks up to 5 [owner questions](#owner-questions), then says how many remain; when already here, it only asks them.
+- A `SessionStart` hook starts a new Claude Code process or a resumed conversation in the mode and adds the state as one line; `/clear`, compaction and a fork keep the state.
+- A `UserPromptExpansion` hook sets the state; that event fires when a prompt's command expands ([hooks reference](https://code.claude.com/docs/en/hooks#userpromptexpansion)). By that reference the same text in a scheduled task, a `/loop` iteration or a message from another session sets nothing; the skill is user-only.
+- The state is one file per Claude Code process in the plugin's data folder (`ask/<CLAUDE_PID>.json`). `CLAUDE_PID` is set in the Bash tool too, so a model that writes or deletes that file changes the state; the [role guard](#role-guard) refuses such writes.
+- When the refusal hook cannot start, both are refused ([`onFailure: "block"`](https://code.claude.com/docs/en/hooks#block-the-action-when-a-hook-fails)).
+- On Windows (untested) the hooks start `node` without a shell, so `node.exe` itself must be on the PATH: with only a `.cmd` or `.bat` shim, `/cl-workflow:away` cannot keep its state.
 - `disableAllHooks` turns the hooks off.
 - Codex runs none of these hooks.
 
@@ -42,14 +42,14 @@ The coordinator of `/cl-orchestration:coordinate` files an owner question, in th
 
 Rejected work is closed as not planned, with no label. `/cl-repo:setup` lists the labels the repository lacks and creates the ones you approve.
 
-`/cl-workflow:questions` asks in batches, all or up to a count you name: this repository's `cl:needs-human` issues, then the local queue, where it writes the answer line the coordinator reads. That line counts as the owner's, so the [role guard](#role-guard) refuses edit-tool writes to the queue, and commands that reach it, in every subagent and every session but one where `/cl-workflow:questions` set the answer flag; the coordinator files through `approval.mjs file`.
+`/cl-workflow:away off` asks up to 5 in batches: this repository's `cl:needs-human` issues, then the local queue, where it writes the answer line the coordinator reads. That line counts as the owner's, so the [role guard](#role-guard) refuses edit-tool writes to the queue, and commands that reach it, in every subagent and every session but one where `/cl-workflow:away off` set the answer flag; the coordinator files through `approval.mjs file`.
 
-- No hook input tells a typed command from a piped one, so no flag is set outside `default`, `acceptEdits`, `plan`, `auto` and `bypassPermissions` mode, or where `CLAUDE_CODE_ENTRYPOINT` starts with `sdk-` (Agent SDKs, `claude -p`; except with the Python SDK, a child of an IDE or orchestrator session is not refused and its window lasts its session).
-- Each run logs a line in the plugin's data folder (`ask/log/`); a flagged run shows the runs since the last flagged one.
-- Not prevented: a process on your account typing into a session in a mode above, writing the queue, window or log files, or naming the command in a file, a variable or a spelling the shell joins.
+- No hook input tells a typed command from a piped one, so no flag is set outside `default`, `acceptEdits`, `plan`, `auto` and `bypassPermissions` mode, or where `CLAUDE_CODE_ENTRYPOINT` starts with `sdk-` (Agent SDKs, `claude -p`; except with the Python SDK, a child of an IDE or orchestrator session is not refused); there `off` changes nothing and the question tool and plan mode stay refused.
+- Each `off` logs a line in the plugin's data folder (`ask/log/`); a flagged run shows the runs since the last flagged one.
+- Not prevented: a process on your account typing into a session in a mode above, writing the queue, state or log files, or naming the command in a file, a variable or a spelling the shell joins.
 - A command reaches the queue when its text names `.cedarloom/questions` or when a word or redirection target, read as the shell decodes it from the session folder and from each folder a `cd`, `pushd` or `Set-Location` before it names, lies in it (`*`, `?` and `[...]` match any name, but two such segments in a row (`*/*`) match no folder).
 - It does not catch a command written to get around it (`.c*/q*`, braces, variables, bracket classes, look-alike letters, a tool's own folder option such as `git -C`), nor one that acts on `.cedarloom` itself. A session whose folder lies in the queue writes nothing there.
-- The guard also refuses, in every session, writes to the window files of `/cl-workflow:ask`, commands that name them, and a `claude` launch with `/cl-workflow:questions` or `/questions` in its command line: `claude -p` expands such a command ([headless mode](https://code.claude.com/docs/en/headless)); where cl-orchestration is on, its hook refuses the same in an `orca` command, even one that only mentions both.
+- The guard also refuses, in every session, writes to the state files of `/cl-workflow:away`, commands that name them, and a `claude` launch with `/cl-workflow:away off`, `/away off`, `/cl-workflow:questions` or `/questions` in its command line: `claude -p` expands such a command ([headless mode](https://code.claude.com/docs/en/headless)); where cl-orchestration is on, its hook refuses the same in an `orca` command, even one that only mentions both.
 
 ## Role guard
 
@@ -158,7 +158,7 @@ Every switch except one environment variable is a Claude Code setting. In the pr
 - The plugin: `"cl-workflow@cedarloom": false` under `enabledPlugins` removes all `cl-workflow` skills and agents in the project ([`enabledPlugins`](https://code.claude.com/docs/en/settings-reference)). The plugins that depend on it, `cl-orchestration` and the bundle `cedarloom`, then do not load either and report the dependency as disabled; `cl-repo` keeps working ([Dependencies](https://code.claude.com/docs/en/plugins/dependencies)).
 - A copy loaded with `--plugin-dir` has its own key, `cl-workflow@inline`, and the `@cedarloom` key does not reach it. With only `"cl-workflow@inline": false`, the installed copy loads instead; set both keys to `false` to remove the plugin from such a session ([CLI reference](https://code.claude.com/docs/en/plugins/cli-reference)).
 - The `workflow` skill: `Skill(cl-workflow:workflow)` blocks the skill by its plugin name, `Skill(skill:workflow)` by any of its names ([Restrict Claude's skill access](https://code.claude.com/docs/en/skills)). It is the only `cl-workflow` skill the model can call on its own. `/cl-workflow:dev`, `full` and `research` load it first and stop when that load is refused.
-- The typed entries: `ask`, `dev`, `full`, `plan`, `questions` and `research` set `disable-model-invocation: true`, so the model cannot call them through the Skill tool. You still start each by typing its slash command, which a `Skill` deny rule does not stop. To switch them off, use `enabledPlugins`; the `workflow` skill deny stops `dev`, `full` and `research`, but not `ask`, `plan` and `questions`.
+- The typed entries: `ask`, `away`, `dev`, `full`, `plan`, `questions` and `research` set `disable-model-invocation: true`, so the model cannot call them through the Skill tool. You still start each by typing its slash command, which a `Skill` deny rule does not stop. To switch them off, use `enabledPlugins`; the `workflow` skill deny stops `dev`, `full` and `research`, but not `ask`, `away`, `plan` and `questions`.
 - One phase agent: `Agent(cl-workflow:<agent>)`, with the agents `gather`, `implement`, `plan`, `recheck`, `research`, `review`, `test` and `verify` ([Subagents](https://code.claude.com/docs/en/sub-agents)). A denied call comes back to the model as a tool error naming the rule; a headless run does not list it in `permission_denials`, so a check that reads only that list misses it.
 - One workflow script: `Workflow(cl-workflow:full-run)` blocks the script, also where the Workflow tool is allowed by an allow rule or `--allowedTools Workflow` ([Workflows](https://code.claude.com/docs/en/workflows)). Until the workspace is trusted, the project file's allow rules are ignored and its deny rules apply ([Project allow rules and workspace trust](https://code.claude.com/docs/en/permissions#project-allow-rules-and-workspace-trust)).
 - Every workflow script: `"disableWorkflows": true` removes the Workflow tool and the plugin's scripts in any settings file, the project's included ([`disableWorkflows`](https://code.claude.com/docs/en/settings-reference#disableworkflows)); the environment variable `CLAUDE_CODE_DISABLE_WORKFLOWS=1` does the same for one session ([Turn workflows off](https://code.claude.com/docs/en/workflows#turn-workflows-off)). `/cl-workflow:full` then runs its phases as prose.

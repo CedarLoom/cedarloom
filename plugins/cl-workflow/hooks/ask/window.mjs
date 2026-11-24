@@ -1,7 +1,4 @@
-// The window of terminal questions that /cl-workflow:ask and /cl-workflow:questions open, read by the plugin's hook (ask.mjs).
-
-// The line a session reads while the window is closed, and the reason the hook gives when it refuses the question tool or plan mode.
-export const OFF = 'Terminal questions are off: the question tool (AskUserQuestion) and plan mode (EnterPlanMode) are refused; run no chat-text interviews either (rounds of questions in plain text, as a grilling skill asks them). Put the open questions with your recommendations into one issue per task in the issue tracker the project names, else the report; take each recommendation that is safe and reversible (an item without one waits), and go on. Only the user can allow terminal questions, with /cl-workflow:ask or /cl-workflow:questions.';
+// The away state that /cl-workflow:away sets and the plugin option mode starts a session in, read by the plugin's hook (ask.mjs).
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -12,18 +9,25 @@ function clock(at, now) {
   return a.toDateString() === new Date(now).toDateString() ? time : `${a.getFullYear()}-${pad(a.getMonth() + 1)}-${pad(a.getDate())} ${time}`;
 }
 
-// /cl-workflow:questions opens the window for the rest of the session: an end of Infinity, kept as SESSION in the window file.
+// Away without a span lasts until off: an end of Infinity, kept as SESSION in the window file.
 export const SESSION = 'session';
-const lasting = (until, now) => (until === Infinity ? 'for this session' : `until ${clock(until, now)}`);
 
-export const allowed = (until, now) => `Terminal questions are allowed ${lasting(until, now)}: /cl-workflow:ask or /cl-workflow:questions opened them, and the question tool and plan mode are refused again after that.`;
+const RULE = 'the question tool (AskUserQuestion) and plan mode (EnterPlanMode) are refused; run no chat-text interviews either (rounds of questions in plain text, as a grilling skill asks them). Put the open questions with your recommendations into one issue per task in the issue tracker the project names, else the report; take each recommendation that is safe and reversible (an item without one waits), and go on.';
 
-// The window's end in epoch ms: none 30 minutes, `[for] <n>[m|h]` (minutes without a unit, a span of 0 unread), `until HH:MM` (next such local time); null off, undefined unread.
-export function askUntil(args, now) {
+// The line a session reads while away, and the reason the hook gives when it refuses the question tool or plan mode.
+export const away = (until, now) => `Away ${until === Infinity ? 'until /cl-workflow:away off' : `until ${clock(until, now)}`}: ${RULE} Only the user comes back, with /cl-workflow:away off.`;
+export const alone = (why) => `Nobody answers in this session (${why}): ${RULE}`;
+
+export const HERE = 'Here: the user answers terminal questions (the question tool and plan mode). /cl-workflow:away [span] works alone.';
+
+export const FORMS = '/cl-workflow:away alone (until off), 30 or 30m (minutes), 2h, until 07:30 (local time), or off';
+
+// The end of an away span in epoch ms: none Infinity, `<n>[m|h]` (minutes without a unit, a span of 0 unread), `until HH:MM` (next such local time); null off, undefined unread.
+export function awayUntil(args, now) {
   const a = args.trim().toLowerCase();
   if (a === 'off') return null;
-  if (a === '') return now + 30 * 60_000;
-  const span = /^(?:for )?(\d{1,4}) ?(m|h)?$/.exec(a);
+  if (a === '') return Infinity;
+  const span = /^(\d{1,4}) ?(m|h)?$/.exec(a);
   if (span) return Number(span[1]) === 0 ? undefined : now + Number(span[1]) * (span[2] === 'h' ? 3_600_000 : 60_000);
   const at = /^until ([01]?\d|2[0-3]):([0-5]\d)$/.exec(a);
   if (!at) return undefined;
@@ -33,25 +37,6 @@ export function askUntil(args, now) {
   return end.getTime();
 }
 
-const COUNT = /^([1-9]\d{0,2}|all)$/;
-const PROJECT = /^[A-Za-z0-9._][A-Za-z0-9._-]{0,99}$/;
-
-// The question count and filter of /cl-workflow:questions, undefined unread. A first word of digits or all is always the count, never a project.
-export function queueArgs(args) {
-  const words = args.match(/\S+/g) ?? [];
-  const given = /^(\d+|all)$/i.test(words[0] ?? '') ? words.shift().toLowerCase() : 'all';
-  if (!COUNT.test(given) || words.length > 1) return undefined;
-  const count = given === 'all' ? given : Number(given);
-  if (!words.length) return { count, filter: null };
-  const [word] = words;
-  if (word.toLowerCase() === 'deferred') return { count, filter: 'deferred' };
-  return PROJECT.test(word) ? { count, filter: { project: word } } : undefined;
-}
-
-// The line the questions skill follows.
-export function queueLine({ count, filter }) {
-  const asked = count !== 'all' ? `at most ${count} question${count === 1 ? '' : 's'}` : `every ${filter === 'deferred' ? 'deferred' : 'open'} question`;
-  const scope = filter === null ? 'no filter' : filter === 'deferred' ? 'filter: deferred' : `local queue filter: project ${filter.project}`;
-  // No closing period: a project name can end in one.
-  return `Question queue: ${asked}; ${scope}`;
-}
+// The most queued questions /cl-workflow:away off asks.
+export const QUEUE_COUNT = 5;
+export const QUEUE_LINE = `Question queue: at most ${QUEUE_COUNT} questions; no filter`;

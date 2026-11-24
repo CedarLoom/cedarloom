@@ -1,0 +1,5 @@
+interface:
+  display_name: "Away"
+  short_description: "Work alone until off, then answer queued questions"
+policy:
+  allow_implicit_invocation: false

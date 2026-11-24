@@ -23,4 +23,4 @@ Why now: <what waits on it>
 | Cost | <sessions and an estimate; mark unverified> |
 | Undo | <how each part is reversed> |
 
-Answer: <in the local queue: run /cl-workflow:questions; in a repository: run /cl-workflow:questions in a clone of it, or comment on this issue "a" or "b" alone, or "Owner answer (date): a." with "b" in place of "a" and your own text after it>
+Answer: <in the local queue: run /cl-workflow:away off; in a repository: run /cl-workflow:away off in a clone of it, or comment on this issue "a" or "b" alone, or "Owner answer (date): a." with "b" in place of "a" and your own text after it>

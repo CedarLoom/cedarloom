@@ -12,12 +12,14 @@ const decision = (command, tool = 'Bash') => {
   return r.stdout === '' ? 'none' : JSON.parse(r.stdout).hookSpecificOutput.permissionDecision;
 };
 
-test('dispatch guard: an Orca dispatch that hands a session /cl-workflow:questions is refused', () => {
+test('dispatch guard: an Orca dispatch that hands a session /cl-workflow:away off or /cl-workflow:questions is refused', () => {
   const dispatched = [
     'orca orchestration worker-start --spec "/cl-workflow:questions all" --terminal t1 --json',
     'orca orchestration send --to dispatch:d1 --subject x --body "/questions 5" --json',
     '/opt/orca/bin/orca orchestration worker-start --spec /cl-workflow:questions',
     'cd w && ORCA_HOME=x orca orchestration send --to dispatch:d1 --body \'/cl-workflow:questions\'',
+    'orca orchestration worker-start --spec "/cl-workflow:away off" --terminal t1 --json',
+    'orca orchestration send --to dispatch:d1 --body "/away OFF"',
   ];
   for (const command of dispatched) assert.equal(decision(command), 'deny', command);
   assert.equal(decision('orca.exe orchestration send --to dispatch:d1 --body "/questions"', 'PowerShell'), 'deny');
@@ -27,6 +29,7 @@ test('dispatch guard: other Orca commands and commands that only name the queue 
   const passed = [
     'orca orchestration worker-start --spec-file spec.md --terminal t1 --json',
     'orca orchestration send --to dispatch:d1 --body "run the questions skill later"',
+    'orca orchestration send --to dispatch:d1 --body "/cl-workflow:away 2h"',
     'grep -rn /cl-workflow:questions plugins',
     'cat docs/orca.md',
   ];

@@ -74,11 +74,11 @@ For other agents, follow its own README.
 1. [Install](#install) the `cedarloom` bundle; `cl-workflow` plus `cl-repo` is enough without the coordinator.
 2. Once per repository, run `claude` there and then `/cl-repo:setup`. Where the cl-orchestration plugin is installed, it also writes the coordinator's policy, `docs/agents/orchestration.json`, whose `startLabel` names the label that lets the coordinator start an issue ([policy](plugins/cl-orchestration/skills/coordinate/policy.md)). The coordinator starts nothing until that file is on the default branch.
 3. Per task, without the coordinator:
-   - Describe the task: the workflow picks the kind and the depth. Start a bigger one with `/cl-workflow:plan <task>`, and run `/cl-workflow:ask` to let the agent ask you questions in the terminal for a while.
+   - Describe the task: the workflow picks the kind and the depth. Start a bigger one with `/cl-workflow:plan <task>`, and run `/cl-workflow:away` when you leave the terminal, so the agent works alone and asks nothing.
 4. Per issue, with the coordinator (needs `cl-orchestration`):
    - Label the issues with the `startLabel` (`cl:ready-for-agent` by default).
    - In a terminal (an Orca terminal for Orca workers), run `CEDARLOOM_ROLE=coordinator claude` in the default permission mode, then `/cl-orchestration:coordinate <project paths>`. It starts a worker per issue through [Orca](plugins/cl-orchestration/skills/coordinate/orca.md) and a fresh reviewer per pull request. Releases and tags stay yours.
-   - Its questions go to the project's repository as issues when it has issues on, else to a local queue; `/cl-workflow:questions` asks them. Where they go, the labels and why a private repository is recommended: [owner questions](docs/plugins.md#owner-questions).
+   - Its questions go to the project's repository as issues when it has issues on, else to a local queue; `/cl-workflow:away off` asks them. Where they go, the labels and why a private repository is recommended: [owner questions](docs/plugins.md#owner-questions).
 
 ## Update
 

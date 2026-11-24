@@ -419,10 +419,10 @@ test('role guard: the project bot deletes a head branch of the bot shape, never 
   for (const role of [undefined, ...ROLE_BOTS]) assert.equal(decision('gh api -X DELETE repos/o/r/git/refs/heads/feat/37-bot-roles', { role }), 'deny', role);
 });
 
-test('role guard: only the session where /cl-workflow:questions set the answer flag writes into the local question queue', () => {
+test('role guard: only the session where /cl-workflow:away off set the answer flag writes into the local question queue', () => {
   const data = mkdtempSync(join(tmpdir(), 'role-guard-'));
   const env = { CLAUDE_PLUGIN_DATA: data, CLAUDE_PID: '4242' };
-  const typed = (command_name) => spawnSync(process.execPath, [ASK], { input: JSON.stringify({ hook_event_name: 'UserPromptExpansion', command_name, command_args: '', session_id: 's', cwd: trunk, permission_mode: 'default' }), env: { ...ENV, ...env }, encoding: 'utf8' }).status;
+  const typed = (command_args) => spawnSync(process.execPath, [ASK], { input: JSON.stringify({ hook_event_name: 'UserPromptExpansion', command_name: 'cl-workflow:away', command_args, session_id: 's', cwd: trunk, permission_mode: 'default' }), env: { ...ENV, ...env }, encoding: 'utf8' }).status;
   const answer = { file_path: '.cedarloom/questions/project-1.md', old_string: 'Status: open', new_string: 'Status: answered' };
   const calls = [
     ['Edit', answer],
@@ -430,15 +430,15 @@ test('role guard: only the session where /cl-workflow:questions set the answer f
     ['Bash', { command: "sed -i 's/open/answered/' .cedarloom/questions/project-1.md" }],
   ];
   const decide = (opts) => calls.map(([tool, toolInput]) => decision(undefined, { tool, toolInput, env, ...opts }));
-  // Every session, the coordinator's included, until the user types the command; a window /cl-workflow:ask opened does not count.
+  // Every session, the coordinator's included, until the user types the command; going away does not count.
   for (const role of [undefined, 'worker', 'coordinator']) assert.deepEqual(decide({ role }), ['deny', 'deny', 'deny'], role);
-  assert.equal(typed('cl-workflow:ask'), 0);
+  assert.equal(typed('2h'), 0);
   assert.deepEqual(decide({}), ['deny', 'deny', 'deny']);
-  assert.equal(typed('cl-workflow:questions'), 0);
+  assert.equal(typed('off'), 0);
   assert.deepEqual(decide({}), ['none', 'none', 'none']);
-  // The window is the process's, so a subagent of that session stays out.
+  // The flag is the process's, so a subagent of that session stays out.
   assert.deepEqual(decide({ agent: 'agent_01' }), ['deny', 'deny', 'deny']);
-  // No session writes the window files, which would open the window for itself.
+  // No session writes the window files, which would set the flag for itself.
   const forged = join(data, 'ask', '4242.json');
   for (const opts of [{}, { role: 'coordinator' }]) {
     assert.equal(decision(undefined, { tool: 'Write', toolInput: { file_path: forged, content: '{}' }, env, ...opts }), 'deny');
@@ -489,6 +489,8 @@ test('role guard: a command reaches the queue or the window files through a cd, 
   for (const role of [undefined, 'coordinator']) {
     assert.equal(decision('claude -p "/cl-workflow:questions"', { cwd: session, env, role }), 'deny', role);
     assert.equal(decision("echo '/questions' | claude -p", { cwd: session, env, role }), 'deny', role);
+    assert.equal(decision('claude -p "/cl-workflow:away off"', { cwd: session, env, role }), 'deny', role);
+    assert.equal(decision("echo '/away  OFF' | claude -p", { cwd: session, env, role }), 'deny', role);
     // npx names the package with a version, and a Windows npm install starts claude through a script file.
     for (const command of versioned) assert.equal(decision(command, { cwd: session, env, role }), 'deny', `${role}: ${command}`);
     for (const command of ['claude.cmd -p /questions', 'claude.ps1 -p /questions', 'claude.bat -p /questions']) assert.equal(decision(command, { tool: 'PowerShell', cwd: session, env, role }), 'deny', `${role}: ${command}`);
