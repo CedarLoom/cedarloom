@@ -252,11 +252,17 @@ test('precheck and policy: started through a symlinked folder they still run, so
 });
 
 test('precheck: Pick leaves an issue while a question that names it waits for the owner', () => {
-  const question = (comments, body = 'What: the export format\n\nIssue: owner/project#7\n') => ({ number: 20, labels: [{ name: 'cl:needs-human' }], body, author: { login: 'owner' }, comments });
+  const question = (comments, body = 'What: the export format\n\nIssue: owner/project#7\n', login = 'owner') => ({ number: 20, labels: [{ name: 'cl:needs-human' }], body, author: { login }, comments });
   const answered = [{ author: { login: 'owner' }, authorAssociation: 'OWNER', body: 'Owner answer (2026-11-20): a.', createdAt: '2026-11-20T10:00:00Z' }];
-  const run = (asked) => (dir, cmd, args) => (args[0] === 'issue' ? JSON.stringify(asked) : stub(POLICY)(dir, cmd, args));
+  const run = (asked) => (dir, cmd, args) => {
+    if (args[0] === 'issue') return JSON.stringify(asked);
+    if (args[1]?.endsWith('/permission')) return JSON.stringify({ permission: args[1].split('/')[4] === 'owner' ? 'admin' : 'read' });
+    return stub(POLICY)(dir, cmd, args);
+  };
   const none = () => [];
   assert.deepEqual(check('/p', run([question([])]), {}, none), []);
+  // Anyone can open an issue with an Issue line: one without write access holds nothing.
+  assert.deepEqual(check('/p', run([question([], undefined, 'stranger')]), {}, none), [7]);
   // A plain comment answer keeps cl:needs-human and releases the issue; a question about another repository's #7 holds nothing.
   assert.deepEqual(check('/p', run([question(answered)]), {}, none), [7]);
   assert.deepEqual(check('/p', run([question([], 'Issue: owner/other#7')]), {}, none), [7]);
