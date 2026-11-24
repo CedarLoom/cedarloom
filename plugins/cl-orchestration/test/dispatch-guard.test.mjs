@@ -20,6 +20,10 @@ test('dispatch guard: an Orca dispatch that hands a session /cl-workflow:away of
     'cd w && ORCA_HOME=x orca orchestration send --to dispatch:d1 --body \'/cl-workflow:questions\'',
     'orca orchestration worker-start --spec "/cl-workflow:away off" --terminal t1 --json',
     'orca orchestration send --to dispatch:d1 --body "/away OFF"',
+    // Spellings the shell joins into the command.
+    'orca orchestration send --to dispatch:d1 --body "/cl-workflow:away"\' off\'',
+    'orca orchestration send --to dispatch:d1 --body /cl-workflow:away\\ off',
+    'orca orchestration send --to dispatch:d1 --body "/cl-workflow:away o""ff"',
   ];
   for (const command of dispatched) assert.equal(decision(command), 'deny', command);
   assert.equal(decision('orca.exe orchestration send --to dispatch:d1 --body "/questions"', 'PowerShell'), 'deny');

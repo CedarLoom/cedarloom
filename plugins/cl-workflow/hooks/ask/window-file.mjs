@@ -9,6 +9,11 @@ export const windowDir = () => (process.env.CLAUDE_PLUGIN_DATA ? join(process.en
 export const processId = () => process.env.CLAUDE_PID ?? String(process.ppid);
 export const windowFile = () => { const dir = windowDir(); return dir && join(dir, `${processId()}.json`); };
 
+// The plugin option mode, which Claude Code exports only once the option is saved (it does not fill the manifest default for hooks).
+export const optionMode = () => process.env.CLAUDE_PLUGIN_OPTION_MODE;
+// Unset is here; any value but here, a typo too, starts away: coming back is one command, a job that waits for an answer is not.
+export const startsAway = (mode) => mode !== undefined && mode.trim().toLowerCase() !== 'here';
+
 const read = (path) => {
   try {
     return JSON.parse(readFileSync(path, 'utf8'));
@@ -17,11 +22,21 @@ const read = (path) => {
   }
 };
 
-// The end of a window file's away span while it lasts (Infinity until off), else null.
-export function awayEnd(path, now) {
-  const window = read(path);
-  if (typeof window?.awayUntil !== 'string') return null;
-  const end = window.awayUntil === SESSION ? Infinity : Date.parse(window.awayUntil);
+// The end of a window file's away span while it lasts (Infinity until off), else null. No file is here, unless the mode starts
+// away (the start could not write it); state it cannot read is away until off.
+export function awayEnd(path, now, mode = optionMode()) {
+  let window;
+  try {
+    window = JSON.parse(readFileSync(path ?? '', 'utf8'));
+  } catch (error) {
+    return error.code === 'ENOENT' && !startsAway(mode) ? null : Infinity;
+  }
+  if (window?.answers === true && Object.keys(window).length === 1) return null;
+  const until = window?.awayUntil;
+  if (until === SESSION) return Infinity;
+  const end = typeof until === 'string' ? Date.parse(until) : NaN;
+  // Only the ISO time save() writes is read; any other value is away until off.
+  if (Number.isNaN(end) || new Date(end).toISOString() !== until) return Infinity;
   return end > now ? end : null;
 }
 

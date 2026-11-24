@@ -422,7 +422,7 @@ test('role guard: the project bot deletes a head branch of the bot shape, never 
 test('role guard: only the session where /cl-workflow:away off set the answer flag writes into the local question queue', () => {
   const data = mkdtempSync(join(tmpdir(), 'role-guard-'));
   const env = { CLAUDE_PLUGIN_DATA: data, CLAUDE_PID: '4242' };
-  const typed = (command_args) => spawnSync(process.execPath, [ASK], { input: JSON.stringify({ hook_event_name: 'UserPromptExpansion', command_name: 'cl-workflow:away', command_args, session_id: 's', cwd: trunk, permission_mode: 'default' }), env: { ...ENV, ...env }, encoding: 'utf8' }).status;
+  const typed = (command_args) => spawnSync(process.execPath, [ASK], { input: JSON.stringify({ hook_event_name: 'UserPromptExpansion', command_name: 'cl-workflow:away', command_args, session_id: 's', cwd: trunk, permission_mode: 'default' }), env: { ...ENV, ...env, CLAUDE_CODE_ENTRYPOINT: 'cli' }, encoding: 'utf8' }).status;
   const answer = { file_path: '.cedarloom/questions/project-1.md', old_string: 'Status: open', new_string: 'Status: answered' };
   const calls = [
     ['Edit', answer],

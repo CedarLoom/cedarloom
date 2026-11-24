@@ -9,7 +9,7 @@ writes: "One file per Claude Code process in the plugin's data folder (ask/<proc
 
 # Away
 
-Questions are open by default; the plugin option `mode` (`here` or `away`) sets how a session starts. Alone, this command is away until `off`; a span ends it sooner: `30` or `30m` minutes, `2h` hours, `until HH:MM` (local time, the next such time). While away, the question tool and plan mode are refused, agents take the safe, reversible defaults and put owner-only items into the issue tracker. `/clear`, compaction and a fork keep the state; a new Claude Code process or a resumed conversation starts in the mode.
+Questions are open by default; the plugin option `mode` sets how a session starts: unset or `here` here, any other value away. Alone, this command is away until `off`; a span sets an end: `30` or `30m` minutes, `2h` hours, `until HH:MM` (local time, the next such time). Only `off` ends an away sooner. While away, the question tool and plan mode are refused, agents take the safe, reversible defaults and put owner-only items into the issue tracker. `/clear`, compaction and a fork keep the state; a new Claude Code process or a resumed conversation starts in the mode.
 
 The plugin's hook has already set the state and added a line above as context.
 - A span, or a hook line that names the forms: answer with that line alone.

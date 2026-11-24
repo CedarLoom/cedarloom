@@ -1,10 +1,10 @@
-// The question tool's switch for three hooks: SessionStart starts the session in the plugin option mode (argument 1) and says the state,
+// The question tool's switch for three hooks: SessionStart starts the session in the plugin option mode and says the state,
 // UserPromptExpansion sets it for /cl-workflow:away, PreToolUse refuses while away or where nobody answers.
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { FORMS, HERE, QUEUE_LINE, SESSION, alone, away, awayUntil } from './window.mjs';
-import { answerFlag, awayEnd, processId, windowDir, windowFile } from './window-file.mjs';
+import { answerFlag, awayEnd, optionMode, processId, startsAway, windowDir, windowFile } from './window-file.mjs';
 import { logFile, logRun } from './questions-log.mjs';
 
 const dir = windowDir();
@@ -12,16 +12,25 @@ const file = windowFile();
 
 // The permission modes a person can answer in. Any other value, a mode added later too, refuses until it is judged.
 const ATTENDED = new Set(['default', 'acceptEdits', 'plan', 'auto', 'bypassPermissions']);
+// The entrypoints a person answers in: the terminal, the VS Code extension and the desktop app; unset or any other value refuses.
+const ENTRYPOINTS = new Set(['cli', 'claude-vscode', 'claude-desktop']);
+
+// Why CLAUDE_CODE_ENTRYPOINT shows a session nobody may answer in, else null. SessionStart reads only this: its input has no permission mode.
+function unattendedEntrypoint() {
+  const entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT;
+  // Python Agent SDK: sdk-py over any value. TypeScript SDK: sdk-ts only where unset. claude -p: sdk-cli only where unset or cli.
+  // Those two keep an IDE or orchestrator parent's value: that child is not refused.
+  if (ENTRYPOINTS.has(entrypoint)) return null;
+  if (entrypoint?.startsWith('sdk-')) return 'the session runs headless or under an Agent SDK (CLAUDE_CODE_ENTRYPOINT starts with sdk-)';
+  return 'CLAUDE_CODE_ENTRYPOINT names no entrypoint a person answers in';
+}
 
 // Why the input shows a session nobody may answer in, else null.
 function unattended(input) {
   const mode = input.permission_mode;
   if (mode === 'dontAsk') return 'the session runs in dontAsk mode, which asks nobody';
   if (!ATTENDED.has(mode)) return 'the hook input names no permission mode a person answers in';
-  // Python Agent SDK: sdk-py over any value. TypeScript SDK: sdk-ts only where unset. claude -p: sdk-cli only where unset or cli.
-  // Those two keep an IDE or orchestrator parent's value: that child is not refused.
-  if (process.env.CLAUDE_CODE_ENTRYPOINT?.startsWith('sdk-')) return 'the session runs headless or under an Agent SDK (CLAUDE_CODE_ENTRYPOINT starts with sdk-)';
-  return null;
+  return unattendedEntrypoint();
 }
 
 // The rule while away or where nobody answers, else null.
@@ -48,7 +57,7 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
   const reason = refusal(input, now);
   if (reason) say(event, { permissionDecision: 'deny', permissionDecisionReason: reason });
 } else if (event === 'SessionStart') {
-  const mode = process.argv[2] ?? 'here';
+  const mode = optionMode();
   let note = '';
   // A new process or a resumed conversation starts in the mode; ended away spans of earlier processes go too.
   // shortcut: a quit process's answer flag stays (a few bytes) until a process with its id starts; prune by age if they pile up.
@@ -63,11 +72,16 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
         if (entry.isFile() && awayEnd(path, now) === null && !answerFlag(path)) rmSync(path, { force: true });
       }
     }
-    if (mode === 'away' && !dir) throw new Error('the plugin has no data folder (CLAUDE_PLUGIN_DATA), so the session cannot start away');
-    if (mode === 'away') save({ awayUntil: SESSION });
-    else if (mode !== 'here') note = ` The plugin option mode reads "${mode}", which is neither here nor away, so the session started here.`;
+    // A start that cannot write the state still ends away: with no file, awayEnd reads a mode other than here as away.
+    if (startsAway(mode)) {
+      if (mode.trim().toLowerCase() !== 'away') note = ` The plugin option mode reads "${mode}", which is not here, so the session started away.`;
+      if (!dir) throw new Error('the plugin has no data folder (CLAUDE_PLUGIN_DATA), so the session cannot keep its away state');
+      save({ awayUntil: SESSION });
+    }
   }
-  say(event, { additionalContext: `${refusal(input, now) ?? HERE}${note}` });
+  const end = awayEnd(file, now);
+  const why = unattendedEntrypoint();
+  say(event, { additionalContext: `${end !== null ? away(end, now) : why ? alone(why) : HERE}${note}` });
 } else if (event === 'UserPromptExpansion' && ['cl-workflow:away', 'cl-workflow:ask', 'cl-workflow:questions'].includes(input.command_name)) {
   const args = String(input.command_args ?? '');
   const end = input.command_name === 'cl-workflow:away' ? awayUntil(args, now) : undefined;
@@ -78,8 +92,14 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
   } else if (!file) {
     throw new Error('the plugin has no data folder (CLAUDE_PLUGIN_DATA), so /cl-workflow:away cannot keep its state');
   } else if (end !== null) {
-    save({ awayUntil: end === Infinity ? SESSION : new Date(end).toISOString() });
-    say(event, { additionalContext: away(end, now) });
+    // Only off ends an away sooner, so another session that types a short span cannot open the question tool.
+    const current = awayEnd(file, now);
+    if (current !== null && end < current) {
+      say(event, { additionalContext: `/cl-workflow:away ${args.trim()} would end before the current away, so nothing changed. ${away(current, now)}` });
+    } else {
+      save({ awayUntil: end === Infinity ? SESSION : new Date(end).toISOString() });
+      say(event, { additionalContext: away(end, now) });
+    }
   } else {
     // A command expands alike when typed, piped to claude -p or sent as a stream-json message, and no field of this input tells
     // them apart. So off sets no answer flag where the input shows an unattended session, role-guard.mjs refuses a launch that
