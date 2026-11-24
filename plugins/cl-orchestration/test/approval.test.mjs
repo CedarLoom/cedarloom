@@ -211,6 +211,10 @@ test('approval: apply moves a question the owner answered to cl:ready-for-agent,
   const approval = run([said('a', '2026-11-11T10:00:00Z')], { body: FILLED });
   assert.equal(approval.status, 0, approval.stderr);
   assert.deepEqual(approval.edits, ['issue edit 12 -R owner/tracker --remove-label cl:needs-human --remove-label CL:Deferred']);
+  // So does a question with an Issue line: the issue it names is the work.
+  const named = run([SECOND], { body: 'Which export format?\n\nIssue: owner/tracker#7' });
+  assert.equal(named.status, 0, named.stderr);
+  assert.deepEqual(named.edits, ['issue edit 12 -R owner/tracker --remove-label cl:needs-human --remove-label CL:Deferred']);
   // An approval that carries the start label loses it, or the precheck lists it as work to start.
   const started = run([said('a', '2026-11-11T10:00:00Z')], { body: FILLED, tags: [{ name: 'cl:needs-human' }, { name: 'cl:ready-for-agent' }, { name: 'bug' }] });
   assert.equal(started.status, 0, started.stderr);
@@ -280,11 +284,14 @@ test('approval: without a private tracker, the question goes into the local queu
   writeFileSync(join(dir, '.cedarloom/questions/project-1.md'), `${filed.replace('Status: open', 'Status: answered')}\nOwner answer (2026-11-15): b. Hold it for now.\n`);
   // A question that holds back a work issue names it on its Issue line.
   writeFileSync(join(dir, '.cedarloom/questions/project-2.md'), `${filed.replace('Status: open', 'Status: deferred')}\nIssue: acme/app#7\nDeferred by the owner on 2026-11-15.\n`);
-  assert.deepEqual(queue(), [{ file: 'project-1.md', status: 'answered', option: 'b', text: 'Hold it for now.', at: '2026-11-15' }, { file: 'project-2.md', status: 'deferred', issue: 'acme/app#7' }]);
+  assert.deepEqual(queue(), [{ file: 'project-1.md', status: 'answered', option: 'b', text: 'Hold it for now.', at: '2026-11-15', held: true }, { file: 'project-2.md', status: 'deferred', issue: 'acme/app#7' }]);
   // A file answered without an answer line is an error, never "no answer yet", and holds back no other answer.
   writeFileSync(join(dir, '.cedarloom/questions/project-2.md'), `Status: answered\n\n${FILLED}`);
   assert.deepEqual(queue()[1], { file: 'project-2.md', error: 'answered, but no Owner answer line' });
   assert.equal(queue()[0].option, 'b');
+  // The option by its row's text, as the question tool offered it, releases what the question holds back.
+  writeFileSync(join(dir, '.cedarloom/questions/project-1.md'), `${filed.replace('Status: open', 'Status: answered')}\nOwner answer (2026-11-15): Stream the export.\n`);
+  assert.equal(queue()[0].held, false);
 });
 
 test('approval: the digest folder is kept out of git with one exclude line, also on a second write', () => {
@@ -370,7 +377,7 @@ test('approval: the local queue refuses links, existing files and planted answer
   assert.deepEqual(JSON.parse(read.stdout), [
     { file: '.#project-1.md', error: 'cannot be read (ENOENT)' },
     { file: 'notes.md', error: 'cannot be read (EISDIR)' },
-    { file: 'project-9007199254740992.md', status: 'answered', option: 'b', text: 'Hold it for now.', at: '2026-11-15' },
+    { file: 'project-9007199254740992.md', status: 'answered', option: 'b', text: 'Hold it for now.', at: '2026-11-15', held: true },
   ]);
   // A project named as a repository can be, and a working folder whose name holds gitignore pattern characters.
   const brackets = project('apps/[web]');

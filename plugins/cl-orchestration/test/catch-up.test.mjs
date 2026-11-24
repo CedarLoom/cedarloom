@@ -37,6 +37,7 @@ function github({ runs = [run('success')], asked = [], recent = [], prs = [], sk
     [['api', 'repos/acme/app/issues/5'], { number: 5, author_association: 'OWNER', user: { login: 'owner' } }],
     [['api', 'repos/acme/app/issues/6'], { number: 6, author_association: 'OWNER', user: { login: 'owner' }, pull_request: { url: 'https://api.github.com/repos/acme/app/pulls/6' } }],
     [['api', 'repos/acme/app/issues/8'], { number: 8, author_association: 'NONE', user: { login: 'stranger' } }],
+    ...['owner', 'stranger'].map((login) => [['api', `repos/acme/app/collaborators/${login}/permission`], { permission: login === 'owner' ? 'admin' : 'read' }]),
   ];
   gh.answer(answers.filter(([args]) => args[0] !== skip).map(([args, out]) => [args, JSON.stringify(out)]));
 }
@@ -104,6 +105,11 @@ test('catch-up 3: each owner answer not acted on starts a run, whether or not it
   assert.deepEqual(check(stateWith()), ANSWERED);
   github({ recent: [OWNER_ANSWER] });
   assert.deepEqual(check(stateWith()), ANSWERED);
+  // Without the label, a stranger's issue is no question, and a label alone answers none.
+  github({ recent: [{ ...OWNER_ANSWER, author: { login: 'stranger' } }] });
+  assert.deepEqual(check(stateWith()), NOTHING);
+  github({ recent: [{ ...OWNER_ANSWER, body: '| Option | Impact |\n|---|---|\n| (a) Go | x |\n| (b) Hold | y |\n', comments: [{ ...OWNER_ANSWER.comments[0], body: 'a' }] }] });
+  assert.deepEqual(check(stateWith()), NOTHING);
   // A repeated pass over an answer acted on starts none, in either form; a newer answer on that issue starts one.
   const acted = stateWith({ 'answered.json': [`#3 ${ago(5)}`] });
   github({ asked: [OWNER_ANSWER], recent: [OWNER_ANSWER] });

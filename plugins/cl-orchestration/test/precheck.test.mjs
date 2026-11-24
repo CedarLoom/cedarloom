@@ -263,20 +263,28 @@ test('precheck: Pick leaves an issue while a question that names it waits for th
   assert.deepEqual(check('/p', run([question([])]), {}, none), []);
   // Anyone can open an issue with an Issue line: one without write access holds nothing.
   assert.deepEqual(check('/p', run([question([], undefined, 'stranger')]), {}, none), [7]);
-  // A plain comment answer keeps cl:needs-human and releases the issue; a question about another repository's #7 holds nothing.
-  assert.deepEqual(check('/p', run([question(answered)]), {}, none), [7]);
+  // A question filed under an App, as gh prints it, is a trustedAuthors login's.
+  assert.deepEqual(check('/p', run([question([], undefined, 'app/helper')]), {}, none), []);
+  // An Issue line in a comment or a code block names nothing; a question about another repository's #7 holds nothing.
+  for (const quoted of ['<!--\nIssue: owner/project#7\n-->', '```\nIssue: owner/project#7\n```', '~~~~\nIssue: owner/project#7\n']) {
+    assert.deepEqual(check('/p', run([question([], quoted)]), {}, none), [7], quoted);
+  }
   assert.deepEqual(check('/p', run([question([], 'Issue: owner/other#7')]), {}, none), [7]);
-  // A Hold keeps it, picked by its row's label or named.
-  const options = 'Issue: owner/project#7\n\n| Option | Impact |\n|---|---|\n| (a) Stream it | x |\n| (c) Hold | Nothing changes |\n';
-  for (const said of ['c', 'Owner answer (2026-11-20): (c) Hold. Later.']) {
+  // An answer releases the issue only when it names one option row that is no Hold, by label, text or both; anything else holds it.
+  const options = 'Issue: owner/project#7\n\n| Option | Impact |\n|---|---|\n| (a) Stream it (Recommended) | x |\n| (c) Hold | Nothing changes |\n';
+  for (const said of ['a', 'Owner answer (2026-11-20): Stream it. Go.', 'Owner answer (2026-11-20): (a) Stream it (Recommended).']) {
+    assert.deepEqual(check('/p', run([question([{ ...answered[0], body: said }], options)]), {}, none), [7], said);
+  }
+  for (const said of ['c', 'Owner answer (2026-11-20): (c) Hold. Later.', 'Owner answer (2026-11-20): Wait until the audit is done.']) {
     assert.deepEqual(check('/p', run([question([{ ...answered[0], body: said }], options)]), {}, none), [], said);
   }
-  assert.deepEqual(check('/p', run([question([{ ...answered[0], body: 'a' }], options)]), {}, none), [7]);
-  // A local question holds it until it is answered other than Hold; a file that is no question starts nothing.
-  const local = (status, option) => () => [{ file: 'project-1.md', status, issue: 'owner/project#7', option }];
+  // Without option rows, no answer names one.
+  assert.deepEqual(check('/p', run([question(answered)]), {}, none), []);
+  // A local question holds it while open, deferred or held by its answer; a file that is no question starts nothing.
+  const local = (status, held) => () => [{ file: 'project-1.md', status, issue: 'owner/project#7', held }];
   assert.deepEqual(check('/p', run([]), {}, local('open')), []);
   assert.deepEqual(check('/p', run([]), {}, local('deferred')), []);
-  assert.deepEqual(check('/p', run([]), {}, local('answered', 'Hold')), []);
-  assert.deepEqual(check('/p', run([]), {}, local('answered', 'Stream it')), [7]);
+  assert.deepEqual(check('/p', run([]), {}, local('answered', true)), []);
+  assert.deepEqual(check('/p', run([]), {}, local('answered', false)), [7]);
   assert.throws(() => check('/p', run([]), {}, () => [{ file: 'project-1.md', error: 'cannot be read (EISDIR)' }]), /the question project-1\.md cannot be read/);
 });

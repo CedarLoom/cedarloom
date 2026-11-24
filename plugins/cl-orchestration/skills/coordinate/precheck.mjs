@@ -28,6 +28,12 @@ export const trusts = (policy, writes) => {
   return (i) => i.author_association === 'OWNER' || trusted.has(i.user?.login) || (ASSOCIATED.includes(i.author_association) && writes(i.user?.login));
 };
 
+// Whether the author of an issue that gh issue list printed may ask a question: a trustedAuthors login or one with write access. gh prints an App as app/<slug>, which trustedAuthors names as <slug>[bot].
+export const asks = (policy, writes) => (i) => {
+  const login = i.author?.login?.replace(/^app\/(.+)$/, '$1[bot]');
+  return (policy.trustedAuthors ?? []).includes(login) || writes(login);
+};
+
 // An issue with one of these waits for the owner, also after it gained the start label, is held by a worker or is parked.
 const HELD = ['cl:needs-human', 'cl:in-progress', 'cl:deferred'];
 
@@ -87,9 +93,11 @@ function picks(dir, run, env, queue) {
   const listed = (...filter) => JSON.parse(run(dir, 'gh', ['issue', 'list', '-R', repo, ...filter, '--state', 'open', '--limit', '1000', '--json', 'number,labels,comments,author,body']));
   // An answered question has lost cl:needs-human, and a new one may not be in the search index yet: both lists count.
   // Only a trusted author's question holds an issue back: anyone can open an issue that names one.
-  const trusted = (i) => (policy.trustedAuthors ?? []).includes(i.author?.login) || writes(i.author?.login);
-  const asked = [...listed('--label', 'cl:needs-human'), ...listed('--search', `"Issue: ${repo}#" in:body`)].filter(trusted);
-  return { tracker: repo, numbers: pickable(policy, issues, pulls, writes, waiting(repo, asked, queue(), writes)), warnings };
+  const asked = [...listed('--label', 'cl:needs-human'), ...listed('--search', `"Issue: ${repo}#" in:body`)].filter(asks(policy, writes));
+  const held = waiting(repo, asked, queue(), writes);
+  // An answer that names no single option row holds its issue too: the line says why it is not picked.
+  const said = [...held].sort((a, b) => a - b).map((n) => ({ rule: 'question', message: `a question without an answer that releases it holds ${repo}#${n}` }));
+  return { tracker: repo, numbers: pickable(policy, issues, pulls, writes, held), warnings: [...warnings, ...said] };
 }
 
 // queue() lists the local questions as approval.mjs queue does.

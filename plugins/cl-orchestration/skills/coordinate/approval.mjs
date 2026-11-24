@@ -1,8 +1,8 @@
 // Usage: node approval.mjs <file>, the file in .cedarloom/runs/ of the working directory (the run folder, approvals.md); any other path exits 2. Checks an approval or owner question against approval-template.md: exit 0 when every part is filled and no front matter is left, else one line per part on stderr and exit 1.
 // Usage: node approval.mjs answer <file>, the file in the run folder as above. Reads the owner's answer from a filed approval, the file holding what `gh issue view <n> -R <repository> --json labels,comments,author,body,url` printed: the answer as JSON and exit 0, exit 1 while there is none, or exit 2 with one line when the file cannot be read as that output.
 // Usage: node approval.mjs file <file> <project>, the file in the run folder: checks it as above and files it as the next question of the local queue, .cedarloom/questions/<project>-<n>.md, printing { file }.
-// Usage: node approval.mjs apply <owner/name> <number>. Reads the issue with gh and its owner's answer as the answer mode does; on an answer takes cl:needs-human and cl:deferred off, and cl:ready-for-agent too when the body holds an Approval table, else puts cl:ready-for-agent on, then prints { option, text, at, labels } and exits 0; exit 1 while there is none, exit 2 with one line on an error.
-// Usage: node approval.mjs queue: { file, status, issue, option, text, at } of each question in the local queue as JSON (issue where its Issue line names one), or exit 2 with one line.
+// Usage: node approval.mjs apply <owner/name> <number>. Reads the issue with gh and its owner's answer as the answer mode does; on an answer takes cl:needs-human and cl:deferred off, and cl:ready-for-agent too when the body holds an Approval table or an Issue line, else puts cl:ready-for-agent on, then prints { option, text, at, labels } and exits 0; exit 1 while there is none, exit 2 with one line on an error.
+// Usage: node approval.mjs queue: { file, status, issue, option, text, at, held } of each question in the local queue as JSON (issue where its Issue line names one; held: whether the answer keeps that issue back, holds), or exit 2 with one line.
 // Usage: node approval.mjs digests: makes the digest folder .cedarloom/digests/ (digest.md) and keeps it out of git as the queue is, printing { folder }, or exit 2 with one line.
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
@@ -123,10 +123,10 @@ const fullAnswer = (body, at) => {
 const ASKING = ['cl:needs-human', 'cl:deferred'];
 const START = 'cl:ready-for-agent';
 
-// gh refuses to remove a label the repository lacks, so only the issue's own go; an approval (an Approval table) gets no start label and loses one it has, as its work lives in the issue or pull request it names.
+// gh refuses to remove a label the repository lacks, so only the issue's own go; an approval (an Approval table) or a question with an Issue line gets no start label and loses one it has, as its work lives in the issue or pull request it names.
 export function settle(repo, issue, exec) {
   const labels = issue.labels.map((label) => String(label.name));
-  const approval = tables(issue.body.replace(COMMENT, ''), 'Approval').length > 0;
+  const approval = tables(issue.body.replace(COMMENT, ''), 'Approval').length > 0 || named(issue.body) !== null;
   // Without cl:needs-human, an approval that kept the start label would read as work to start (precheck.mjs pickable).
   const off = labels.filter((name) => [...ASKING, ...(approval ? [START] : [])].includes(name.toLowerCase()));
   const on = approval || labels.some((name) => name.toLowerCase() === START) ? [] : [START];
@@ -215,28 +215,36 @@ export function readQueue() {
     const issue = named(body);
     if (status !== 'answered') return { file, status, ...(issue && { issue }) };
     const found = fullAnswer(body.slice(body.lastIndexOf('\nOwner answer (') + 1));
-    return found ? { file, status, ...(issue && { issue }), ...found } : { file, error: 'answered, but no Owner answer line' };
+    return found ? { file, status, ...(issue && { issue }), ...found, held: holds(found.option, body) } : { file, error: 'answered, but no Owner answer line' };
   });
 }
 
-// The work issue a question holds back from Pick, from its line `Issue: <owner/repo>#<n>` (approvals.md, Labels and title), or null.
-const named = (text) => /^Issue: ([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#[1-9]\d*)\r?$/m.exec(String(text))?.[1] ?? null;
+// A fenced code block, up to its closing fence or the end of the text: it shows its lines as code, not as lines of the body.
+const FENCED = /^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[^\n]*$|(?![\s\S]))/gm;
 
-// Whether an answer keeps the work its question holds back: its option names Hold, or is the label of the option row of body whose text is Hold.
+// The work issue a question holds back from Pick, from its line `Issue: <owner/repo>#<n>` (approvals.md, Labels and title), or null; a line in a comment or code block is none.
+const named = (text) => /^Issue: ([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#[1-9]\d*)\r?$/m.exec(String(text).replace(COMMENT, '').replace(FENCED, ''))?.[1] ?? null;
+
+// Whether an answer keeps the work its question holds back: it does unless its option names exactly one option row of body that is no Hold,
+// by label ("b" or "(b)"), by text, or both, as the questions skill records the option it offered; "(Recommended)" is no part of the name.
 export function holds(option, body = '') {
-  const said = String(option).trim().toLowerCase();
-  if (/\bhold\b/.test(said)) return true;
-  const row = (tables(body.replace(COMMENT, ''), 'Option')[0] ?? []).find(([cell]) => labelOf(cell)?.toLowerCase() === (said.startsWith('(') ? said : `(${said})`));
-  return Boolean(row) && /^\([^()]+\)\s*hold\b/i.test(shown(row[0]));
+  const plain = (text) => text.replace(/\(recommended\)/gi, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const said = plain(String(option).replace(/\.$/, ''));
+  const textOf = (cell) => plain(cell.slice(labelOf(cell)?.length ?? 0));
+  const rows = (tables(body.replace(COMMENT, ''), 'Option')[0] ?? []).map(([cell]) => shown(cell)).filter((cell) => {
+    const label = labelOf(cell)?.toLowerCase() ?? '';
+    return said !== '' && [plain(cell), label, label.slice(1, -1), textOf(cell)].includes(said);
+  });
+  return /\bhold\b/.test(said) || rows.length !== 1 || /^hold\b/.test(textOf(rows[0]));
 }
 
-// The numbers of repo's issues that a question still waits on, which Pick leaves (precheck.mjs): one an open issue of asked or a local question names while it has no answer or a Hold.
+// The numbers of repo's issues that a question still waits on, which Pick leaves (precheck.mjs): one an open issue of asked or a local question names while its answer is missing or holds it.
 // A queue file that is no question throws, so nothing starts on a guess.
 export function waiting(repo, asked, queue, writes) {
   const open = (found, body) => !found || holds(found.option, body);
   const refs = [
     ...asked.filter((issue) => named(issue.body) && open(answer(issue, writes), issue.body)).map((issue) => named(issue.body)),
-    ...queue.map((q) => { if (q.error) throw new Error(`the question ${q.file} ${q.error}`); return q.status !== 'answered' || holds(q.option) ? q.issue : null; }),
+    ...queue.map((q) => { if (q.error) throw new Error(`the question ${q.file} ${q.error}`); return q.status !== 'answered' || q.held ? q.issue : null; }),
   ];
   const prefix = `${repo.toLowerCase()}#`;
   return new Set(refs.filter((ref) => ref?.toLowerCase().startsWith(prefix)).map((ref) => Number(ref.slice(prefix.length))));
