@@ -408,8 +408,15 @@ test('role guard: in PowerShell a bot is refused a merge or a write after any as
   for (const command of writes) assert.equal(decision(command, { role: 'reviewer-bot', tool: 'PowerShell' }), 'deny', command);
 });
 
-test('role guard: an unknown bot role runs no command', () => {
-  for (const role of ['fixer_bot', 'Fixer-Bot', 'review-bot', 'fixer-bot-1', 'fixer-bot ']) for (const command of ['ls', 'gh pr view 12']) assert.equal(decision(command, { role }), 'deny', `${role}: ${command}`);
+test('role guard: a set role it does not know, empty or without the -bot suffix included, runs no command and writes no file', () => {
+  for (const role of ['fixer_bot', 'Fixer-Bot', 'fixer-bot ', '', 'planner', 'maintainer', 'Coordinator']) {
+    assert.equal(decision('gh pr view 12', { role }), 'deny', JSON.stringify(role));
+    assert.equal(decision(undefined, { role, tool: 'Write', toolInput: { file_path: 'notes.md', content: 'x' } }), 'deny', JSON.stringify(role));
+  }
+  assert.equal(decision(undefined, { role: 'worker', tool: 'Edit', toolInput: { file_path: 'notes.md', old_string: 'a', new_string: 'b' } }), 'deny');
+  // No role at all is an ordinary session: the guarded rules, writes and reads pass.
+  assert.equal(decision('ls'), 'none');
+  assert.equal(decision(undefined, { tool: 'Write', toolInput: { file_path: 'notes.md', content: 'x' } }), 'none');
 });
 
 test('role guard: the project bot deletes a head branch of the bot shape, never another', () => {

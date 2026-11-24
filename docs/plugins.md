@@ -74,7 +74,7 @@ Only the coordinator's session runs with `CEDARLOOM_ROLE=coordinator` ([how to s
 
 ### Bot roles
 
-A session with `CEDARLOOM_ROLE` set to a bot role takes its rules; bot settings do not set it yet. Each is guarded like any other session and also refused what its procedure does not need; its subagents inherit the role and the rules. A role holding `bot` that is none of these runs no command. No role, the coordinator included, runs `gh pr merge --admin`; the merge endpoints are not read for it.
+A session with `CEDARLOOM_ROLE` set to a bot role takes its rules; each bot's settings set it (`env` in its home's `.claude/settings.json`). Each is guarded like any other session and also refused what its procedure does not need; its subagents inherit the role and the rules. Any other value but `coordinator`, empty, misspelled or without the `-bot` suffix (`planner`), runs no command and writes no file; an unset role is an ordinary guarded session. No role, the coordinator included, runs `gh pr merge --admin`; the merge endpoints are not read for it.
 
 | `CEDARLOOM_ROLE` | Also refused |
 |---|---|
