@@ -278,8 +278,9 @@ test('approval: without a private tracker, the question goes into the local queu
   assert.deepEqual(queue(), [{ file: 'project-1.md', status: 'open' }, { file: 'project-2.md', status: 'open' }]);
   // What /cl-workflow:questions writes for an answer and a defer.
   writeFileSync(join(dir, '.cedarloom/questions/project-1.md'), `${filed.replace('Status: open', 'Status: answered')}\nOwner answer (2026-11-15): b. Hold it for now.\n`);
-  writeFileSync(join(dir, '.cedarloom/questions/project-2.md'), `${filed.replace('Status: open', 'Status: deferred')}\nDeferred by the owner on 2026-11-15.\n`);
-  assert.deepEqual(queue(), [{ file: 'project-1.md', status: 'answered', option: 'b', text: 'Hold it for now.', at: '2026-11-15' }, { file: 'project-2.md', status: 'deferred' }]);
+  // A question that holds back a work issue names it on its Issue line.
+  writeFileSync(join(dir, '.cedarloom/questions/project-2.md'), `${filed.replace('Status: open', 'Status: deferred')}\nIssue: acme/app#7\nDeferred by the owner on 2026-11-15.\n`);
+  assert.deepEqual(queue(), [{ file: 'project-1.md', status: 'answered', option: 'b', text: 'Hold it for now.', at: '2026-11-15' }, { file: 'project-2.md', status: 'deferred', issue: 'acme/app#7' }]);
   // A file answered without an answer line is an error, never "no answer yet", and holds back no other answer.
   writeFileSync(join(dir, '.cedarloom/questions/project-2.md'), `Status: answered\n\n${FILLED}`);
   assert.deepEqual(queue()[1], { file: 'project-2.md', error: 'answered, but no Owner answer line' });

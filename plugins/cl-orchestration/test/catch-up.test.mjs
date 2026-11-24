@@ -24,12 +24,15 @@ const pr = (extra = {}) => ({ number: 9, headRefName: 'feat/5-x', headRefOid: HE
 const OWNER_ANSWER = { number: 3, labels: [], body: '', url: 'u', author: { login: 'owner' }, comments: [{ author: { login: 'owner' }, authorAssociation: 'OWNER', body: 'Owner answer (2026-11-20): Yes.', createdAt: ago(5) }] };
 
 // The GitHub of acme/app: the tip's runs, the open needs-human issues and the open pull requests; skip leaves one read unanswered.
-function github({ runs = [run('success')], asked = [], prs = [], skip } = {}) {
+// recent: the open issues updated in the last 7 days, where an answer through the questions skill took cl:needs-human off.
+function github({ runs = [run('success')], asked = [], recent = [], prs = [], skip } = {}) {
   const answers = [
     [['repo', 'view', 'acme/app', '--json', 'defaultBranchRef'], { defaultBranchRef: { name: 'main' } }],
     [['api', 'repos/acme/app/branches/main'], { commit: { sha: TIP } }],
     [['run', 'list', '-R', 'acme/app', '--branch', 'main', '--commit', TIP, '--limit', '100', '--json', 'databaseId,headSha,status,conclusion,workflowDatabaseId,createdAt'], runs],
     [['issue', 'list', '-R', 'acme/app', '--label', 'cl:needs-human', '--state', 'open', '--limit', '1000', '--json', 'number,labels,comments,author,body,url'], asked],
+    // The window of NOW, and of a run on the next day.
+    ...['2026-11-13', '2026-11-14'].map((day) => [['issue', 'list', '-R', 'acme/app', '--search', `updated:>=${day}`, '--state', 'open', '--limit', '1000', '--json', 'number,labels,comments,author,body,url'], recent]),
     [['pr', 'list', '-R', 'acme/app', '--state', 'open', '--limit', '1000', '--json', 'number,headRefName,headRefOid,isCrossRepository,mergeable,statusCheckRollup'], prs],
     [['api', 'repos/acme/app/issues/5'], { number: 5, author_association: 'OWNER', user: { login: 'owner' } }],
     [['api', 'repos/acme/app/issues/6'], { number: 6, author_association: 'OWNER', user: { login: 'owner' }, pull_request: { url: 'https://api.github.com/repos/acme/app/pulls/6' } }],
@@ -94,9 +97,22 @@ test('catch-up 2: a red tip without a report for that tip starts a run', () => {
   assert.deepEqual(check(stateWith({ 'red-main.json': { sha: TIP, report: 'https://github.com/acme/app/issues/4' } })), NOTHING);
 });
 
-test('catch-up 3: an owner answer on a needs-human issue, or a local answer not acted on, starts a run', () => {
+test('catch-up 3: each owner answer not acted on starts a run, whether or not its label is off; a local one too', () => {
+  const ANSWERED = { start: true, condition: 3, reason: '#3 has an answer', probe: false };
+  // A plain comment keeps cl:needs-human; the questions skill takes it off at once.
   github({ asked: [OWNER_ANSWER] });
-  assert.deepEqual(check(stateWith()), { start: true, condition: 3, reason: '#3 has an answer', probe: false });
+  assert.deepEqual(check(stateWith()), ANSWERED);
+  github({ recent: [OWNER_ANSWER] });
+  assert.deepEqual(check(stateWith()), ANSWERED);
+  // A repeated pass over an answer acted on starts none, in either form; a newer answer on that issue starts one.
+  const acted = stateWith({ 'answered.json': [`#3 ${ago(5)}`] });
+  github({ asked: [OWNER_ANSWER], recent: [OWNER_ANSWER] });
+  assert.deepEqual(check(acted), NOTHING);
+  github({ recent: [{ ...OWNER_ANSWER, comments: [...OWNER_ANSWER.comments, { ...OWNER_ANSWER.comments[0], body: 'Owner answer (2026-11-20): No.', createdAt: ago(1) }] }] });
+  assert.deepEqual(check(acted), ANSWERED);
+  // An answer without a time has no key: it is reported, never acted on at every pass.
+  github({ asked: [{ ...OWNER_ANSWER, comments: [{ ...OWNER_ANSWER.comments[0], body: 'Owner answer (soon): Yes.', createdAt: undefined }] }] });
+  assert.deepEqual(check(stateWith()), { start: true, condition: 'failed', reason: 'the answer on #3 has no time', probe: false });
   github({ asked: [{ ...OWNER_ANSWER, comments: [{ ...OWNER_ANSWER.comments[0], authorAssociation: 'NONE' }] }] });
   assert.deepEqual(check(stateWith()), NOTHING);
   const queue = () => [{ file: 'q1.md', status: 'answered', option: 'Yes', text: '', at: '2026-11-20' }, { file: 'q2.md', status: 'open' }];

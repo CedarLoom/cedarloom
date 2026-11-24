@@ -2,7 +2,7 @@
 // Usage: node approval.mjs answer <file>, the file in the run folder as above. Reads the owner's answer from a filed approval, the file holding what `gh issue view <n> -R <repository> --json labels,comments,author,body,url` printed: the answer as JSON and exit 0, exit 1 while there is none, or exit 2 with one line when the file cannot be read as that output.
 // Usage: node approval.mjs file <file> <project>, the file in the run folder: checks it as above and files it as the next question of the local queue, .cedarloom/questions/<project>-<n>.md, printing { file }.
 // Usage: node approval.mjs apply <owner/name> <number>. Reads the issue with gh and its owner's answer as the answer mode does; on an answer takes cl:needs-human and cl:deferred off, and cl:ready-for-agent too when the body holds an Approval table, else puts cl:ready-for-agent on, then prints { option, text, at, labels } and exits 0; exit 1 while there is none, exit 2 with one line on an error.
-// Usage: node approval.mjs queue: { file, status, option, text, at } of each question in the local queue as JSON, or exit 2 with one line.
+// Usage: node approval.mjs queue: { file, status, issue, option, text, at } of each question in the local queue as JSON (issue where its Issue line names one), or exit 2 with one line.
 // Usage: node approval.mjs digests: makes the digest folder .cedarloom/digests/ (digest.md) and keeps it out of git as the queue is, printing { folder }, or exit 2 with one line.
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
@@ -212,10 +212,25 @@ export function readQueue() {
     }
     const status = /^Status: (open|answered|deferred)\r?$/.exec(body.split('\n', 1)[0])?.[1];
     if (!status) return { file, error: 'the first line is no Status line (open, answered or deferred)' };
-    if (status !== 'answered') return { file, status };
+    const issue = named(body);
+    if (status !== 'answered') return { file, status, ...(issue && { issue }) };
     const found = fullAnswer(body.slice(body.lastIndexOf('\nOwner answer (') + 1));
-    return found ? { file, status, ...found } : { file, error: 'answered, but no Owner answer line' };
+    return found ? { file, status, ...(issue && { issue }), ...found } : { file, error: 'answered, but no Owner answer line' };
   });
+}
+
+// The work issue a question holds back from Pick, from its line `Issue: <owner/repo>#<n>` (approvals.md, Labels and title), or null.
+const named = (text) => /^Issue: ([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#[1-9]\d*)\r?$/m.exec(String(text))?.[1] ?? null;
+
+// The numbers of repo's issues that a question still waits on, which Pick leaves (precheck.mjs): one an unanswered open issue of asked, or a local question not answered, names.
+// A queue file that is no question throws, so nothing starts on a guess.
+export function waiting(repo, asked, queue, writes) {
+  const refs = [
+    ...asked.filter((issue) => named(issue.body) && !answer(issue, writes)).map((issue) => named(issue.body)),
+    ...queue.map((q) => { if (q.error) throw new Error(`the question ${q.file} ${q.error}`); return q.status === 'answered' ? null : q.issue; }),
+  ];
+  const prefix = `${repo.toLowerCase()}#`;
+  return new Set(refs.filter((ref) => ref?.toLowerCase().startsWith(prefix)).map((ref) => Number(ref.slice(prefix.length))));
 }
 
 // The path comes from a session's command line: a file that resolves outside the run folder, through .. or a link, is not read,

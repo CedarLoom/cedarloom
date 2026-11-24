@@ -1,11 +1,12 @@
 // Usage: node precheck.mjs [--prompts <folder>] <project paths...>. Sample precheck for a scheduled coordinator run: exit 0 when a project has an issue to pick or a planner or worker result in <folder> is unread, else 1. It starts and merges nothing.
 // node precheck.mjs --catch-up <clone> [--state <folder>]: the project bot's catch-up precheck (catch-up.mjs).
-// Pickable: open, carries startLabel and every issues.labels entry, not labeled cl:needs-human (an owner question), cl:in-progress (a worker holds it) or cl:deferred (the owner parked it), written by a trusted author (the repository owner, a trustedAuthors login, or a member or collaborator with write access), and no pull request for it: none merged or open in the repository with a head branch <type>/<number>-<slug> (an open one from a fork does not count, since anyone can open it).
+// Pickable: open, carries startLabel and every issues.labels entry, not labeled cl:needs-human (an owner question), cl:in-progress (a worker holds it) or cl:deferred (the owner parked it), named by no question that waits for the owner (approval.mjs waiting), written by a trusted author (the repository owner, a trustedAuthors login, or a member or collaborator with write access), and no pull request for it: none merged or open in the repository with a head branch <type>/<number>-<slug> (an open one from a fork does not count, since anyone can open it).
 // An issue that several of the given projects list starts in none of them: it is printed once on stderr, as "several projects: <owner/repo>#<number> (<paths>)".
 // Unread: a planner or worker prompt file in the project bot's prompts folder whose result file holds text; the pick sweep deletes the prompt file once it read the result (bot-project.md, Start). Each is printed on stderr as "<folder>: <reason>".
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { parseArgs } from 'node:util';
+import { readQueue, waiting } from './approval.mjs';
 import { errorLine, escaped, isMain, json, read, sh } from './policy.mjs';
 
 // MEMBER is any member of the owning organization and COLLABORATOR any invited collaborator: either may have only the Read role, so each counts only with write access.
@@ -30,14 +31,14 @@ export const trusts = (policy, writes) => {
 // An issue with one of these waits for the owner, also after it gained the start label, is held by a worker or is parked.
 const HELD = ['cl:needs-human', 'cl:in-progress', 'cl:deferred'];
 
-// writes(login) is asked last, so only for an issue that is pickable otherwise.
-export function pickable(policy, issues, pulls, writes = () => false) {
+// writes(login) is asked last, so only for an issue that is pickable otherwise. held: the numbers an open question waits on.
+export function pickable(policy, issues, pulls, writes = () => false, held = new Set()) {
   if (!policy?.startLabel) return [];
   const labels = [policy.startLabel, ...(policy.issues?.labels ?? [])];
   return issues
     .filter((i) => !i.pull_request)
     .filter((i) => labels.every((label) => i.labels.some((l) => l.name.toLowerCase() === label.toLowerCase())))
-    .filter((i) => !i.labels.some((l) => HELD.includes(l.name.toLowerCase())))
+    .filter((i) => !i.labels.some((l) => HELD.includes(l.name.toLowerCase())) && !held.has(i.number))
     .filter((i) => !pulls.some((p) => p.headRefName.includes(`/${i.number}-`)))
     .filter(trusts(policy, writes))
     .map((i) => i.number);
@@ -72,7 +73,7 @@ export const originRepo = (dir, run, env = process.env) => {
 };
 
 // { tracker, numbers }: the repository that holds the project's issues and the pickable ones; no tracker is read without a startLabel.
-function picks(dir, run, env) {
+function picks(dir, run, env, queue) {
   const { policy, errors, warnings = [] } = read(dir, run);
   // Thrown, so the command line names the project and why nothing starts there, as it does for a failed command.
   if (!policy) throw new Error(errors.map(errorLine).join('; '));
@@ -82,10 +83,13 @@ function picks(dir, run, env) {
   const issues = JSON.parse(run(dir, 'gh', ['api', '--paginate', '--slurp', `repos/${repo}/issues?state=open&per_page=100&labels=${labels}`])).flat();
   const pulls = JSON.parse(run(dir, 'gh', ['pr', 'list', '-R', repo, '--state', 'all', '--limit', '1000', '--json', 'headRefName,state,isCrossRepository']))
     .filter((p) => p.state === 'MERGED' || (p.state !== 'CLOSED' && !p.isCrossRepository));
-  return { tracker: repo, numbers: pickable(policy, issues, pulls, writers(repo, (cmd, args) => run(dir, cmd, args))), warnings };
+  const writes = writers(repo, (cmd, args) => run(dir, cmd, args));
+  const asked = JSON.parse(run(dir, 'gh', ['issue', 'list', '-R', repo, '--label', 'cl:needs-human', '--state', 'open', '--limit', '1000', '--json', 'number,labels,comments,author,body']));
+  return { tracker: repo, numbers: pickable(policy, issues, pulls, writes, waiting(repo, asked, queue(), writes)), warnings };
 }
 
-export const check = (dir, run = sh, env = process.env) => picks(dir, run, env).numbers;
+// queue() lists the local questions as approval.mjs queue does.
+export const check = (dir, run = sh, env = process.env, queue = readQueue) => picks(dir, run, env, queue).numbers;
 
 // A label per project does not make the labels distinct: an issue listed for two projects would get a worker in each. lists: [{ dir, tracker, numbers }]; shared: [{ tracker, number, dirs }].
 export function distinct(lists) {
@@ -173,7 +177,7 @@ if (isMain(import.meta.url) && process.argv.slice(2).includes('--catch-up')) {
   try { ({ dirs, prompts } = argsOf(process.argv.slice(2))); } catch (e) { console.error(e.message); process.exit(1); }
   if (!dirs.length) { console.error('usage: node precheck.mjs [--prompts <folder>] <project paths...>'); process.exit(1); }
   const results = prompts === undefined ? [] : unread(prompts).map((reason) => `${prompts}: ${reason}`);
-  const { out, err, code } = report(dirs, (dir) => picks(dir, sh, process.env), results);
+  const { out, err, code } = report(dirs, (dir) => picks(dir, sh, process.env, readQueue), results);
   for (const line of err) console.error(line);
   for (const line of out) console.log(line);
   process.exit(code);
