@@ -2,7 +2,7 @@
 // node precheck.mjs --catch-up <clone> [--state <folder>]: the project bot's catch-up precheck (catch-up.mjs).
 // Pickable: open, carries startLabel and every issues.labels entry, not labeled cl:needs-human (an owner question), cl:in-progress (a worker holds it) or cl:deferred (the owner parked it), written by a trusted author (the repository owner, a trustedAuthors login, or a member or collaborator with write access), and no pull request for it: none merged or open in the repository with a head branch <type>/<number>-<slug> (an open one from a fork does not count, since anyone can open it).
 // An issue that several of the given projects list starts in none of them: it is printed once on stderr, as "several projects: <owner/repo>#<number> (<paths>)".
-// Unread: a planner or worker prompt file in the project bot's prompts folder whose result file exists; the pick sweep deletes the prompt file once it read the result (bot-project.md, Start). Each is printed on stderr as "<folder>: <reason>".
+// Unread: a planner or worker prompt file in the project bot's prompts folder whose result file holds text; the pick sweep deletes the prompt file once it read the result (bot-project.md, Start). Each is printed on stderr as "<folder>: <reason>".
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -104,22 +104,31 @@ export function distinct(lists) {
 const PROMPT = /-(planner|worker|reviewer|fixer|maintainer)-\d+-\d{8}T\d{6}Z-[0-9a-f]{6}-[1-9]\d*\.md$/;
 const RESULT_LINE = /^Result file: (.+)$/gm;
 
-// The reasons that the planner and worker runs of folder have an unread result. A file that cannot be read or checked, or an empty result (a write not done), counts too, so a person sees it. Reviewer and fixer results are read through their state files (catch-up.mjs, condition 7).
-export function unread(folder) {
+// shortcut: a fixed window of two ticks, since stallMinutes is read per project only after the precheck. Past it, a file the precheck cannot check is the sweep's to report, and no longer starts it every tick.
+const CANNOT_CHECK_MS = 60 * 60_000;
+
+// Milliseconds since file changed; one that stat cannot read counts as new, so it stays named.
+function age(file, now) {
+  try { return now - statSync(file).mtimeMs; } catch { return 0; }
+}
+
+// The reasons that the planner and worker runs of folder have an unread result. A missing or unreadable folder counts too, and so does a file that cannot be read or checked while it or its result file changed within CANNOT_CHECK_MS, so a person sees it. An empty result file is a write not done, like a missing one. Reviewer and fixer results are read through their state files (catch-up.mjs, condition 7).
+export function unread(folder, now = Date.now()) {
   let names;
-  try { names = readdirSync(folder); } catch (e) { return e.code === 'ENOENT' ? [] : [`the folder is unreadable (${e.code})`]; }
+  try { names = readdirSync(folder); } catch (e) { return [e.code === 'ENOENT' ? 'the folder does not exist' : `the folder is unreadable (${e.code})`]; }
   const found = [];
   for (const name of names.filter((n) => !n.startsWith('.')).sort()) {
+    const cannot = (reason, ...files) => { if ([join(folder, name), ...files].some((f) => age(f, now) < CANNOT_CHECK_MS)) found.push(reason); };
     const role = PROMPT.exec(name)?.[1];
-    if (!role) { found.push(`${name} is no role bot prompt file`); continue; }
+    if (!role) { cannot(`${name} is no role bot prompt file`); continue; }
     if (role !== 'planner' && role !== 'worker') continue;
     let file;
-    try { file = [...readFileSync(join(folder, name), 'utf8').matchAll(RESULT_LINE)].at(-1)?.[1]; } catch (e) { found.push(`${name} is unreadable (${e.code})`); continue; }
-    if (!file || !isAbsolute(file)) { found.push(`${name} names no absolute result file`); continue; }
+    try { file = [...readFileSync(join(folder, name), 'utf8').matchAll(RESULT_LINE)].at(-1)?.[1]; } catch (e) { cannot(`${name} is unreadable (${e.code})`); continue; }
+    if (!file || !isAbsolute(file)) { cannot(`${name} names no absolute result file`); continue; }
     let stat;
-    try { stat = statSync(file); } catch (e) { if (e.code !== 'ENOENT') found.push(`${name}: its result file is unreadable (${e.code})`); continue; }
-    if (!stat.isFile()) found.push(`${name}: its result file is no file`);
-    else found.push(stat.size ? `${name}: the ${role} result is unread` : `${name}: its result file is empty`);
+    try { stat = statSync(file); } catch (e) { if (e.code !== 'ENOENT') cannot(`${name}: its result file is unreadable (${e.code})`); continue; }
+    if (!stat.isFile()) cannot(`${name}: its result file is no file`, file);
+    else if (stat.size) found.push(`${name}: the ${role} result is unread`);
   }
   return found;
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -69,30 +69,43 @@ test('precheck: a read result, a run without its result yet and a reviewer or fi
   const h = home();
   // Read: the pick sweep deleted the prompt file, and the result file stays.
   h.result(`project-12-worker-1-${RUN}`, 'DONE\n');
-  // A missing prompts folder holds no run.
-  assert.deepEqual(unread(join(h.prompts, 'none')), []);
   h.prompt(`project-14-worker-1-${RUN}`, `Result file: ${join(h.results, 'pending.md')}\n`);
   // A reviewer's or fixer's result is read through its state file.
   h.prompt(`project-15-reviewer-1-${RUN}`, `Result file: ${h.result('r.md', 'Head: c0ffee\n')}\n`);
   h.prompt(`project-15-fixer-1-${RUN}`, `Result file: ${h.result('f.md', 'DONE\n')}\n`);
+  // An empty result file is a write not done.
+  h.prompt(`project-16-worker-1-${RUN}`, `Result file: ${h.result('empty.md', '')}\n`);
   h.prompt('.DS_Store', '');
   assert.deepEqual(unread(h.prompts), []);
 });
 
-test('precheck: a prompt or result file that cannot be checked counts as work and names why', () => {
+test('precheck: a prompts folder, prompt or result file that cannot be checked counts as work and names why', () => {
   const h = home();
+  assert.deepEqual(unread(join(h.prompts, 'none')), ['the folder does not exist']);
   h.prompt('notes.md', 'x');
   h.prompt(`project-1-worker-1-${RUN}`, 'bot-worker.md\n');
   h.prompt(`project-2-planner-1-${RUN}`, 'Result file: results/plan.md\n');
-  h.prompt(`project-3-worker-1-${RUN}`, `Result file: ${h.result('empty.md', '')}\n`);
   h.prompt(`project-4-worker-1-${RUN}`, `Result file: ${h.results}\n`);
   assert.deepEqual(unread(h.prompts), [
     'notes.md is no role bot prompt file',
     `project-1-worker-1-${RUN} names no absolute result file`,
     `project-2-planner-1-${RUN} names no absolute result file`,
-    `project-3-worker-1-${RUN}: its result file is empty`,
     `project-4-worker-1-${RUN}: its result file is no file`,
   ]);
+});
+
+test('precheck: a file it cannot check counts only while it or its result file changed within the last hour, and an unread result at any age', () => {
+  const h = home();
+  const now = Date.now(), old = new Date(now - 61 * 60_000), recent = new Date(now - 59 * 60_000);
+  const plan = h.prompt(`project-5-planner-1-${RUN}`, `Result file: ${h.result('plan.md', 'The plan.\n')}\n`);
+  const noFile = h.prompt(`project-4-worker-1-${RUN}`, `Result file: ${h.results}\n`);
+  for (const file of [h.prompt('notes.md', 'x'), plan, join(h.results, 'plan.md'), noFile]) utimesSync(file, old, old);
+  utimesSync(h.prompt('todo.md', 'x'), recent, recent);
+  utimesSync(h.results, recent, recent);
+  const listed = [`project-5-planner-1-${RUN}: the planner result is unread`, 'todo.md is no role bot prompt file'];
+  assert.deepEqual(unread(h.prompts, now), [`project-4-worker-1-${RUN}: its result file is no file`, ...listed]);
+  utimesSync(h.results, old, old);
+  assert.deepEqual(unread(h.prompts, now), listed);
 });
 
 test('precheck: an unread result exits 0 with no issue to pick and is named on stderr', () => {
