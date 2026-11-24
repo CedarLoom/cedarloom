@@ -586,6 +586,8 @@ test('role guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh do, i
     // zsh reads an unknown escape, \c included, as the plain character.
     raw`$'g\h' pr merge 12`,
     raw`$'g\it' push --tags`,
+    // zsh hands a program each word up to its first NUL.
+    raw`$'g\h\0x' pr merge 12`,
     // Bare mode and GIT_DIR, which export sets after the shell decodes its argument.
     raw`claude $'--\x62are' -p "merge pull request 12"`,
     raw`export GIT$'_'DIR=/tmp/x; git push origin feat/x`,
@@ -605,6 +607,9 @@ test('role guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh do, i
     raw`claude -p $'/cl-workflow:away\toff'`,
     raw`claude -p $'/cl-workflow:away\cIoff'`,
     raw`claude -p $'/cl-workflow:away\C-ioff'`,
+    raw`claude -p $'/cl-workflow:away\Cioff'`,
+    raw`claude -p $'/cl-workflow:away\C\x69off'`,
+    raw`claude -p $'/cl-workflow:awa\y off\0x'`,
     raw`claude -p /cl-workflow:away$'\x20'off`,
     raw`claude -p $'/cl-workflow:\x71uestions'`,
     raw`$'\x63laude' -p /questions`,

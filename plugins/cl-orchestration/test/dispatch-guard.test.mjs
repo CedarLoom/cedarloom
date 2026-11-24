@@ -42,6 +42,10 @@ test('dispatch guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh d
     raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\toff'`,
     raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\cIoff'`,
     raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\C-ioff'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\Cioff'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\C\x69off'`,
+    // zsh hands a program each word up to its first NUL.
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:awa\y off\0x'`,
     raw`orca orchestration send --to dispatch:d1 --body "/cl-workflow:away"$'\x20off'`,
     raw`orca orchestration worker-start --spec $'/cl-workflow:\x71uestions'`,
     raw`$'\x6frca' orchestration send --to dispatch:d1 --body /questions`,

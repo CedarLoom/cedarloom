@@ -51,9 +51,10 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
     process.stderr.write('CedarLoom dispatch guard: the command is no string, so the call is refused.\n');
     process.exitCode = 2;
   } else if (command) {
-    // The text as written, as bash and zsh join it, and without any quote, a $ before one or a backslash, which PowerShell joins alike
-    // ("/cl-workflow:away"' off').
-    const texts = [command, joined(command, false), joined(command, true), command.replace(/\$?["'\\]/g, '')];
+    // The text as written, as bash joins it, as zsh joins it for a program (each word up to its first NUL) and for a builtin
+    // (here without the NUL), and without any quote, a $ before one or a backslash, which PowerShell joins alike ("/cl-workflow:away"' off').
+    const zsh = joined(command, true);
+    const texts = [command, joined(command, false), zsh.replace(/\0\S*/g, ''), zsh.replaceAll('\0', ''), command.replace(/\$?["'\\]/g, '')];
     if (texts.some((t) => QUESTIONS.test(t)) && texts.some((t) => t.split(WORDS).some((word) => program(word) === 'orca'))) {
       const reason = 'CedarLoom dispatch guard: an Orca command with /cl-workflow:away off or /cl-workflow:questions in it would hand that command to a session, which could then write answers into the local question queue (.cedarloom/questions/); only the owner runs it, typed into their own terminal session. Text a session receives names it without the leading slash. The guard reads text only, so a command that merely mentions orca and the command, as a commit message or a search may, is refused too: take that text from a file (git commit -F, gh --body-file, rg -f).';
       process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } }));

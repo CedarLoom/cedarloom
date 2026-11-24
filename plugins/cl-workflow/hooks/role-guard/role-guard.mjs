@@ -224,12 +224,16 @@ function commands(source, powershell, nested = false, zsh = false) {
 }
 
 // The commands of a command text in each reading a shell may give it: PowerShell's, or bash's and zsh's, which differ only in
-// ANSI-C quoting; every check runs on each.
+// ANSI-C quoting and a NUL; every check runs on each.
 function readings(source, powershell) {
   if (powershell) return [commands(source, true)];
   const bash = commands(source, false);
-  const zsh = source.includes("$'") ? commands(source, false, false, true) : bash;
-  return JSON.stringify(zsh) === JSON.stringify(bash) ? [bash] : [bash, zsh];
+  if (!source.includes("$'") && !source.includes('\0')) return [bash];
+  const zsh = commands(source, false, false, true);
+  // zsh hands a program each word up to its first NUL; a builtin reads it whole, here without the NUL.
+  const each = (f) => zsh.map((c) => ({ ...c, words: c.words.map(f), targets: c.targets.map(f) }));
+  const all = [bash, each((w) => w.split('\0')[0]), each((w) => w.replaceAll('\0', ''))].map((r) => [JSON.stringify(r), r]);
+  return [...new Map(all).values()];
 }
 
 const program = (word) => word.split(/[/\\]/).pop().toLowerCase().replace(/\.exe$/, '');
