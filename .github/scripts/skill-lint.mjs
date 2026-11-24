@@ -110,7 +110,7 @@ export function lintAgent(file) {
 // Word budgets for the body after front matter, soft (a warning) and hard (an error), in docs/authoring.md. The first class
 // whose pattern matches a file's path relative to the repository applies.
 const BUDGETS = [
-  { kind: 'cl-workflow entry skill file', path: /(^|\/)cl-workflow\/skills\/workflow\/[^/]+\.md$/, soft: 450, hard: 900 },
+  { kind: 'cl-workflow entry skill file', path: /(^|\/)cl-workflow\/skills\/workflow\/.+\.md$/, soft: 450, hard: 900 },
   { kind: 'bot brief', path: /\/skills\/[^/]+\/SOUL\.md$/, soft: 600, hard: 800 },
   { kind: 'bot procedure', path: /\/skills\/coordinate\/bot-[^/]+\.md$/, soft: 450, hard: 900 },
   { kind: 'SKILL.md', path: /\/skills\/[^/]+\/SKILL\.md$/, soft: 1200, hard: 3000 },

@@ -75,6 +75,7 @@ const classes = [
   ['plugins/p/skills/s/ref.md', 'skill reference file', 1500, 3000],
   ['plugins/cl-workflow/skills/workflow/SKILL.md', 'cl-workflow entry skill file', 450, 900],
   ['plugins/cl-workflow/skills/workflow/deep.md', 'cl-workflow entry skill file', 450, 900],
+  ['plugins/cl-workflow/skills/workflow/references/x.md', 'cl-workflow entry skill file', 450, 900],
   ['plugins/p/agents/a.md', 'subagent prompt', 400, 600],
   ['plugins/p/rules/r.md', 'rules file', 450, 600],
   ['plugins/p/skills/coordinate/SOUL.md', 'bot brief', 600, 800],
