@@ -59,7 +59,7 @@ Owner questions go where `<skill folder>/approvals.md` (Where it goes) says; the
 On the project bot, each `--runs-in new --results-to chat --model opus --effort high`, its prompt naming one procedure file:
 
 ```text
-ORCA automations create --bot <repo>-project --name '<owner/repo> pick' --trigger '*/30 * * * *' --precheck "node <skill folder>/precheck.mjs <clone>" --prompt 'Pick sweep: take <skill folder>/bot-project.md.' <flags> --json
+ORCA automations create --bot <repo>-project --name '<owner/repo> pick' --trigger '*/30 * * * *' --precheck "node <skill folder>/precheck.mjs --prompts <project home>/prompts <clone>" --prompt 'Pick sweep: take <skill folder>/bot-project.md.' <flags> --json
 ORCA automations create --bot <repo>-project --name '<owner/repo> reconcile' --trigger daily --time <HH:MM> --prompt 'Daily reconciliation: take <skill folder>/bot-project.md.' <flags> --json
 ORCA automations create --bot <repo>-project --name '<owner/repo> maintain' --trigger '<MM> <HH> * * <weekday>' --prompt 'Weekly maintenance with <maintain folder>: take <skill folder>/bot-project.md.' <flags> --json
 ORCA automations create --bot <repo>-project --name '<owner/repo> catch-up' --trigger '*/15 * * * *' --precheck "node <skill folder>/precheck.mjs --catch-up <clone> --state <project home>/state" --precheck-timeout 120 --prompt 'Catch-up sweep: take <skill folder>/bot-catch-up.md.' <flags> --json
