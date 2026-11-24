@@ -14,7 +14,7 @@ Typed as `/cl-workflow:lite <task>`. No task: ask for it, or without terminal qu
 1. **Gate.** On any of these, say which, load the skill `cl-workflow:workflow` (missing or refused: stop) and run it from its step 1:
    - more than a one-sentence diff, or unsure;
    - a bug, a review-thread follow-up, a log line that logs user data, any dependency change (a dependency major or security advisory too);
-   - any migration (a schema migration too), infrastructure as code, CI, a performance change, a refactor across modules or with a changed interface;
+   - any migration (a schema migration too), infrastructure as code, CI, a performance change, a refactor across modules or with a changed interface, any changed interface;
    - authentication, permissions, secrets, input validation, production data, deploy or production configuration, an irreversible action;
    - a file under `riskyPaths` in `docs/agents/orchestration.json` as the default branch has it;
    - a depth or `Depth minimum:` line above quick, or a risk above low.
