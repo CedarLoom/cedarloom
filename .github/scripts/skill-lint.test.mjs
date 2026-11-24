@@ -34,6 +34,11 @@ test('user-invoked skill needs implicit invocation off', () => {
   assert.match(lintSkill(skill('a', { fm })).join(), /allow_implicit_invocation/);
   assert.deepEqual(lintSkill(skill('a', { fm, yaml: 'policy:\n  allow_implicit_invocation: false\n' })), []);
 });
+test('a skill nobody can start fails', () => {
+  const fm = 'name: a\ndescription: "x"\nuser-invocable: false\ndisable-model-invocation: true';
+  assert.match(lintSkill(skill('a', { fm, yaml: 'policy:\n  allow_implicit_invocation: false\n' })).join(), /no way to start/);
+  assert.deepEqual(lintSkill(skill('a', { fm: 'name: a\ndescription: "x"\nuser-invocable: false' })), []);
+});
 test('broken front matter fails', () => assert.match(lintSkill(skill('a', { fm: 'just text' })).join(), /front matter/));
 test('issue text handed to a worker needs the author filter', () => {
   const body = 'Send the worker the issue with all its comments.';
