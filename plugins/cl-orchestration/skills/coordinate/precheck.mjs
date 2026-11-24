@@ -1,7 +1,10 @@
-// Usage: node precheck.mjs <project paths...>. Sample precheck for a scheduled coordinator run: exit 0 when a project has an issue to pick, else 1. It starts and merges nothing.
+// Usage: node precheck.mjs [--prompts <folder>] <project paths...>. Sample precheck for a scheduled coordinator run: exit 0 when a project has an issue to pick or a planner or worker result in <folder> is unread, else 1. It starts and merges nothing.
 // node precheck.mjs --catch-up <clone> [--state <folder>]: the project bot's catch-up precheck (catch-up.mjs).
 // Pickable: open, carries startLabel and every issues.labels entry, not labeled cl:needs-human (an owner question), cl:in-progress (a worker holds it) or cl:deferred (the owner parked it), written by a trusted author (the repository owner, a trustedAuthors login, or a member or collaborator with write access), and no pull request for it: none merged or open in the repository with a head branch <type>/<number>-<slug> (an open one from a fork does not count, since anyone can open it).
 // An issue that several of the given projects list starts in none of them: it is printed once on stderr, as "several projects: <owner/repo>#<number> (<paths>)".
+// Unread: a planner or worker prompt file in the project bot's prompts folder whose result file holds text; the pick sweep deletes the prompt file once it read the result (bot-project.md, Start). Each is printed on stderr as "<folder>: <reason>".
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { errorLine, escaped, isMain, json, read, sh } from './policy.mjs';
 
@@ -97,8 +100,41 @@ export function distinct(lists) {
   return { lists: lists.map((list) => ({ ...list, numbers: list.numbers.filter((number) => !gone.has(key(list.tracker, number))) })), shared };
 }
 
-// What the command line prints and its exit code: { out, err, code }. pick(dir) gives a project's { tracker, numbers, warnings } or throws why nothing starts there.
-export function report(dirs, pick) {
+// A role bot run's prompt file name, <repo>-<n>-<role>-<round>-<run id>-<k>.md, and the line that names its result file: the last one, since the spec before it may hold such a line.
+const PROMPT = /-(planner|worker|reviewer|fixer|maintainer)-\d+-\d{8}T\d{6}Z-[0-9a-f]{6}-[1-9]\d*\.md$/;
+const RESULT_LINE = /^Result file: (.+)$/gm;
+
+// shortcut: a fixed window of two ticks, since stallMinutes is read per project only after the precheck. Past it, a file the precheck cannot check is the sweep's to report, and no longer starts it every tick.
+const CANNOT_CHECK_MS = 60 * 60_000;
+
+// Milliseconds since file changed; one that stat cannot read counts as new, so it stays named.
+function age(file, now) {
+  try { return now - statSync(file).mtimeMs; } catch { return 0; }
+}
+
+// The reasons that the planner and worker runs of folder have an unread result. A missing or unreadable folder counts too, and so does a file that cannot be read or checked while it or its result file changed within CANNOT_CHECK_MS, so a person sees it. An empty result file is a write not done, like a missing one. Reviewer and fixer results are read through their state files (catch-up.mjs, condition 7).
+export function unread(folder, now = Date.now()) {
+  let names;
+  try { names = readdirSync(folder); } catch (e) { return [e.code === 'ENOENT' ? 'the folder does not exist' : `the folder is unreadable (${e.code})`]; }
+  const found = [];
+  for (const name of names.filter((n) => !n.startsWith('.')).sort()) {
+    const cannot = (reason, ...files) => { if ([join(folder, name), ...files].some((f) => age(f, now) < CANNOT_CHECK_MS)) found.push(reason); };
+    const role = PROMPT.exec(name)?.[1];
+    if (!role) { cannot(`${name} is no role bot prompt file`); continue; }
+    if (role !== 'planner' && role !== 'worker') continue;
+    let file;
+    try { file = [...readFileSync(join(folder, name), 'utf8').matchAll(RESULT_LINE)].at(-1)?.[1]; } catch (e) { cannot(`${name} is unreadable (${e.code})`); continue; }
+    if (!file || !isAbsolute(file)) { cannot(`${name} names no absolute result file`); continue; }
+    let stat;
+    try { stat = statSync(file); } catch (e) { if (e.code !== 'ENOENT') cannot(`${name}: its result file is unreadable (${e.code})`); continue; }
+    if (!stat.isFile()) cannot(`${name}: its result file is no file`, file);
+    else if (stat.size) found.push(`${name}: the ${role} result is unread`);
+  }
+  return found;
+}
+
+// What the command line prints and its exit code: { out, err, code }. pick(dir) gives a project's { tracker, numbers, warnings } or throws why nothing starts there; results are the lines on unread results, each of which starts the run.
+export function report(dirs, pick, results = []) {
   const found = [], err = [];
   for (const dir of dirs) {
     try {
@@ -109,13 +145,17 @@ export function report(dirs, pick) {
   }
   const { lists, shared } = distinct(found);
   for (const { tracker, number, dirs: listing } of shared) err.push(`several projects: ${tracker}#${number} (${listing.join(', ')})`);
+  err.push(...results);
   // Oldest first, which is the lowest number.
   const out = lists.filter(({ numbers }) => numbers.length).map(({ dir, numbers }) => `${dir}: ${[...numbers].sort((a, b) => a - b).map((n) => `#${n}`).join(' ')}`);
-  return { out: out.map((line) => escaped(line)), err: err.map((line) => escaped(line)), code: out.length ? 0 : 1 };
+  return { out: out.map((line) => escaped(line)), err: err.map((line) => escaped(line)), code: out.length || results.length ? 0 : 1 };
 }
 
-// The project paths; an option fails, so an old schedule's arguments are not read as a path.
-export const projectsOf = (argv) => parseArgs({ args: argv, allowPositionals: true }).positionals;
+// { dirs, prompts }: the project paths and the prompts folder; another option fails, so an old schedule's arguments are not read as a path.
+export function argsOf(argv) {
+  const { values, positionals } = parseArgs({ args: argv, options: { prompts: { type: 'string' } }, allowPositionals: true });
+  return { dirs: positionals, prompts: values.prompts };
+}
 
 if (isMain(import.meta.url) && process.argv.slice(2).includes('--catch-up')) {
   // catch-up.mjs imports this file: an await here would wait on itself, so the import resolves after this file is done.
@@ -129,10 +169,11 @@ if (isMain(import.meta.url) && process.argv.slice(2).includes('--catch-up')) {
     process.exit(0);
   });
 } else if (isMain(import.meta.url)) {
-  let dirs;
-  try { dirs = projectsOf(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exit(1); }
-  if (!dirs.length) { console.error('usage: node precheck.mjs <project paths...>'); process.exit(1); }
-  const { out, err, code } = report(dirs, (dir) => picks(dir, sh, process.env));
+  let dirs, prompts;
+  try { ({ dirs, prompts } = argsOf(process.argv.slice(2))); } catch (e) { console.error(e.message); process.exit(1); }
+  if (!dirs.length) { console.error('usage: node precheck.mjs [--prompts <folder>] <project paths...>'); process.exit(1); }
+  const results = prompts === undefined ? [] : unread(prompts).map((reason) => `${prompts}: ${reason}`);
+  const { out, err, code } = report(dirs, (dir) => picks(dir, sh, process.env), results);
   for (const line of err) console.error(line);
   for (const line of out) console.log(line);
   process.exit(code);
