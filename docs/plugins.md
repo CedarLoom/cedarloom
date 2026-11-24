@@ -126,6 +126,7 @@ A typed entry such as `/cl-workflow:dev` is generated from one JSON definition i
 - An agent phase has `agent` (a name such as `cl-workflow:review`, never a path), `model` (`haiku`, `sonnet`, `opus`, `fable` or `inherit`), and optionally `effort` (`low` to `max`), `loop` and `with` (a phase of the same stage that has a loop, run beside it once).
 - A `loop` has `fix` (an earlier agent phase of the same stage), `maxRounds` (1 or 2; 1 where `fix` is the `cl-workflow:plan` agent), `escalate` (boolean) and an optional `recheck` agent.
 - A scripted definition starts only the agents `cl-workflow:plan`, `implement`, `test`, `verify`, `review` and `recheck`; a phase with `loop` or `with` and a `recheck` are `verify`, `review` or `recheck`, and `fix` is a `plan` or `implement` phase.
+- The test phase (`cl-workflow:test`) runs each test the change adds or changes on the base commit, in a scratch clone, and reports per test `fails on base` or `passes on base`. A test that passes on base is flagged as not proving the change; it fails the phase only when the change claims to fix a bug that test covers.
 
 ```sh
 node plugins/cl-workflow/generator/generate.mjs <definition>... [--prefix <plugin name>|--prefix ''] [--out <folder>] [--check] [--json]
