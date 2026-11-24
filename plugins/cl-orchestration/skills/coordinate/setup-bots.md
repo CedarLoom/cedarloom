@@ -12,7 +12,7 @@ The Orca bots that run a repository's coordinator work, and the steps the setup 
 | Project bot | `<repo>-project` | picks issues, starts the role bot runs, routes pull request events, merges through `merge.mjs` | A1, `#2E6B4F` |
 | Builder | `<repo>-builder` | plans inline, builds and tests an issue, and fixes its own pull request: one plan, build or round of fixes per run | E1, `#2E5F8C` |
 | Reviewer | `<repo>-reviewer` | one review per run | B1, `#8C5A2E` |
-| Maintain | `<repo>-maintain` | one `cl-repo:maintain` pass per weekly run, none while a maintenance pull request is open; its findings wait for the owner's approval | D1, `#4F5B66` |
+| Maintain | `<repo>-maintain` | one `cl-repo:maintain` pass per weekly run, in a private repository none while a maintenance pull request is open; its findings wait for the owner's approval | D1, `#4F5B66` |
 
 The user creates each bot in Orca: from a bot's chat, `ORCA bot create --offer --name <name> --purpose '<Does, as one sentence>'` puts the card there, and the user sets the look with Edit and presses Create bot; with no bot yet, the user creates it by hand with that name, purpose and look. Then, in the bot's settings in Orca (unverified: these settings and a connector limited to one repository): the project bot gets the GitHub connector for `<owner/repo>` only, each role bot no connector, the builder and reviewer bots their memory off and the maintain bot its memory on; every bot its nightly memory tidy-up off.
 

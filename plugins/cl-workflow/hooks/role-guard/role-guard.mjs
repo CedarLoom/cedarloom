@@ -249,10 +249,12 @@ function folder(dir, args) {
 
 // known: dir is the folder git runs in. Otherwise dir is one of the folders it may run in, and only a named branch is read.
 // switched: an earlier git command in the same command line changes the branch, which the guard reads before the line runs.
-function push(args, dir, known, role, switched) {
+// filled: the shell fills in words of the push at run time (a backtick substitution, or xargs), which the guard never sees.
+function push(args, dir, known, role, { switched, filled }) {
   if (BOTS.has(role) && !OWN_BRANCH.has(role)) return 'a push';
   const own = OWN_BRANCH.has(role);
   if (own && switched) return 'a push after a branch switch in the same command';
+  if (own && filled) return 'a push whose refspec the shell fills in';
   const positionals = [];
   let repo;
   for (let i = 0; i < args.length; i++) {
@@ -342,7 +344,28 @@ function git(args, cwd, known, gitDir, role, line) {
   // A rebase may switch to the branch it names, bisect checks out commits and its reset a branch, and symbolic-ref HEAD <ref>
   // moves HEAD; git takes --mo and --cop for --move and --copy.
   if (sub === 'checkout' || sub === 'switch' || sub === 'rebase' || sub === 'bisect' || (sub === 'symbolic-ref' && rest.filter((w) => !w.startsWith('-')).length > 1) || (sub === 'branch' && rest.some((w) => /^(-[^-]*[mMcC]|--(mov?e?|copy?)$)/.test(w)))) line.switched = true;
-  return sub === 'push' ? push(rest, dir, known, role, line.switched) : null;
+  return sub === 'push' ? push(rest, dir, known, role, line) : null;
+}
+
+// bash runs a backtick substitution anywhere but in single quotes and after a backslash; in $'...' a backslash escapes a quote.
+function backtick(cmd) {
+  let quote = '';
+  for (let i = 0; i < cmd.length; i++) {
+    const c = cmd[i];
+    if (quote === "'") quote = c === "'" ? '' : quote;
+    else if (quote === '$') {
+      if (c === '\\') i++;
+      else if (c === "'") quote = '';
+    } else if (c === '\\') i++;
+    else if (c === '`') return true;
+    else if (c === '"') quote = quote ? '' : '"';
+    else if (quote) continue;
+    else if (c === '$' && cmd[i + 1] === "'") {
+      quote = '$';
+      i++;
+    } else if (c === "'") quote = "'";
+  }
+  return false;
 }
 
 // gh api's flags as gh reads them: grouped short flags (-iX PUT), values joined (-XPUT, --method=PUT) or in the next word.
@@ -443,7 +466,9 @@ function reason({ tool_name: tool, tool_input: toolInput }, cwd, role) {
   const source = [cmd, ...parsed.flatMap((c) => c.words)].join('\n');
   // Before the command, through env or export in bash, or $env:GIT_DIR in PowerShell.
   const gitDir = /\bGIT_DIR\s*=/i.test(cmd);
-  const line = { switched: false };
+  const line = { switched: false, filled: false };
+  // The tokenizer ends a command at a backtick, so the raw text tells whether one runs.
+  const substitutes = !powershell && backtick(cmd);
   for (const { words, nested } of parsed) {
     if (!words.length) continue;
     const at = words.findIndex(changesDir);
@@ -460,6 +485,7 @@ function reason({ tool_name: tool, tool_input: toolInput }, cwd, role) {
     for (let j = 0; j < words.length; j++) {
       const name = program(words[j]);
       const rest = words.slice(j + 1);
+      line.filled = substitutes || words.slice(0, j).some((w) => program(w) === 'xargs');
       const why =
         name === 'git' ? (known ? [dir] : seen).reduce((found, d) => found ?? git(rest, d, known, gitDir, role, line), null)
         : name === 'gh' ? gh(rest, source, role, runs(words, j, powershell))

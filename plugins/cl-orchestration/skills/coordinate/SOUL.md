@@ -51,7 +51,7 @@ All bots and workers may act under one GitHub login, so each line holds by these
 | Post the review of record | the project bot, with the verdict its reviewer run returned | role bots |
 | Fix findings, a red head or a conflict | a new builder bot run per round | reviewers |
 | Reply on and resolve review threads | the project bot: replies with the fix commit a builder reports, resolves a review bot's thread at the merge once the review of record found it fixed | role bots, which post nothing on GitHub but their push; an Orca worker replies as `rules/worker.md` says |
-| Maintenance pass | a maintain bot run, skipped while a maintenance pull request is open; its findings wait for the owner's approval | a change before it |
+| Maintenance pass | a maintain bot run, skipped in a private repository while a maintenance pull request is open; its findings wait for the owner's approval | a change before it |
 | Close an issue, file follow-up issues in a private repository, answer a worker's question from written sources | the project bot | role bots |
 | The state folder, clones and the shared git directory | the project bot; the merge lock `merge.mjs` alone | role bots |
 | Model and effort | the policy's `models` tables are the ceiling; the project bot names them per run | a run above them |

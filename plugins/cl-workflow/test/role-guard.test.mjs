@@ -314,7 +314,7 @@ test('role guard: the builder bot pushes only the branch checked out where git r
 });
 
 test('role guard: the builder bot never force-pushes or deletes its branch', () => {
-  const forced = ['git push -f origin feat/x', 'git push -uf origin feat/x', 'git push --force origin feat/x', 'git push --force-with-lease origin feat/x', 'git push --forc origin feat/x', 'git push origin +feat/x', 'git push origin +HEAD:feat/x', 'git push -d origin feat/x', 'git push --delete origin feat/x', 'git push origin :feat/x'];
+  const forced = ['git push -f origin feat/x', 'git push -uf origin feat/x', 'git push --force origin feat/x', 'git push --force-with-lease origin feat/x', 'git push --forc origin feat/x', 'git push origin +feat/x', 'git push origin +HEAD:feat/x', 'git push -d origin feat/x', 'git push --delete origin feat/x', 'git push origin :feat/x', 'git push origin `echo main`', 'git push origin `echo +feat/x`', 'git push origin `echo HEAD:main`', 'echo main | xargs git push origin'];
   for (const role of ['builder-bot']) for (const command of forced) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
 });
 
