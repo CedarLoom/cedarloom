@@ -54,27 +54,27 @@ function home() {
 }
 const RUN = '20261124T101500Z-a1b2c3-1.md';
 
-test('precheck: a planner or worker result the pick sweep has not read is work', () => {
+test('precheck: a builder result of round 0 the pick sweep has not read is work', () => {
   const h = home();
-  h.prompt(`project-12-planner-1-${RUN}`, `bot-planner.md\n\nResult file: ${join(h.results, `project-12-planner-1-${RUN}`)}\n`);
-  h.result(`project-12-planner-1-${RUN}`, 'The plan.\n');
-  assert.deepEqual(unread(h.prompts), [`project-12-planner-1-${RUN}: the planner result is unread`]);
+  h.prompt(`project-12-builder-0-${RUN}`, `bot-builder.md\n\nResult file: ${join(h.results, `project-12-builder-0-${RUN}`)}\n`);
+  h.result(`project-12-builder-0-${RUN}`, 'The plan.\n');
+  assert.deepEqual(unread(h.prompts), [`project-12-builder-0-${RUN}: the builder result is unread`]);
   // The spec before the result line may quote such a line: the last one names the result file.
-  h.prompt(`my-project-14-worker-2-${RUN}`, `bot-worker.md\nResult file: ${join(h.results, 'example.md')}\nResult file: ${join(h.results, 'w.md')}`);
+  h.prompt(`my-project-14-builder-0-${RUN}`, `bot-builder.md\nResult file: ${join(h.results, 'example.md')}\nResult file: ${join(h.results, 'w.md')}`);
   h.result('w.md', 'DONE\n');
-  assert.deepEqual(unread(h.prompts), [`my-project-14-worker-2-${RUN}: the worker result is unread`, `project-12-planner-1-${RUN}: the planner result is unread`]);
+  assert.deepEqual(unread(h.prompts), [`my-project-14-builder-0-${RUN}: the builder result is unread`, `project-12-builder-0-${RUN}: the builder result is unread`]);
 });
 
-test('precheck: a read result, a run without its result yet and a reviewer or fixer result are no work', () => {
+test('precheck: a read result, a run without its result yet and a reviewer or later builder round result are no work', () => {
   const h = home();
   // Read: the pick sweep deleted the prompt file, and the result file stays.
-  h.result(`project-12-worker-1-${RUN}`, 'DONE\n');
-  h.prompt(`project-14-worker-1-${RUN}`, `Result file: ${join(h.results, 'pending.md')}\n`);
-  // A reviewer's or fixer's result is read through its state file.
+  h.result(`project-12-builder-0-${RUN}`, 'DONE\n');
+  h.prompt(`project-14-builder-0-${RUN}`, `Result file: ${join(h.results, 'pending.md')}\n`);
+  // A reviewer's result and a builder's fix round are read through the state file.
   h.prompt(`project-15-reviewer-1-${RUN}`, `Result file: ${h.result('r.md', 'Head: c0ffee\n')}\n`);
-  h.prompt(`project-15-fixer-1-${RUN}`, `Result file: ${h.result('f.md', 'DONE\n')}\n`);
+  h.prompt(`project-15-builder-1-${RUN}`, `Result file: ${h.result('f.md', 'DONE\n')}\n`);
   // An empty result file is a write not done.
-  h.prompt(`project-16-worker-1-${RUN}`, `Result file: ${h.result('empty.md', '')}\n`);
+  h.prompt(`project-16-builder-0-${RUN}`, `Result file: ${h.result('empty.md', '')}\n`);
   h.prompt('.DS_Store', '');
   assert.deepEqual(unread(h.prompts), []);
 });
@@ -83,41 +83,43 @@ test('precheck: a prompts folder, prompt or result file that cannot be checked c
   const h = home();
   assert.deepEqual(unread(join(h.prompts, 'none')), ['the folder does not exist']);
   h.prompt('notes.md', 'x');
-  h.prompt(`project-1-worker-1-${RUN}`, 'bot-worker.md\n');
-  h.prompt(`project-2-planner-1-${RUN}`, 'Result file: results/plan.md\n');
-  h.prompt(`project-4-worker-1-${RUN}`, `Result file: ${h.results}\n`);
+  h.prompt(`project-1-builder-0-${RUN}`, 'bot-builder.md\n');
+  h.prompt(`project-2-builder-0-${RUN}`, 'Result file: results/plan.md\n');
+  h.prompt(`project-3-worker-1-${RUN}`, `Result file: ${h.result('w.md', 'DONE\n')}\n`);
+  h.prompt(`project-4-builder-0-${RUN}`, `Result file: ${h.results}\n`);
   assert.deepEqual(unread(h.prompts), [
     'notes.md is no role bot prompt file',
-    `project-1-worker-1-${RUN} names no absolute result file`,
-    `project-2-planner-1-${RUN} names no absolute result file`,
-    `project-4-worker-1-${RUN}: its result file is no file`,
+    `project-1-builder-0-${RUN} names no absolute result file`,
+    `project-2-builder-0-${RUN} names no absolute result file`,
+    `project-3-worker-1-${RUN} is no role bot prompt file`,
+    `project-4-builder-0-${RUN}: its result file is no file`,
   ]);
 });
 
 test('precheck: a file it cannot check counts only while it or its result file changed within the last hour, and an unread result at any age', () => {
   const h = home();
   const now = Date.now(), old = new Date(now - 61 * 60_000), recent = new Date(now - 59 * 60_000);
-  const plan = h.prompt(`project-5-planner-1-${RUN}`, `Result file: ${h.result('plan.md', 'The plan.\n')}\n`);
-  const noFile = h.prompt(`project-4-worker-1-${RUN}`, `Result file: ${h.results}\n`);
+  const plan = h.prompt(`project-5-builder-0-${RUN}`, `Result file: ${h.result('plan.md', 'The plan.\n')}\n`);
+  const noFile = h.prompt(`project-4-builder-0-${RUN}`, `Result file: ${h.results}\n`);
   for (const file of [h.prompt('notes.md', 'x'), plan, join(h.results, 'plan.md'), noFile]) utimesSync(file, old, old);
   utimesSync(h.prompt('todo.md', 'x'), recent, recent);
   utimesSync(h.results, recent, recent);
-  const listed = [`project-5-planner-1-${RUN}: the planner result is unread`, 'todo.md is no role bot prompt file'];
-  assert.deepEqual(unread(h.prompts, now), [`project-4-worker-1-${RUN}: its result file is no file`, ...listed]);
+  const listed = [`project-5-builder-0-${RUN}: the builder result is unread`, 'todo.md is no role bot prompt file'];
+  assert.deepEqual(unread(h.prompts, now), [`project-4-builder-0-${RUN}: its result file is no file`, ...listed]);
   utimesSync(h.results, old, old);
   assert.deepEqual(unread(h.prompts, now), listed);
 });
 
 test('precheck: an unread result exits 0 with no issue to pick and is named on stderr', () => {
-  assert.deepEqual(report(['/a'], () => ({ tracker: 'owner/project', numbers: [] }), ['/home/prompts: p.md: the worker result is unread']), { out: [], err: ['/home/prompts: p.md: the worker result is unread'], code: 0 });
+  assert.deepEqual(report(['/a'], () => ({ tracker: 'owner/project', numbers: [] }), ['/home/prompts: p.md: the builder result is unread']), { out: [], err: ['/home/prompts: p.md: the builder result is unread'], code: 0 });
   const h = home();
-  h.prompt(`project-12-planner-1-${RUN}`, `Result file: ${h.result('plan.md', 'The plan.\n')}\n`);
+  h.prompt(`project-12-builder-0-${RUN}`, `Result file: ${h.result('plan.md', 'The plan.\n')}\n`);
   // A project without a policy picks nothing: the exit is the result's.
   const script = fileURLToPath(new URL('../skills/coordinate/precheck.mjs', import.meta.url));
   const run = spawnSync(process.execPath, [script, '--prompts', h.prompts, join(h.prompts, 'missing')], { encoding: 'utf8' });
   assert.equal(run.status, 0, run.stderr);
   assert.equal(run.stdout, '');
-  assert.ok(run.stderr.split('\n').includes(`${h.prompts}: project-12-planner-1-${RUN}: the planner result is unread`), run.stderr);
+  assert.ok(run.stderr.split('\n').includes(`${h.prompts}: project-12-builder-0-${RUN}: the builder result is unread`), run.stderr);
 });
 
 test('precheck: an issue that several projects list starts in none of them', () => {

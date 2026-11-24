@@ -2,7 +2,7 @@
 
 Copy this file's block, replace each `<...>`, and send it as the worker's task. Change nothing else, except that a spec for one issue leaves out the Batch block, its lead line and its bullets, and a spec for an [automatic](#automatic-mode) worker or a [supervised Claude Code worker on Orca](#supervised-claude-code-worker-on-orca) changes the lines that section names, and a spec takes the lines [Start the run](orca.md#start-the-run) adds, only for the worker kind and mode that section names (such as a Role check line). The repository's rules stay in its `AGENTS.md`; this spec only points to them.
 
-"The coordinator" in this template is whoever writes the spec and starts the worker: a coordinator session, or a project bot for a worker bot run ([bot-worker.md](bot-worker.md)).
+"The coordinator" in this template is whoever writes the spec and starts the worker: a coordinator session, or a project bot for a builder bot run ([bot-builder.md](bot-builder.md)).
 
 What the lines take, policy fields as the reader prints them:
 

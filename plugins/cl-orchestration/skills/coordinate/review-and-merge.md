@@ -27,7 +27,7 @@ What the steps name:
 A project bot takes these steps with these changes ([bot-project.md](bot-project.md)):
 
 - The run folder is the bot run's `.cedarloom/runs/<run id>/`, the clones lie in `<bot home>/clones/`, and what the steps write into the handoff file goes into the state file `<bot home>/state/pr-<n>.json`.
-- The reviewer, re-reviewer and verifier are reviewer bot runs ([bot-reviewer.md](bot-reviewer.md)), and a follow-up is a fixer bot run ([bot-fixer.md](bot-fixer.md)), each started by the project bot with its brief in the prompt.
+- The reviewer, re-reviewer and verifier are reviewer bot runs ([bot-reviewer.md](bot-reviewer.md)), and a follow-up is a builder bot run that fixes ([bot-builder.md](bot-builder.md)), each started by the project bot with its brief in the prompt.
 - "At a later wake-up" is a later run, woken by a pull request event or the catch-up sweep.
 - Merge steps 1 to 5.2 write the subject and body files beside the state file, as `pr-<n>-subject.txt` and `pr-<n>-body.md`. Steps 5.3 to 6.7 and the [Merge log](#merge-log) are `merge.mjs`'s, in the state folder's `merge-log.md`.
 

@@ -1,6 +1,6 @@
 # Bot brief
 
-This brief holds for every run of a repository's project bot and of its role bots (planner, worker, reviewer, fixer, maintainer). Each automation prompt names one procedure file in the coordinate skill folder (`<skill folder>`): read this brief, then that file, and take only its steps. Every run is a new conversation. What it knows of earlier runs comes from GitHub, from Orca and from the project bot's state folder, `<bot home>/state/` (the head of `state.mjs` lists its files).
+This brief holds for every run of a repository's project bot and of its role bots (builder, reviewer, maintain). Each automation prompt names one procedure file in the coordinate skill folder (`<skill folder>`): read this brief, then that file, and take only its steps. Every run is a new conversation. What it knows of earlier runs comes from GitHub, from Orca and from the project bot's state folder, `<bot home>/state/` (the head of `state.mjs` lists its files).
 
 | Automation | Procedure |
 |---|---|
@@ -21,7 +21,7 @@ These hold in every step of every run.
 - Stay within `workersPerProject`, `hostWorkerLimit` and the daily limits of `state.mjs`: 320 project bot runs, 120 worker starts (a role bot run counts as one) and 12 runs per pull request in a UTC day. A run takes at most one merge and three worker starts and reports what it left.
 - A run does one task and ends at its boundary. It never sleeps, polls or waits for a person: events, the catch-up sweep and one-time automations wake the next run.
 - State goes into the state folder with `writeState` of `state.mjs` (a temporary file, then a rename), right after each decision, never into `MEMORY.md`. A missing or unreadable file is rebuilt from the pull request, its reviews and claim comment, `worker-list` and `automations list`. What has no copy fails closed: no trial base takes the update path, no review of record a new review, no first-seen time "seen now". A file that was unreadable, or whose pull request merged with no merge log line, is rebuilt with `mergeCommandAt` and `held` (`state rebuilt`) and filed once: `merge.mjs` then pauses every merge until the owner's answer.
-- A role bot run keeps memory off, runs on the model and effort its automation names, and never merges, approves its own work, or writes `SOUL.md`, `MEMORY.md`, the state folder or another bot's home.
+- A builder or reviewer run keeps memory off; a maintain run keeps it on and writes to `MEMORY.md` only what it changed and what was refused ([bot-maintain.md](bot-maintain.md)). A role bot run runs on the model and effort its automation names, and never merges, approves its own work, or writes `SOUL.md`, the state folder, another bot's home or, but for a maintain run, `MEMORY.md`.
 - Before a merge, `merge.mjs` runs the command that `<bot home>/pre-merge.json` names. Before every other post (a comment, an issue, an approval, a draft pull request), pipe its text through the same command, if one is set: a refusal posts nothing and goes in the report.
 - No commit, pull request, comment or report carries an AI attribution: no `Co-authored-by` line for an agent, no "Generated with" line, no session link.
 - A session on `fable` takes one issue, gets no follow-up and is never resumed. Before its start, estimate what it must read at four bytes a token: at most 50,000 tokens, 25,000 at `xhigh`. More goes to a gathering run first, and what is still too much is listed for the owner.
@@ -45,13 +45,13 @@ All bots and workers may act under one GitHub login, so each line holds by these
 | Choose the work (`startLabel`), merge a pull request with an owner-only file, releases and tags, settings, rulesets, secrets, tokens, spend limits | the owner | any bot |
 | Merge any other pull request | the project bot, through `merge.mjs` only | role bots, workers |
 | Start a worker or role bot run, route a pull request event | the project bot | role bots |
-| Plan a deep or open issue | a planner bot run | the project bot |
-| Implement an issue | a worker bot run | the project bot, reviewers |
+| Plan a deep or open issue | a builder bot run that only plans | the project bot |
+| Implement an issue | a builder bot run | the project bot, reviewers |
 | Review a head | a new reviewer bot run per first review and round | a run reviewing its own change; a built-in review bot counting as one |
 | Post the review of record | the project bot, with the verdict its reviewer run returned | role bots |
-| Fix findings, a red head or a conflict | a new fixer bot run per round | reviewers |
-| Reply on and resolve review threads | the project bot: replies with the fix commit a fixer reports, resolves a review bot's thread at the merge once the review of record found it fixed | role bots, which post nothing on GitHub but their push; an Orca worker replies as `rules/worker.md` says |
-| Maintenance pass | a maintainer bot run; its findings wait for the owner's approval | a change before it |
+| Fix findings, a red head or a conflict | a new builder bot run per round | reviewers |
+| Reply on and resolve review threads | the project bot: replies with the fix commit a builder reports, resolves a review bot's thread at the merge once the review of record found it fixed | role bots, which post nothing on GitHub but their push; an Orca worker replies as `rules/worker.md` says |
+| Maintenance pass | a maintain bot run, skipped while a maintenance pull request is open; its findings wait for the owner's approval | a change before it |
 | Close an issue, file follow-up issues in a private repository, answer a worker's question from written sources | the project bot | role bots |
 | The state folder, clones and the shared git directory | the project bot; the merge lock `merge.mjs` alone | role bots |
 | Model and effort | the policy's `models` tables are the ceiling; the project bot names them per run | a run above them |
