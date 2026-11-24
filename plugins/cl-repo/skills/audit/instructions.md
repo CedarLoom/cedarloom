@@ -27,6 +27,8 @@ When the target is one rule file (CLAUDE.md, AGENTS.md, a rule file), collect it
 2. Apply the prompt below to the numbered text, using only that text: the line numbers in findings are those numbers. One line can carry more than one kind.
 3. Each item of the answer is a candidate for step 5 of the skill, its kind the pattern; a finding carries its `why` and its `fix` on its Why line.
 
+This pass reads only the file, so the later pass also checks for restates against the docs the file links.
+
 ```text
 Below is one instruction file that a coding agent loads at the start of every session, with line numbers. Review it; do not read files or run commands.
 Report only these problems:
@@ -34,7 +36,7 @@ Report only these problems:
 - vague: a line an agent cannot act on or check, because it names no concrete action, file, command or threshold.
 - enforceable: a line a formatter, linter, hook or CI check could enforce instead of the agent.
 - restates: a line that only describes what the agent can read from the code or config itself (languages, versions, folders, scripts), with no instruction.
-A line that is specific and gives its reason is fine; report nothing for it. Report nothing else.
+A line that is specific and gives its reason is not vague, enforceable or restates; still report a contradiction it is part of. Report nothing else.
 Answer with one JSON object and nothing else: {"findings": [{"kind": "...", "lines": [n], "why": "one short sentence", "fix": "one short sentence"}]}. An empty list when nothing applies.
 
 FILE
@@ -44,7 +46,7 @@ The prompt is checked against the fixtures in `test/fixtures/audit/` of this plu
 
 ## Not findings
 
-- A line that is specific and gives its reason, for the four kinds of [One rule file](#one-rule-file).
+- A line that is specific and gives its reason, for vague, enforceable and restates ([One rule file](#one-rule-file)).
 - Context only the author knows: project facts, reasons, constraints of the environment.
 - A prohibition that guards against a failure that still occurs.
 - The exact command or script of a fragile operation.
