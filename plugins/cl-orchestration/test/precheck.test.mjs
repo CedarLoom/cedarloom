@@ -282,10 +282,9 @@ test('precheck: Pick leaves an issue while a question that names it waits for th
   for (const said of ['c', 'Owner answer (2026-11-20): (c) Hold. Later.', 'Owner answer (2026-11-20): Wait until the audit is done.']) {
     assert.deepEqual(check('/p', run([question([{ ...answered[0], body: said }], options)]), {}, none), [], said);
   }
-  // A full stop in the row's text cuts the answer's option after the label: the label still names the row.
+  // An option that starts with a row's label but goes on to reject it names no row: the answer holds the issue.
   const node = 'Issue: owner/project#7\n\n| Option | Impact |\n|---|---|\n| (a) Upgrade to Node.js 24 (Recommended) | x |\n| (b) Hold | Nothing changes |\n';
-  assert.deepEqual(check('/p', run([question([{ ...answered[0], body: 'Owner answer (2026-11-20): (a) Upgrade to Node.js 24. Go.' }], node)]), {}, none), [7]);
-  assert.deepEqual(check('/p', run([question([{ ...answered[0], body: 'Owner answer (2026-11-20): (b) Hold off. Later.' }], node)]), {}, none), []);
+  assert.deepEqual(check('/p', run([question([{ ...answered[0], body: 'Owner answer (2026-11-20): (a) is too risky. Wait for the audit.' }], node)]), {}, none), []);
   // Without option rows, no answer names one.
   assert.deepEqual(check('/p', run([question(answered)]), {}, none), []);
   // A local question holds it while open, deferred or held by its answer; a file that is no question starts nothing.

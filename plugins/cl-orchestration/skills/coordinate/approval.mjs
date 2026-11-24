@@ -230,14 +230,13 @@ const named = (text) => /^Issue: ([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#[1-9
 
 // Whether an answer keeps the work its question holds back: it does unless its option names exactly one option row of body that is no Hold,
 // by label ("b" or "(b)"), by text, or both, as the questions skill records the option it offered; "(Recommended)" is no part of the name.
-// An option that starts with a row's label and a space names that row: a full stop in the row's text cuts the option there (fullAnswer).
 export function holds(option, body = '') {
   const plain = (text) => text.replace(/\(recommended\)/gi, '').replace(/\s+/g, ' ').trim().toLowerCase();
   const said = plain(String(option).replace(/\.$/, ''));
   const textOf = (cell) => plain(cell.slice(labelOf(cell)?.length ?? 0));
   const rows = (tables(body.replace(COMMENT, ''), 'Option')[0] ?? []).map(([cell]) => shown(cell)).filter((cell) => {
     const label = labelOf(cell)?.toLowerCase() ?? '';
-    return said !== '' && ([plain(cell), label, label.slice(1, -1), textOf(cell)].includes(said) || (label !== '' && said.startsWith(`${label} `)));
+    return said !== '' && [plain(cell), label, label.slice(1, -1), textOf(cell)].includes(said);
   });
   return /\bhold\b/.test(said) || rows.length !== 1 || /^hold\b/.test(textOf(rows[0]));
 }
