@@ -16,7 +16,7 @@ In a Claude Code session with the cl-workflow plugin on, a hook refuses the ques
 
 - The plugin's `PreToolUse` hook refuses both with the rule as its reason: open questions with recommendations go into one issue per task in the issue tracker the project names, else the report; safe, reversible recommendations are taken and the work goes on; no chat-text interviews either.
 - A `SessionStart` hook adds that rule as one line at start, resume, `/clear`, compaction and fork.
-- `/cl-workflow:ask` allows both for 30 minutes, `for <n>m` or `for <n>h`, or `until HH:MM` (local time); `off` ends the window early.
+- `/cl-workflow:ask` allows both for 30 minutes, `<n>` or `<n>m` minutes or `<n>h` hours (with or without `for`), or `until HH:MM` (local time); `off` ends the window early.
 - `/cl-workflow:questions` (the [owner questions](#owner-questions) queue) allows both for the rest of the session, unless it cannot read its arguments; `/cl-workflow:ask off` or a timed `/cl-workflow:ask` replaces that.
 - A window ends at its time or when Claude Code quits. `/clear`, compaction and a fork keep it; a new Claude Code process or a resumed conversation starts with questions off.
 - A `UserPromptExpansion` hook sets the window; that event fires when a prompt's command expands ([hooks reference](https://code.claude.com/docs/en/hooks#userpromptexpansion)). By that reference the same text in a scheduled task, a `/loop` iteration or a message from another session sets nothing; the skill is user-only.
