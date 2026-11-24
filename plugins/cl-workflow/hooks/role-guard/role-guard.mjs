@@ -1,7 +1,8 @@
 // PreToolUse hook for Bash, Monitor and PowerShell: a session that does not run as the coordinator (CEDARLOOM_ROLE=coordinator),
 // and every subagent, may not merge, release, push tags or to the default branch, change repository settings or security,
 // use gh auth, write git config, use git stash or start a session in bare mode, which runs no hooks. The bot roles take narrower
-// rules (BOTS), and no role, the coordinator included, merges with --admin.
+// rules (BOTS), any other value of the role, empty included, runs and writes nothing, and no role, the coordinator included, merges
+// with --admin.
 // It stops a session that forgets its role, not one that works around it (variables, aliases, scripts, another tool):
 // the boundary is a gh token without those rights.
 // For Write, Edit, MultiEdit and NotebookEdit too: an answer in the local question queue counts as the owner's, so every session, the
@@ -9,8 +10,8 @@
 // after /cl-workflow:questions set the answer flag in that session (ask.mjs: an expansion whose input shows no unattended session);
 // no session writes the window files that record that or starts a session with that command.
 import { spawnSync } from 'node:child_process';
-import { statSync } from 'node:fs';
-import { basename, resolve } from 'node:path';
+import { lstatSync, realpathSync, statSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { openUntil, windowFile } from '../ask/window-file.mjs';
 import { gitProgram } from '../git-program.mjs';
@@ -542,6 +543,36 @@ function queue({ tool_name: tool, tool_input: toolInput, agent_id: agent }, cwd)
   return hits(QUEUE) ? 'a write into the local question queue (.cedarloom/questions/), or a command that names it,' : null;
 }
 
+// The maintainer bot writes with a file tool only its result file, below results/ of its home (the project folder of its run);
+// its clones and knowledge base it writes from its shell. Each path resolves through links, from the folder that holds it where
+// the file is new, so a link cannot lead out; a path that does not resolve (a dangling link included), or no project folder,
+// refuses the write.
+function outsideResults({ tool_input: toolInput }, cwd) {
+  const what = 'a file write outside results/ of its home';
+  const home = process.env.CLAUDE_PROJECT_DIR;
+  const fields = EDIT_PATHS.filter((key) => toolInput?.[key] !== undefined).map((key) => toolInput[key]);
+  if (!home || !fields.length || fields.some((path) => typeof path !== 'string')) return what;
+  const real = (path) => {
+    try {
+      return realpathSync(path);
+    } catch (error) {
+      // Only a file that is not there, not even as a link, resolves through its folder.
+      if (error.code !== 'ENOENT' || lstatSync(path, { throwIfNoEntry: false })) throw error;
+      return join(realpathSync(dirname(path)), basename(path));
+    }
+  };
+  try {
+    const results = realpathSync(join(resolve(home), 'results'));
+    for (const field of fields) {
+      const rel = relative(results, real(resolve(cwd, field)));
+      if (!rel || rel.startsWith('..') || isAbsolute(rel)) return what;
+    }
+  } catch {
+    return what;
+  }
+  return null;
+}
+
 // Exit 2 refuses the call; onFailure "block" also refuses it when the hook cannot start.
 const refuse = (what) => {
   process.stderr.write(`CedarLoom role guard: ${what}, so the call is refused.\n`);
@@ -558,16 +589,20 @@ else {
     // A bot's subagents inherit its role and its rules.
     const role = process.env[ROLE];
     const coordinator = role === 'coordinator' && !input.agent_id;
-    // A misspelled bot role would fall back to the wider rules of a guarded session, so it runs nothing.
-    const unknownBot = /bot/i.test(role ?? '') && !BOTS.has(role);
+    // A role set to a value the guard does not know (misspelled, empty, a bot role without -bot) would fall back to the wider rules of
+    // a guarded session, so it runs and writes nothing. Only an unset role, an ordinary session, takes those rules.
+    const unknown = role !== undefined && role !== 'coordinator' && !BOTS.has(role);
     const why =
-      owners || EDITS.has(input.tool_name) ? null
-      : unknownBot ? `a command in the unknown role ${role}`
+      owners ? null
+      : unknown ? `a ${EDITS.has(input.tool_name) ? 'file write' : 'command'} in the unknown role ${JSON.stringify(role)}`
+      : EDITS.has(input.tool_name) ? (role === 'maintainer-bot' ? outsideResults(input, cwd) : null)
       : coordinator ? (adminMerge(input) ? 'a merge with --admin' : null)
       : reason(input, cwd, role);
     if (owners) line = `CedarLoom role guard: ${owners} is the owner's step: only a session where /cl-workflow:questions set the answer flag, which the ask hook refuses in a session it reads as unattended, writes answers there. File a question with approval.mjs file and read answers with approval.mjs queue. Text that only mentions the folder goes in a file (-F, --body-file).`;
     else if (why && coordinator) line = `CedarLoom role guard: ${why}, which passes branch protection, is no role's step. Merge without --admin, or leave the pull request to the owner. Text that only mentions such a command goes in a file (-F, --body-file).`;
-    else if (why && unknownBot) line = `CedarLoom role guard: ${why} is refused: the bot roles are ${[...BOTS].join(', ')}. Report the role to the user who starts this session.`;
+    else if (why && unknown) line = `CedarLoom role guard: ${why} is refused: the roles are coordinator, ${[...BOTS].join(', ')}. Report the role to the user who starts this session.`;
+    // The maintainer's knowledge base is a step of its procedure: the refusal names the shell, so the run keeps that step.
+    else if (why && role === 'maintainer-bot' && EDITS.has(input.tool_name)) line = `CedarLoom role guard: ${why} is no step of the ${role} (${ROLE}=${role}). The file tool writes only the result file below results/; write the knowledge base and the clone from the shell.`;
     else if (why && BOTS.has(role)) line = `CedarLoom role guard: ${why} is no step of the ${role} (${ROLE}=${role}).${!why.startsWith('a push') && /merge/i.test(why) ?' Merges go only through merge.mjs.' : ''} Leave the step out and name it in your report. Text that only mentions such a command goes in a file (-F, --body-file).`;
     else if (why) line = `CedarLoom role guard: ${why} is the coordinator's step, and this session does not run as the coordinator (${ROLE}=coordinator in the main session, set by the user who starts it). Leave the step to the coordinator and name it in your report. Text that only mentions such a command goes in a file (-F, --body-file).`;
   } catch (error) {
