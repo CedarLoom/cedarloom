@@ -130,8 +130,8 @@ const BASH_QUOTED_ESCAPES = '$`"\\';
 // (https://github.com/PowerShell/PowerShell/blob/ba2221aed027041b6620c5fe1c0675567f14452a/src/System.Management.Automation/engine/MinishellParameterBinderController.cs#L177-L192).
 // PowerShell also runs the command after an assignment operator, whatever its target ($r =gh, ${r}=gh, [int] $a[0] += gh,
 // @{ a = gh }): the words after each = of a command are read as a command of their own as well.
-// An ANSI-C quoted string ($'...') holds its decoded value, as bash reads it or, with zsh, as zsh does (ansi-c-quote.mjs).
-function commands(source, powershell, nested = false, zsh = false) {
+// An ANSI-C quoted string ($'...') holds its decoded value, as the shell of mode reads it (ansi-c-quote.mjs).
+function commands(source, powershell, nested = false, mode = 'bash') {
   /** @type {{ words: string[], targets: string[], nested: boolean }[]} */
   const out = [];
   const escape = powershell ? '`' : '\\';
@@ -145,7 +145,7 @@ function commands(source, powershell, nested = false, zsh = false) {
         redirect = false;
         targets.push(word);
       } else words.push(word);
-      if (quoted && /[\s;&|()`<>]/.test(word)) out.push(...commands(word, powershell, true, zsh));
+      if (quoted && /[\s;&|()`<>]/.test(word)) out.push(...commands(word, powershell, true, mode));
     }
     word = '';
     started = quoted = false;
@@ -181,7 +181,7 @@ function commands(source, powershell, nested = false, zsh = false) {
       quote = c;
       started = quoted = true;
     } else if (c === '$' && !powershell && s[i + 1] === "'") {
-      const { value, end } = ansiC(s, i + 2, zsh);
+      const { value, end } = ansiC(s, i + 2, mode);
       word += value;
       i = end;
       started = quoted = true;
@@ -223,16 +223,16 @@ function commands(source, powershell, nested = false, zsh = false) {
   return out;
 }
 
-// The commands of a command text in each reading a shell may give it: PowerShell's, or bash's and zsh's, which differ only in
-// ANSI-C quoting and a NUL; every check runs on each.
+// The commands of a command text in each reading a shell may give it: PowerShell's, or those of current bash, bash 3.2 and zsh,
+// which differ only in ANSI-C quoting and a NUL; every check runs on each.
 function readings(source, powershell) {
   if (powershell) return [commands(source, true)];
   const bash = commands(source, false);
   if (!source.includes("$'") && !source.includes('\0')) return [bash];
-  const zsh = commands(source, false, false, true);
+  const zsh = commands(source, false, false, 'zsh');
   // zsh hands a program each word up to its first NUL; a builtin reads it whole, here without the NUL.
   const each = (f) => zsh.map((c) => ({ ...c, words: c.words.map(f), targets: c.targets.map(f) }));
-  const all = [bash, each((w) => w.split('\0')[0]), each((w) => w.replaceAll('\0', ''))].map((r) => [JSON.stringify(r), r]);
+  const all = [bash, commands(source, false, false, 'bash3'), each((w) => w.split('\0')[0]), each((w) => w.replaceAll('\0', ''))].map((r) => [JSON.stringify(r), r]);
   return [...new Map(all).values()];
 }
 

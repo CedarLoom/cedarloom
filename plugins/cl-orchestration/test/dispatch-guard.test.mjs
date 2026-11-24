@@ -52,6 +52,12 @@ test('dispatch guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh d
     // zsh reads \c as a plain c.
     raw`$'or\ca' orchestration send --to dispatch:d1 --body /questions`,
     raw`o""rca orchestration send --to dispatch:d1 --body /questions`,
+    // bash 3.2's \c takes one backslash of \c\\, so the second starts an escape of its own.
+    raw`bash -c $'\c\\x3b\x6frca orchestration send --body "/cl-workflow:away off"'`,
+    raw`eval $'\c\\norca orchestration send --body "/cl-workflow:away off"'`,
+    raw`bash -c $'\c\\073orca orchestration send --body "/cl-workflow:away off"'`,
+    raw`bash -c $'\c\\\\\\x3b\x6frca orchestration send --body "/cl-workflow:away off"'`,
+    raw`bash -c $'echo a\c\\x3b\x6frca orchestration send --body "/cl-workflow:away off"'`,
   ];
   for (const command of dispatched) assert.equal(decision(command), 'deny', command);
   const passed = [

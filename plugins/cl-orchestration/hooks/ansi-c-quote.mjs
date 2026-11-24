@@ -15,7 +15,9 @@ const control = (x) => (x === '?' ? 127 : x.toUpperCase().charCodeAt(0) & 31);
 const utf8 = (point) => [...encoder.encode(String.fromCodePoint(point <= 0x10ffff ? point : 0xfffd))];
 
 // start: the index after $'. end: the index of the closing quote, which a backslash escapes, or the text's length without one.
-export function ansiC(text, start, zsh = false) {
+// mode: 'bash' (current bash), 'bash3' (bash 3.2, macOS's /bin/bash) or 'zsh'.
+export function ansiC(text, start, mode = 'bash') {
+  const zsh = mode === 'zsh';
   let end = start;
   while (end < text.length && text[end] !== "'") end += text[end] === '\\' ? 2 : 1;
   end = Math.min(end, text.length);
@@ -63,9 +65,10 @@ export function ansiC(text, start, zsh = false) {
         put(...(c === 'x' ? [parseInt(run, 16)] : utf8(parseInt(run, 16))));
       }
     } else if (c === 'c' && !zsh && i < body.length) {
-      // bash reads \c\\ as the control character of one backslash.
+      // Current bash reads \c\\ as the control character of one backslash; bash 3.2 takes one character, so the second
+      // backslash starts an escape of its own.
       const x = body[i++];
-      if (x === '\\' && body[i] === '\\') i++;
+      if (mode === 'bash' && x === '\\' && body[i] === '\\') i++;
       put(control(x));
     } else if ((c === 'C' || c === 'M') && zsh) {
       if (body[i] === '-') i++;

@@ -580,6 +580,13 @@ test('role guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh do, i
     raw`git $'\x73tash'`,
     raw`bash -c $'gh\x20pr merge 12'`,
     raw`bash -c $'echo ok\ngh pr merge 12'`,
+    // bash 3.2's \c takes one backslash of \c\\, so the second starts an escape of its own.
+    raw`bash -c $'\c\\x3b\x67h pr merge 12'`,
+    raw`eval $'\c\\x3b\x67h pr merge 12'`,
+    raw`eval $'\c\\ngh pr merge 12'`,
+    raw`bash -c $'\c\\073gh pr merge 12'`,
+    raw`bash -c $'\c\\\\\\x3b\x67h pr merge 12'`,
+    raw`bash -c $'echo a\c\\x3b\x67h pr merge 12'`,
     // A NUL ends the string's value in bash.
     raw`$'gh\0x' pr merge 12`,
     raw`$'g\x00'h pr merge 12`,
