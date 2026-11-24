@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { after, before, test } from 'node:test';
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const HOOK = fileURLToPath(new URL('../hooks/role-guard/role-guard.mjs', import.meta.url));
 const ASK = fileURLToPath(new URL('../hooks/ask/ask.mjs', import.meta.url));
 // The hook asks git about the folder it runs in; a GIT_DIR of a surrounding git hook must not answer for it.
-const ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_') && !['CEDARLOOM_ROLE', 'CLAUDE_CODE_ENTRYPOINT'].includes(key)));
+const ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_') && !['CEDARLOOM_ROLE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_PROJECT_DIR'].includes(key)));
 
 // trunk: checked out, the remote's default branch (origin/HEAD), with the tag release-candidate and the branch deps-1.2.3.
 // feature: a repository on the branch feat/x whose remote's default branch is trunk.
@@ -417,6 +417,32 @@ test('role guard: a set role it does not know, empty or without the -bot suffix 
   // No role at all is an ordinary session: the guarded rules, writes and reads pass.
   assert.equal(decision('ls'), 'none');
   assert.equal(decision(undefined, { tool: 'Write', toolInput: { file_path: 'notes.md', content: 'x' } }), 'none');
+});
+
+test('role guard: the maintainer bot writes with a file tool only below results/ of its home, through links too', () => {
+  const home = mkdtempSync(join(tmpdir(), 'role-guard-home-'));
+  const elsewhere = mkdtempSync(join(tmpdir(), 'role-guard-elsewhere-'));
+  try {
+    mkdirSync(join(home, 'results'));
+    mkdirSync(join(home, 'clones'));
+    symlinkSync(elsewhere, join(home, 'results', 'out'));
+    symlinkSync(join(elsewhere, 'missing.md'), join(home, 'results', 'dangling.md'));
+    const write = (file_path, { role = 'maintainer-bot', env = { CLAUDE_PROJECT_DIR: home }, cwd = home } = {}) =>
+      decision(undefined, { role, cwd, env, tool: 'Write', toolInput: { file_path, content: 'x' } });
+    assert.equal(write(join(home, 'results', 'r.md')), 'none');
+    assert.equal(write('results/r.md'), 'none');
+    for (const path of [join(home, 'clones', 'r.md'), 'results/../x.md', join(home, 'results'), join(home, 'results', 'out', 'r.md'), join(home, 'results', 'dangling.md'), join(home, 'results', 'new', 'r.md'), join(elsewhere, 'r.md')]) {
+      assert.equal(write(path), 'deny', path);
+    }
+    assert.equal(write(join(home, 'results', 'r.md'), { env: {} }), 'deny');
+    assert.equal(decision(undefined, { role: 'maintainer-bot', cwd: home, env: { CLAUDE_PROJECT_DIR: home }, tool: 'NotebookEdit', toolInput: { notebook_path: join(home, 'clones', 'n.ipynb'), new_source: 'x' } }), 'deny');
+    // The other roles keep their file tools wherever the settings let them.
+    for (const role of ['worker-bot', 'project-bot', 'coordinator']) assert.equal(write(join(home, 'clones', 'r.md'), { role }), 'none', role);
+    assert.equal(decision(undefined, { cwd: home, env: { CLAUDE_PROJECT_DIR: home }, tool: 'Write', toolInput: { file_path: join(home, 'clones', 'r.md'), content: 'x' } }), 'none');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(elsewhere, { recursive: true, force: true });
+  }
 });
 
 test('role guard: the project bot deletes a head branch of the bot shape, never another', () => {

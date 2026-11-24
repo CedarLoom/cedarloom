@@ -10,8 +10,8 @@
 // after /cl-workflow:questions set the answer flag in that session (ask.mjs: an expansion whose input shows no unattended session);
 // no session writes the window files that record that or starts a session with that command.
 import { spawnSync } from 'node:child_process';
-import { statSync } from 'node:fs';
-import { basename, resolve } from 'node:path';
+import { lstatSync, realpathSync, statSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { openUntil, windowFile } from '../ask/window-file.mjs';
 import { gitProgram } from '../git-program.mjs';
@@ -543,6 +543,36 @@ function queue({ tool_name: tool, tool_input: toolInput, agent_id: agent }, cwd)
   return hits(QUEUE) ? 'a write into the local question queue (.cedarloom/questions/), or a command that names it,' : null;
 }
 
+// The maintainer bot writes with a file tool only its result file, below results/ of its home (the project folder of its run);
+// its clones and knowledge base it writes from its shell. Each path resolves through links, from the folder that holds it where
+// the file is new, so a link cannot lead out; a path that does not resolve (a dangling link included), or no project folder,
+// refuses the write.
+function outsideResults({ tool_input: toolInput }, cwd) {
+  const what = 'a file write outside results/ of its home';
+  const home = process.env.CLAUDE_PROJECT_DIR;
+  const fields = EDIT_PATHS.filter((key) => toolInput?.[key] !== undefined).map((key) => toolInput[key]);
+  if (!home || !fields.length || fields.some((path) => typeof path !== 'string')) return what;
+  const real = (path) => {
+    try {
+      return realpathSync(path);
+    } catch (error) {
+      // Only a file that is not there, not even as a link, resolves through its folder.
+      if (error.code !== 'ENOENT' || lstatSync(path, { throwIfNoEntry: false })) throw error;
+      return join(realpathSync(dirname(path)), basename(path));
+    }
+  };
+  try {
+    const results = realpathSync(join(resolve(home), 'results'));
+    for (const field of fields) {
+      const rel = relative(results, real(resolve(cwd, field)));
+      if (!rel || rel.startsWith('..') || isAbsolute(rel)) return what;
+    }
+  } catch {
+    return what;
+  }
+  return null;
+}
+
 // Exit 2 refuses the call; onFailure "block" also refuses it when the hook cannot start.
 const refuse = (what) => {
   process.stderr.write(`CedarLoom role guard: ${what}, so the call is refused.\n`);
@@ -565,7 +595,7 @@ else {
     const why =
       owners ? null
       : unknown ? `a ${EDITS.has(input.tool_name) ? 'file write' : 'command'} in the unknown role ${JSON.stringify(role)}`
-      : EDITS.has(input.tool_name) ? null
+      : EDITS.has(input.tool_name) ? (role === 'maintainer-bot' ? outsideResults(input, cwd) : null)
       : coordinator ? (adminMerge(input) ? 'a merge with --admin' : null)
       : reason(input, cwd, role);
     if (owners) line = `CedarLoom role guard: ${owners} is the owner's step: only a session where /cl-workflow:questions set the answer flag, which the ask hook refuses in a session it reads as unattended, writes answers there. File a question with approval.mjs file and read answers with approval.mjs queue. Text that only mentions the folder goes in a file (-F, --body-file).`;
