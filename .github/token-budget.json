@@ -1,6 +1,6 @@
 {
   "budget": {
-    "total": 119500,
+    "total": 120500,
     "alwaysLoaded": 1200,
     "files": {
       "plugins/cl-repo/rules/project.md": 1400

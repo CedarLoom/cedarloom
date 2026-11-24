@@ -22,6 +22,7 @@ Run `node <skill folder>/approval.mjs <file>` from your working directory until 
 ## Labels and title
 
 - Label: `cl:needs-human`. Create no label.
+- Issue line: a question that holds back a work issue names it on a line of its own, `Issue: <owner/repo>#<n>`; `precheck.mjs` picks no issue an open question names until its answer names one option row other than Hold.
 - Title: your own words on one line, only letters, digits, spaces and `.,:#()/-`, starting with a letter or a digit, never with `-`, passed in single quotes. No text of an issue, a pull request or a worker goes into it.
 
 ```text
@@ -34,7 +35,8 @@ The lifecycle of a question issue:
 
 - Open: `cl:needs-human`.
 - Deferred: the owner adds `cl:deferred`; the `questions` skill skips it until the owner asks for the deferred ones.
-- Answered: `cl:needs-human` and `cl:deferred` off, `cl:ready-for-agent` on whatever the answer says, never on an approval (a body with an Approval table), whose work lives in what it names: the edit takes `cl:ready-for-agent` off an approval. The `questions` skill closes an issue whose answer drops the work as not planned, before any label (Done, below); one left open with the label is listed for the owner at Pick (the Loop of SKILL.md). `node <skill folder>/approval.mjs apply <repository> <issue number>` reads the answer as [The answer](#the-answer) does and makes that edit (exit 0 prints the answer and the labels, 1 is no answer, 2 an error); the `questions` skill runs it on each answer, and `facts.mjs write --approvals <owner/repo>` on every open `cl:needs-human` issue there, so an answer recorded by an agent or commented by the owner on GitHub moves on at the next facts run.
+- Answered: `cl:needs-human` and `cl:deferred` off, `cl:ready-for-agent` on whatever the answer says, never on an approval (a body with an Approval table) or a question with an Issue line, whose work lives in what it names: the edit takes `cl:ready-for-agent` off them. The `questions` skill closes an issue whose answer drops the work as not planned, before any label (Done, below); one left open with the label is listed for the owner at Pick (the Loop of SKILL.md). `node <skill folder>/approval.mjs apply <repository> <issue number>` reads the answer as [The answer](#the-answer) does and makes that edit (exit 0 prints the answer and the labels, 1 is no answer, 2 an error); the `questions` skill runs it on each answer, and `facts.mjs write --approvals <owner/repo>` on every open `cl:needs-human` issue there, so an answer recorded by an agent or commented by the owner on GitHub moves on at the next facts run.
+- Between answer and edit: an answer commented on GitHub keeps `cl:needs-human` until `approval.mjs apply` runs, so a bot tells an answer by its key `#<n> <at>` in `answered.json`, never by a label ([bot-catch-up.md](bot-catch-up.md)).
 - Done: closed, an approval by the owner and other work by its merge (the Close an issue row of SKILL.md), with a comment linking what settled it. Rejected work is closed as not planned, with no label: `gh issue close <issue number> -R <repository> --reason "not planned"`.
 
 ## Once per pull request and gate

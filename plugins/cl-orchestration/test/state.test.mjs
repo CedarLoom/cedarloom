@@ -5,7 +5,7 @@ import { linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { count, inspectLock, processStart, readState, removeLock, takeLock, writeState } from '../skills/coordinate/state.mjs';
+import { count, decide, inspectLock, processStart, readState, removeLock, takeLock, writeState } from '../skills/coordinate/state.mjs';
 
 const folder = () => mkdtempSync(join(tmpdir(), 'cl-state-'));
 const NOW = new Date('2026-11-20T12:00:00Z');
@@ -105,4 +105,14 @@ test('state: count refuses to add what is no count, and writes nothing', () => {
   count(dir, NOW, { runs: 320, pr: 9 });
   for (const add of [{ runs: 0.5 }, { runs: -320, pr: 9 }, { catchUp: '1' }, { runs: 1, pr: 0 }]) assert.throws(() => count(dir, NOW, add), /count: add holds no counts/);
   assert.deepEqual(count(dir, NOW), { runs: 320, workerStarts: 0, catchUp: 0, prs: { 9: 320 } });
+});
+
+test('state: a Hold decides no maintain finding, so each stays open; another answer decides each, keeping a filed issue number', () => {
+  const dir = folder();
+  const path = join(dir, 'maintain.json');
+  assert.deepEqual(decide(dir, ['M1', 'M2'], null), []);
+  assert.equal(readState(path), null);
+  writeState(path, { M0: { approved: true, issue: 41 } });
+  assert.deepEqual(decide(dir, ['M0', 'M1', 'M2'], ['M0', 'M2']), ['M0', 'M1', 'M2']);
+  assert.deepEqual(readState(path), { M0: { approved: true, issue: 41 }, M1: { approved: false }, M2: { approved: true } });
 });

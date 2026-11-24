@@ -4,7 +4,7 @@
 // The conditions, in this order; from 4 on only an open pull request whose state is neither held nor merged counts, and from 1 on none that had LIMITS.prRuns runs today:
 // 1. The merge lock is stale, or, while no merge holds the lock, a pull request state that is not held holds a merge command time and the merge log no line for it.
 // 2. The default branch's tip has a red run, or red-main.json names the tip, and red-main.json names no report for that tip.
-// 3. An owner answered an open cl:needs-human issue, or a local question that answered.json does not list.
+// 3. An owner answer that answered.json does not list: on an open issue that carries cl:needs-human, or a trusted author's issue updated in the last ANSWER_DAYS days whose answer has the full form, as #<n> <at>, or on a local question, as <file> <at>.
 // 4. A pull request is merge-ready: its state's handled names its head with the verdict merge or trial (merge-checks.mjs) and a reviewed head, its checks are green, or it has none and merge.requiredChecks is empty, the lock is free, no merge command is unconfirmed or held (merge.mjs pauses every merge then), and the tip's watch ended (10 minutes from tip.json's first sight, no run open) or red-main.json names the red tip and that pull request.
 // 5. A bot pull request's head is red or in conflict and handled does not name that head.
 // 6. A bot pull request's head is green, or has no checks and merge.requiredChecks is empty, neither handled nor the reviewed head names that head, and no claim-<n>-<head> folder is younger than stallMinutes.
@@ -16,7 +16,7 @@ import { parseArgs } from 'node:util';
 import { answer, readQueue } from './approval.mjs';
 import { redRuns, unconfirmed } from './merge.mjs';
 import { errorLine, json, read, sh } from './policy.mjs';
-import { originRepo, trusts, writers } from './precheck.mjs';
+import { asks, originRepo, trusts, writers } from './precheck.mjs';
 import { count, inspectLock, isPrFile, LIMITS, logged, RED_MAIN, TIP } from './state.mjs';
 
 const MINUTE = 60_000;
@@ -24,6 +24,8 @@ const MINUTE = 60_000;
 const LIMIT = 90_000;
 const MARGIN = 5_000;
 const WATCH_MIN = 10 * MINUTE;
+// An answer on an issue without cl:needs-human that no sweep read within this many days is left to the owner.
+const ANSWER_DAYS = 7;
 const BOT_BRANCH = /^[a-z]+\/([1-9]\d*)-./;
 const GOOD = ['SUCCESS', 'SKIPPED', 'NEUTRAL'];
 
@@ -73,10 +75,21 @@ function pending({ clone, state, now, run, queue, counts }) {
   if (red && !(redMain?.sha === tip && redMain.report)) return { condition: 2, reason: `the default branch is red at ${tip} and has no report` };
 
   const writes = writers(repo, (cmd, args) => run(clone, cmd, args));
-  const asked = gh('issue', 'list', '-R', repo, '--label', 'cl:needs-human', '--state', 'open', '--limit', '1000', '--json', 'number,labels,comments,author,body,url');
-  const answered = asked.find((issue) => answer(issue, writes));
-  if (answered) return { condition: 3, reason: `#${answered.number} has an answer` };
   const acted = new Set(stored('answered.json') ?? []);
+  // An answer through the questions skill takes cl:needs-human off at once, so the open issues updated in the answer window are read too.
+  const since = new Date(now.getTime() - ANSWER_DAYS * 24 * 60 * MINUTE).toISOString().slice(0, 10);
+  const listed = (...filter) => gh('issue', 'list', '-R', repo, ...filter, '--state', 'open', '--limit', '1000', '--json', 'number,labels,comments,author,body,url');
+  const asker = asks(policy, writes);
+  // Only triage rights set the label: without it, an issue counts as a question only when a trusted author wrote it and the answer has the questions skill's full form.
+  const full = (issue, at) => issue.comments.some((c) => c.createdAt === at && c.body?.startsWith('Owner answer ('));
+  const labeled = listed('--label', 'cl:needs-human');
+  for (const issue of [...labeled, ...listed('--search', `updated:>=${since}`)]) {
+    const found = answer(issue, writes);
+    if (found && !labeled.includes(issue) && !(full(issue, found.at) && asker(issue))) continue;
+    // An answer without a time has no key: it fails the precheck, which reports it, rather than start a run on every pass.
+    if (found && !Number.isFinite(Date.parse(found.at))) throw new Error(`the answer on #${issue.number} has no time`);
+    if (found && !acted.has(`#${issue.number} ${found.at}`)) return { condition: 3, reason: `#${issue.number} has an answer` };
+  }
   for (const q of queue()) {
     if (q.error) throw new Error(`the question ${q.file} ${q.error}`);
     if (q.status === 'answered' && !acted.has(`${q.file} ${q.at}`)) return { condition: 3, reason: `the question ${q.file} has an answer` };
