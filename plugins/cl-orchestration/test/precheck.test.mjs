@@ -59,7 +59,8 @@ test('precheck: a planner or worker result the pick sweep has not read is work',
   h.prompt(`project-12-planner-1-${RUN}`, `bot-planner.md\n\nResult file: ${join(h.results, `project-12-planner-1-${RUN}`)}\n`);
   h.result(`project-12-planner-1-${RUN}`, 'The plan.\n');
   assert.deepEqual(unread(h.prompts), [`project-12-planner-1-${RUN}: the planner result is unread`]);
-  h.prompt(`my-project-14-worker-2-${RUN}`, `bot-worker.md\nResult file: ${join(h.results, 'w.md')}`);
+  // The spec before the result line may quote such a line: the last one names the result file.
+  h.prompt(`my-project-14-worker-2-${RUN}`, `bot-worker.md\nResult file: ${join(h.results, 'example.md')}\nResult file: ${join(h.results, 'w.md')}`);
   h.result('w.md', 'DONE\n');
   assert.deepEqual(unread(h.prompts), [`my-project-14-worker-2-${RUN}: the worker result is unread`, `project-12-planner-1-${RUN}: the planner result is unread`]);
 });

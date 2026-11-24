@@ -100,9 +100,9 @@ export function distinct(lists) {
   return { lists: lists.map((list) => ({ ...list, numbers: list.numbers.filter((number) => !gone.has(key(list.tracker, number))) })), shared };
 }
 
-// A role bot run's prompt file name, <repo>-<n>-<role>-<round>-<run id>-<k>.md, and the line that names its result file.
+// A role bot run's prompt file name, <repo>-<n>-<role>-<round>-<run id>-<k>.md, and the line that names its result file: the last one, since the spec before it may hold such a line.
 const PROMPT = /-(planner|worker|reviewer|fixer|maintainer)-\d+-\d{8}T\d{6}Z-[0-9a-f]{6}-[1-9]\d*\.md$/;
-const RESULT_LINE = /^Result file: (.+)$/m;
+const RESULT_LINE = /^Result file: (.+)$/gm;
 
 // The reasons that the planner and worker runs of folder have an unread result. A file that cannot be read or checked, or an empty result (a write not done), counts too, so a person sees it. Reviewer and fixer results are read through their state files (catch-up.mjs, condition 7).
 export function unread(folder) {
@@ -114,7 +114,7 @@ export function unread(folder) {
     if (!role) { found.push(`${name} is no role bot prompt file`); continue; }
     if (role !== 'planner' && role !== 'worker') continue;
     let file;
-    try { file = RESULT_LINE.exec(readFileSync(join(folder, name), 'utf8'))?.[1]; } catch (e) { found.push(`${name} is unreadable (${e.code})`); continue; }
+    try { file = [...readFileSync(join(folder, name), 'utf8').matchAll(RESULT_LINE)].at(-1)?.[1]; } catch (e) { found.push(`${name} is unreadable (${e.code})`); continue; }
     if (!file || !isAbsolute(file)) { found.push(`${name} names no absolute result file`); continue; }
     let stat;
     try { stat = statSync(file); } catch (e) { if (e.code !== 'ENOENT') found.push(`${name}: its result file is unreadable (${e.code})`); continue; }
