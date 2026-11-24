@@ -1,0 +1,28 @@
+/* Brand green from brand/; every shade keeps 4.5:1 (WCAG 2.2 AA) against its mode's background. */
+:root {
+  --ifm-color-primary: #2e5e4e;
+  --ifm-color-primary-dark: #295546;
+  --ifm-color-primary-darker: #275042;
+  --ifm-color-primary-darkest: #204237;
+  --ifm-color-primary-light: #336756;
+  --ifm-color-primary-lighter: #356c5a;
+  --ifm-color-primary-lightest: #3c7a65;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #7fbfa6;
+  --ifm-color-primary-dark: #6cb59a;
+  --ifm-color-primary-darker: #62b094;
+  --ifm-color-primary-darkest: #4d9a7e;
+  --ifm-color-primary-light: #92c9b2;
+  --ifm-color-primary-lighter: #9bcdb8;
+  --ifm-color-primary-lightest: #b5dacb;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+.docusaurus-mermaid-container {
+  margin-bottom: var(--ifm-spacing-vertical);
+  text-align: center;
+}
