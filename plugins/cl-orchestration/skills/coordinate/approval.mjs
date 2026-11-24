@@ -222,12 +222,21 @@ export function readQueue() {
 // The work issue a question holds back from Pick, from its line `Issue: <owner/repo>#<n>` (approvals.md, Labels and title), or null.
 const named = (text) => /^Issue: ([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#[1-9]\d*)\r?$/m.exec(String(text))?.[1] ?? null;
 
-// The numbers of repo's issues that a question still waits on, which Pick leaves (precheck.mjs): one an unanswered open issue of asked, or a local question not answered, names.
+// Whether an answer keeps the work its question holds back: its option names Hold, or is the label of the option row of body whose text is Hold.
+export function holds(option, body = '') {
+  const said = String(option).trim().toLowerCase();
+  if (/\bhold\b/.test(said)) return true;
+  const row = (tables(body.replace(COMMENT, ''), 'Option')[0] ?? []).find(([cell]) => labelOf(cell)?.toLowerCase() === (said.startsWith('(') ? said : `(${said})`));
+  return Boolean(row) && /^\([^()]+\)\s*hold\b/i.test(shown(row[0]));
+}
+
+// The numbers of repo's issues that a question still waits on, which Pick leaves (precheck.mjs): one an open issue of asked or a local question names while it has no answer or a Hold.
 // A queue file that is no question throws, so nothing starts on a guess.
 export function waiting(repo, asked, queue, writes) {
+  const open = (found, body) => !found || holds(found.option, body);
   const refs = [
-    ...asked.filter((issue) => named(issue.body) && !answer(issue, writes)).map((issue) => named(issue.body)),
-    ...queue.map((q) => { if (q.error) throw new Error(`the question ${q.file} ${q.error}`); return q.status === 'answered' ? null : q.issue; }),
+    ...asked.filter((issue) => named(issue.body) && open(answer(issue, writes), issue.body)).map((issue) => named(issue.body)),
+    ...queue.map((q) => { if (q.error) throw new Error(`the question ${q.file} ${q.error}`); return q.status !== 'answered' || holds(q.option) ? q.issue : null; }),
   ];
   const prefix = `${repo.toLowerCase()}#`;
   return new Set(refs.filter((ref) => ref?.toLowerCase().startsWith(prefix)).map((ref) => Number(ref.slice(prefix.length))));

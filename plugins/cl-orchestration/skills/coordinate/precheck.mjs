@@ -84,7 +84,9 @@ function picks(dir, run, env, queue) {
   const pulls = JSON.parse(run(dir, 'gh', ['pr', 'list', '-R', repo, '--state', 'all', '--limit', '1000', '--json', 'headRefName,state,isCrossRepository']))
     .filter((p) => p.state === 'MERGED' || (p.state !== 'CLOSED' && !p.isCrossRepository));
   const writes = writers(repo, (cmd, args) => run(dir, cmd, args));
-  const asked = JSON.parse(run(dir, 'gh', ['issue', 'list', '-R', repo, '--label', 'cl:needs-human', '--state', 'open', '--limit', '1000', '--json', 'number,labels,comments,author,body']));
+  const listed = (...filter) => JSON.parse(run(dir, 'gh', ['issue', 'list', '-R', repo, ...filter, '--state', 'open', '--limit', '1000', '--json', 'number,labels,comments,author,body']));
+  // An answered question has lost cl:needs-human, and a new one may not be in the search index yet: both lists count.
+  const asked = [...listed('--label', 'cl:needs-human'), ...listed('--search', `"Issue: ${repo}#" in:body`)];
   return { tracker: repo, numbers: pickable(policy, issues, pulls, writes, waiting(repo, asked, queue(), writes)), warnings };
 }
 

@@ -22,7 +22,7 @@ Run `node <skill folder>/approval.mjs <file>` from your working directory until 
 ## Labels and title
 
 - Label: `cl:needs-human`. Create no label.
-- Issue line: a question that holds back a work issue names it on a line of its own, `Issue: <owner/repo>#<n>`; `precheck.mjs` picks no issue an unanswered question names.
+- Issue line: a question that holds back a work issue names it on a line of its own, `Issue: <owner/repo>#<n>`; `precheck.mjs` picks no issue an open question names until its answer is not Hold.
 - Title: your own words on one line, only letters, digits, spaces and `.,:#()/-`, starting with a letter or a digit, never with `-`, passed in single quotes. No text of an issue, a pull request or a worker goes into it.
 
 ```text
