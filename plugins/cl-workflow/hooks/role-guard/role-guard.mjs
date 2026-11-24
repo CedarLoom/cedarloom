@@ -145,7 +145,7 @@ function commands(source, powershell, nested = false, mode = 'bash') {
         redirect = false;
         targets.push(word);
       } else words.push(word);
-      if (quoted && /[\s;&|()`<>]/.test(word)) out.push(...commands(word, powershell, true, mode));
+      if (quoted && /[\s;&|()`<>]/.test(word)) out.push(...(powershell ? commands(word, true, true) : nestedCommands(word)));
     }
     word = '';
     started = quoted = false;
@@ -226,14 +226,27 @@ function commands(source, powershell, nested = false, mode = 'bash') {
 // The commands of a command text in each reading a shell may give it: PowerShell's, or those of current bash, bash 3.2 and zsh,
 // which differ only in ANSI-C quoting and a NUL; every check runs on each.
 function readings(source, powershell) {
-  if (powershell) return [commands(source, true)];
-  const bash = commands(source, false);
+  return powershell ? [commands(source, true)] : shellReadings(source, false);
+}
+
+// The readings of a POSIX shell text. A quoted word read again as commands gets every reading too: the shell that runs it
+// (bash -c, zsh -c, eval) may be another one than the shell around it.
+function shellReadings(source, nested) {
+  const bash = commands(source, false, nested);
   if (!source.includes("$'") && !source.includes('\0')) return [bash];
-  const zsh = commands(source, false, false, 'zsh');
+  const zsh = commands(source, false, nested, 'zsh');
   // zsh hands a program each word up to its first NUL; a builtin reads it whole, here without the NUL.
   const each = (f) => zsh.map((c) => ({ ...c, words: c.words.map(f), targets: c.targets.map(f) }));
-  const all = [bash, commands(source, false, false, 'bash3'), each((w) => w.split('\0')[0]), each((w) => w.replaceAll('\0', ''))].map((r) => [JSON.stringify(r), r]);
+  const all = [bash, commands(source, false, nested, 'bash3'), each((w) => w.split('\0')[0]), each((w) => w.replaceAll('\0', ''))].map((r) => [JSON.stringify(r), r]);
   return [...new Map(all).values()];
+}
+
+// The commands of a quoted word read again, in every reading, each command once and each word read once, so that the readings
+// of deep nesting do not multiply.
+const nestedCache = new Map();
+function nestedCommands(word) {
+  if (!nestedCache.has(word)) nestedCache.set(word, [...new Map(shellReadings(word, true).flat().map((c) => [JSON.stringify(c), c])).values()]);
+  return nestedCache.get(word);
 }
 
 const program = (word) => word.split(/[/\\]/).pop().toLowerCase().replace(/\.exe$/, '');

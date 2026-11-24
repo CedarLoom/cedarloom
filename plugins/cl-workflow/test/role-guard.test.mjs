@@ -587,6 +587,9 @@ test('role guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh do, i
     raw`bash -c $'\c\\073gh pr merge 12'`,
     raw`bash -c $'\c\\\\\\x3b\x67h pr merge 12'`,
     raw`bash -c $'echo a\c\\x3b\x67h pr merge 12'`,
+    // A nested shell decodes its own way: an outer zsh with an inner bash 3.2, and an outer bash with an inner zsh.
+    raw`bash -c $'bash -c \$\'\\c\\\\x3b\\x67h pr merge 12\''`,
+    raw`zsh -c $'true\cJ$\'g\\h\' pr merge 12'`,
     // A NUL ends the string's value in bash.
     raw`$'gh\0x' pr merge 12`,
     raw`$'g\x00'h pr merge 12`,
