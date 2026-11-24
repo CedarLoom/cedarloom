@@ -18,10 +18,10 @@ Typed as `/cl-workflow:lite <task>`. No task: ask for it, or without terminal qu
    - authentication, permissions, secrets, input validation, production data, deploy or production configuration, an irreversible action;
    - a file under `riskyPaths` in `docs/agents/orchestration.json` as the default branch has it;
    - a depth or `Depth minimum:` line above quick, or a risk above low.
-2. **Lines.** Before the first edit: `Depth: quick (lite: <change type>)`, `Risk: low (<reason>)` and the done check (typo: docs build; config value: tests, schema or lint).
+2. **Lines.** Before the first edit: `Depth: quick (lite: <change type>)`, `Risk: low (<reason>)` and the done check (typo: docs build; config value: tests, schema or lint; UI tweak: browser check, screenshot baselines updated only for intended changes).
 3. **Edit**, with fast checks (types, lint, the touched code's tests) after each edit.
 4. **Verify**: build, types, lint and tests as `AGENTS.md` says, and the done check.
-5. **Commit** in the project's convention, else Conventional Commits; a pull request only where the project requires one.
+5. **Commit** in the project's convention, else Conventional Commits; a pull request only where required.
 6. **Report** each check's command and result, "steps skipped: plan, subagents, review" and what was not checked.
 
 Stop and report when the same check fails twice with the same error, or a fix needs wider scope, a weakened test or a new dependency. Work that grows into the gate: stop and leave lite as step 1 says.
