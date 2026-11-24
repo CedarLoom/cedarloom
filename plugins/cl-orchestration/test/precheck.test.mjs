@@ -250,3 +250,48 @@ test('precheck and policy: started through a symlinked folder they still run, so
   symlinkSync(real, link, 'dir');
   for (const dir of [real, link]) for (const script of ['precheck.mjs', 'policy.mjs']) assert.equal(spawnSync(process.execPath, [join(dir, script)]).status, 1, join(dir, script));
 });
+
+test('precheck: Pick leaves an issue while a question that names it waits for the owner', () => {
+  const question = (comments, body = 'What: the export format\n\nIssue: owner/project#7\n', login = 'owner') => ({ number: 20, labels: [{ name: 'cl:needs-human' }], body, author: { login }, comments });
+  const answered = [{ author: { login: 'owner' }, authorAssociation: 'OWNER', body: 'Owner answer (2026-11-20): a.', createdAt: '2026-11-20T10:00:00Z' }];
+  const run = (asked) => (dir, cmd, args) => {
+    if (args[0] === 'issue') return JSON.stringify(asked);
+    if (args[1]?.endsWith('/permission')) return JSON.stringify({ permission: args[1].split('/')[4] === 'owner' ? 'admin' : 'read' });
+    return stub(POLICY)(dir, cmd, args);
+  };
+  const none = () => [];
+  assert.deepEqual(check('/p', run([question([])]), {}, none), []);
+  // Anyone can open an issue with an Issue line: one without write access holds nothing.
+  assert.deepEqual(check('/p', run([question([], undefined, 'stranger')]), {}, none), [7]);
+  // A question filed under an App, as gh prints it, is a trustedAuthors login's.
+  assert.deepEqual(check('/p', run([question([], undefined, 'app/helper')]), {}, none), []);
+  // An Issue line in a comment or a code block names nothing; a question about another repository's #7 holds nothing.
+  for (const quoted of ['<!--\nIssue: owner/project#7\n-->', '```\nIssue: owner/project#7\n```', '~~~~\nIssue: owner/project#7\n']) {
+    assert.deepEqual(check('/p', run([question([], quoted)]), {}, none), [7], quoted);
+  }
+  // GitHub shows the Issue line below a code span that starts with three backticks or holds "<!--": the question names #7.
+  for (const span of ['```gh issue list``` prints the author as app/slug.\nIssue: owner/project#7\n', 'A `<!--` starts a comment.\nIssue: owner/project#7\n']) {
+    assert.deepEqual(check('/p', run([question([], span)]), {}, none), [], span);
+  }
+  assert.deepEqual(check('/p', run([question([], 'Issue: owner/other#7')]), {}, none), [7]);
+  // An answer releases the issue only when it names one option row that is no Hold, by label, text or both; anything else holds it.
+  const options = 'Issue: owner/project#7\n\n| Option | Impact |\n|---|---|\n| (a) Stream it (Recommended) | x |\n| (c) Hold | Nothing changes |\n';
+  for (const said of ['a', 'Owner answer (2026-11-20): Stream it. Go.', 'Owner answer (2026-11-20): (a) Stream it (Recommended).']) {
+    assert.deepEqual(check('/p', run([question([{ ...answered[0], body: said }], options)]), {}, none), [7], said);
+  }
+  for (const said of ['c', 'Owner answer (2026-11-20): (c) Hold. Later.', 'Owner answer (2026-11-20): Wait until the audit is done.']) {
+    assert.deepEqual(check('/p', run([question([{ ...answered[0], body: said }], options)]), {}, none), [], said);
+  }
+  // An option that starts with a row's label but goes on to reject it names no row: the answer holds the issue.
+  const node = 'Issue: owner/project#7\n\n| Option | Impact |\n|---|---|\n| (a) Upgrade to Node.js 24 (Recommended) | x |\n| (b) Hold | Nothing changes |\n';
+  assert.deepEqual(check('/p', run([question([{ ...answered[0], body: 'Owner answer (2026-11-20): (a) is too risky. Wait for the audit.' }], node)]), {}, none), []);
+  // Without option rows, no answer names one.
+  assert.deepEqual(check('/p', run([question(answered)]), {}, none), []);
+  // A local question holds it while open, deferred or held by its answer; a file that is no question starts nothing.
+  const local = (status, held) => () => [{ file: 'project-1.md', status, issue: 'owner/project#7', held }];
+  assert.deepEqual(check('/p', run([]), {}, local('open')), []);
+  assert.deepEqual(check('/p', run([]), {}, local('deferred')), []);
+  assert.deepEqual(check('/p', run([]), {}, local('answered', true)), []);
+  assert.deepEqual(check('/p', run([]), {}, local('answered', false)), [7]);
+  assert.throws(() => check('/p', run([]), {}, () => [{ file: 'project-1.md', error: 'cannot be read (EISDIR)' }]), /the question project-1\.md cannot be read/);
+});
