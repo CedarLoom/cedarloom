@@ -68,7 +68,7 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
   } else if (end === undefined) {
     const [read, forms] = questions
       ? ['count or filter', 'alone (every open question) or as [<count>|all] [deferred|<project>], with a count from 1 to 999']
-      : ['window', 'alone (30 minutes), for 30m, for 2h, until 14:30 or off'];
+      : ['window', 'alone (30 minutes), as 45 or 45m (minutes), 2h, for 45 or for 2h, until 14:30 or off'];
     say(event, { additionalContext: `/${input.command_name} read no ${read} in "${args}", so nothing changed: use it ${forms}. ${line(now)}` });
   } else if (end === null || end <= now) {
     rmSync(file, { force: true });

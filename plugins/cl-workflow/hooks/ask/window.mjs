@@ -18,13 +18,13 @@ const lasting = (until, now) => (until === Infinity ? 'for this session' : `unti
 
 export const allowed = (until, now) => `Terminal questions are allowed ${lasting(until, now)}: /cl-workflow:ask or /cl-workflow:questions opened them, and the question tool and plan mode are refused again after that.`;
 
-// The window's end in epoch ms: none 30 minutes, `for <n>m|h`, `until HH:MM` (next such local time); null off, undefined unread.
+// The window's end in epoch ms: none 30 minutes, `[for] <n>[m|h]` (minutes without a unit, a span of 0 unread), `until HH:MM` (next such local time); null off, undefined unread.
 export function askUntil(args, now) {
   const a = args.trim().toLowerCase();
   if (a === 'off') return null;
   if (a === '') return now + 30 * 60_000;
-  const span = /^for (\d{1,4}) ?(m|h)$/.exec(a);
-  if (span) return now + Number(span[1]) * (span[2] === 'h' ? 3_600_000 : 60_000);
+  const span = /^(?:for )?(\d{1,4}) ?(m|h)?$/.exec(a);
+  if (span) return Number(span[1]) === 0 ? undefined : now + Number(span[1]) * (span[2] === 'h' ? 3_600_000 : 60_000);
   const at = /^until ([01]?\d|2[0-3]):([0-5]\d)$/.exec(a);
   if (!at) return undefined;
   const end = new Date(now);
