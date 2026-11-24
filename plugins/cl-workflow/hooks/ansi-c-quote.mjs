@@ -1,0 +1,65 @@
+// The value of an ANSI-C quoted string ($'...'), as bash and zsh read it. bash decodes the escapes listed in
+// https://www.gnu.org/software/bash/manual/html_node/ANSI_002dC-Quoting.html, keeps the backslash of any other and ends the value
+// at a NUL. zsh decodes them as its print builtin does (https://zsh.sourceforge.io/Doc/Release/Shell-Builtin-Commands.html#index-print):
+// \c and any other unknown escape stand for the plain character, \C-x is a control character, \x, \u and \U without digits a NUL, and
+// a NUL stays in the string; a program receives the words up to it, so the reading that keeps the rest sees more, never less.
+const ESCAPES = new Map(Object.entries({ a: 7, b: 8, e: 27, E: 27, f: 12, n: 10, r: 13, t: 9, v: 11, '\\': 92, "'": 39, '"': 34, '?': 63 }));
+const DIGITS = { 8: /[0-7]{1,3}/y, 16: /[\da-f]{1,2}/iy, u: /[\da-f]{1,4}/iy, U: /[\da-f]{1,8}/iy };
+const LITERAL = /[^\\]+/y;
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+// The control character of x: its code with the upper bits cleared, ? for DEL.
+const control = (x) => (x === '?' ? 127 : x.toUpperCase().charCodeAt(0) & 31);
+// A code point as UTF-8, an invalid one as the replacement character.
+const utf8 = (point) => [...encoder.encode(String.fromCodePoint(point <= 0x10ffff ? point : 0xfffd))];
+
+// start: the index after $'. end: the index of the closing quote, which a backslash escapes, or the text's length without one.
+export function ansiC(text, start, zsh = false) {
+  let end = start;
+  while (end < text.length && text[end] !== "'") end += text[end] === '\\' ? 2 : 1;
+  end = Math.min(end, text.length);
+  const body = text.slice(start, end);
+  const bytes = [];
+  // The digits of a numeric escape at i, or null where none follows.
+  const digits = (i, kind) => {
+    const pattern = DIGITS[kind];
+    pattern.lastIndex = i;
+    return pattern.exec(body)?.[0] ?? null;
+  };
+  for (let i = 0; i < body.length; ) {
+    LITERAL.lastIndex = i;
+    const literal = LITERAL.exec(body)?.[0];
+    if (literal) {
+      bytes.push(...encoder.encode(literal));
+      i += literal.length;
+      continue;
+    }
+    const c = body[i + 1];
+    i += 2;
+    if (c === undefined) bytes.push(92);
+    else if (ESCAPES.has(c)) bytes.push(ESCAPES.get(c));
+    else if (/[0-7]/.test(c)) {
+      const run = digits(i - 1, 8);
+      bytes.push(parseInt(run, 8) & 0xff);
+      i += run.length - 1;
+    } else if (c === 'x' || c === 'u' || c === 'U') {
+      const run = digits(i, c === 'x' ? 16 : c);
+      if (run === null) bytes.push(...(zsh ? [0] : [92, c.charCodeAt(0)]));
+      else {
+        i += run.length;
+        bytes.push(...(c === 'x' ? [parseInt(run, 16)] : utf8(parseInt(run, 16))));
+      }
+    } else if (c === 'c' && !zsh && i < body.length) {
+      // bash reads \c\\ as the control character of one backslash.
+      const x = body[i++];
+      if (x === '\\' && body[i] === '\\') i++;
+      bytes.push(control(x));
+    } else if (c === 'C' && zsh && body[i] === '-' && i + 1 < body.length) {
+      bytes.push(control(body[i + 1]));
+      i += 2;
+    } else bytes.push(...(zsh ? [] : [92]), ...encoder.encode(c));
+  }
+  const nul = bytes.indexOf(0);
+  const value = zsh ? bytes.filter((b) => b !== 0) : nul < 0 ? bytes : bytes.slice(0, nul);
+  return { value: decoder.decode(new Uint8Array(value)), end };
+}

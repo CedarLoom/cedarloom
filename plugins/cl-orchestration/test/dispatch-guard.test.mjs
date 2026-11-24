@@ -31,6 +31,32 @@ test('dispatch guard: an Orca dispatch that hands a session /cl-workflow:away of
   assert.equal(decision('orca.exe orchestration send --to dispatch:d1 --body "/questions"', 'PowerShell'), 'deny');
 });
 
+// The commands as written: String.raw keeps the backslashes of the shell's escapes.
+const raw = String.raw;
+
+test('dispatch guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh do, and quotes joined into the name of Orca', () => {
+  const dispatched = [
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\x20off'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\040off'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\u0020off'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\toff'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\cIoff'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\C-ioff'`,
+    raw`orca orchestration send --to dispatch:d1 --body "/cl-workflow:away"$'\x20off'`,
+    raw`orca orchestration worker-start --spec $'/cl-workflow:\x71uestions'`,
+    raw`$'\x6frca' orchestration send --to dispatch:d1 --body /questions`,
+    // zsh reads \c as a plain c.
+    raw`$'or\ca' orchestration send --to dispatch:d1 --body /questions`,
+    raw`o""rca orchestration send --to dispatch:d1 --body /questions`,
+  ];
+  for (const command of dispatched) assert.equal(decision(command), 'deny', command);
+  const passed = [
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away 2h\n'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'run the questions skill\x21'`,
+  ];
+  for (const command of passed) assert.equal(decision(command), 'none', command);
+});
+
 test('dispatch guard: other Orca commands and commands that only name the queue command pass', () => {
   const passed = [
     'orca orchestration worker-start --spec-file spec.md --terminal t1 --json',
