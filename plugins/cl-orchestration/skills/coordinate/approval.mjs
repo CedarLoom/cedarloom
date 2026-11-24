@@ -225,7 +225,8 @@ const FENCED = /^ {0,3}(`{3,}(?![^\n]*`)|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[^\n]
 
 // The work issue a question holds back from Pick, from its line `Issue: <owner/repo>#<n>` (approvals.md, Labels and title), or null; a line in a comment or code block is none.
 // Only a closed comment hides a line: an unclosed "<!--" may sit in a code span, and naming an issue only holds it back.
-const named = (text) => /^Issue: ([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#[1-9]\d*)\r?$/m.exec(String(text).replace(/<!--[\s\S]*?-->/g, '').replace(FENCED, ''))?.[1] ?? null;
+// split, not replace: the text is searched for one line, never shown as HTML, so a "<!--" left in it is no injection.
+const named = (text) => /^Issue: ([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#[1-9]\d*)\r?$/m.exec(String(text).split(/<!--[\s\S]*?-->/).join('').replace(FENCED, ''))?.[1] ?? null;
 
 // Whether an answer keeps the work its question holds back: it does unless its option names exactly one option row of body that is no Hold,
 // by label ("b" or "(b)"), by text, or both, as the questions skill records the option it offered; "(Recommended)" is no part of the name.
