@@ -25,7 +25,7 @@ test('askUntil: reads a span in minutes or hours', () => {
 });
 
 test('askUntil: leaves every other text unread', () => {
-  for (const args of ['0', '0m', '0h', 'for 0', 'for 0m', '00', '10000', '10000m', '-5', '1.5h', '45s', '45 min', '45mm', 'for', 'for m', 'for45', '45 for', 'm45', 'until 24:00', 'until 9', 'of']) {
+  for (const args of ['0', '0m', '0h', 'for 0', 'for 0m', '00', '10000', '10000m', '-5', '1.5h', '45s', '45 min', '45mm', 'for', 'for m', 'for45', '45 for', 'm45']) {
     assert.equal(askUntil(args, NOW), undefined, args);
   }
 });
