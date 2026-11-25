@@ -41,7 +41,7 @@ let handoff;
 let drifting;
 try {
   const { cwd, session_id: session, agent_id: agent } = JSON.parse(await text(process.stdin));
-  // A subagent shares the coordinator's session id; only its input carries agent_id (Claude Code 2.1.323 and later).
+  // A subagent shares the coordinator's session id; only its input carries agent_id.
   if (agent) process.exit(0);
   // Claude Code's project folder, never a folder a shell cd moved to; Codex sets no such variable. The module's root follows
   // a /cd or worktree move; this variable may not.
