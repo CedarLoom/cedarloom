@@ -1,5 +1,5 @@
 // Usage: node delete-branch.mjs --repo <owner/name> --pr <number> --branch <name> --project <path>, the path absolute: a checkout of the project, whose origin's default branch holds the policy.
-// Step 3 of Clean up (SKILL.md): deletes the pull request's branch on GitHub and in <project> only when the policy's deleteMergedBranch is true, `gh pr view` reads the pull request as MERGED with <branch> of <repo> as its head, and each ref still points at its headRefOid. A ref already gone needs nothing. Every other case keeps that ref: a moved ref, a failed read, a local branch that a worktree, a rebase or a bisect uses.
+// Step 3 of Clean up (run-files.md): deletes the pull request's branch on GitHub and in <project> only when the policy's deleteMergedBranch is true, `gh pr view` reads the pull request as MERGED with <branch> of <repo> as its head, and each ref still points at its headRefOid. A ref already gone needs nothing. Every other case keeps that ref: a moved ref, a failed read, a local branch that a worktree, a rebase or a bisect uses.
 // Prints { remote, local, reasons } as JSON, remote and local each deleted, gone or kept, and exits 0 when reasons is empty, 1 when it names a kept ref or a local delete that removed another commit than the merged head, 2 for a bad argument.
 import { devNull } from 'node:os';
 import { isAbsolute } from 'node:path';

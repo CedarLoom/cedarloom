@@ -23,7 +23,7 @@ At each wake-up, including an empty one, run these in this order; a wake-up that
 1. `worker-list --run <run id>` for state, with `--full` because the concise rows carry no `projection`.
 2. `gh pr list -R <owner/repo> --head <branch> --state merged --json number,title,mergedAt` for merged PRs.
 3. The stall check, and the [acknowledgement](orca-messages.md) of each worker that has none yet.
-4. The next step of each pull request that waits for its checks or its default-branch watch ([review-and-merge.md](review-and-merge.md#merge)).
+4. The next step of each pull request that waits for its checks or its default-branch watch ([merge.md](merge.md#merge)).
 
 For a row whose `projection.attention.requiresAction` is true:
 

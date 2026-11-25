@@ -1,4 +1,4 @@
-// Usage: node merge.mjs <state file> --run <run id> [--method squash|merge|rebase]. The only place a project bot runs gh pr merge. The bot first takes the judgment steps of Merge (review-and-merge.md, steps 1 to 5.2) and records the head and verdict it accepted in the state file's handled; this script then merges that pull request or says why not, in one JSON line { outcome, reason }:
+// Usage: node merge.mjs <state file> --run <run id> [--method squash|merge|rebase]. The only place a project bot runs gh pr merge. The bot first takes the judgment steps of Merge (merge.md, steps 1 to 5.2) and records the head and verdict it accepted in the state file's handled; this script then merges that pull request or says why not, in one JSON line { outcome, reason }:
 // merged; wait (the lock is busy, the watch of the default branch runs, or another pull request waits for its checks after an update: a later sweep retries); redMain (the default branch is red and the answered report names another pull request or none); restart (the head, the verdict, the trial base or the threads changed: the judgment steps run again); stop (the owner's, exit 1 when an error stopped it, exit 2 for a bad argument).
 // <state file> is <bot home>/state/pr-<n>.json (state.mjs). The squash or merge commit's subject and body come from pr-<n>-subject.txt and pr-<n>-body.md beside it (step 5.1). <bot home>/pre-merge.json, if present, names a command that gets the pull request's text on stdin and must exit 0: { "command": [<program>, <args>...] }.
 import { readdirSync, readFileSync } from 'node:fs';
@@ -12,7 +12,7 @@ import { appendLog, inspectLock, isPrFile, logged, readState, RED_MAIN, removeLo
 import { unresolvedThreads } from './thread.mjs';
 
 const MINUTE = 60_000;
-// The watch: a tip younger than this holds the next merge, also where no CI runs (review-and-merge.md, step 6).
+// The watch: a tip younger than this holds the next merge, also where no CI runs (merge.md, step 6).
 const WATCH_MIN = 10 * MINUTE;
 // An expected workflow with no run on the tip by then counts as not run (step 6.5); the order rule waits as long for an updated branch's checks.
 const WAIT_MAX = 30 * MINUTE;
@@ -53,7 +53,7 @@ const pending = (rollup) => !rollup?.length || rollup.some((c) => (c.status !== 
 // A merge command the merge log does not confirm, or one held for the owner: it pauses every merge in the state folder.
 export const unconfirmed = (state, s) => Boolean(s.mergeCommandAt && (s.held || !logged(state, s.repo, s.pr)));
 
-// The watch of the default branch, read from GitHub (review-and-merge.md, step 6). null when it passed, else the answer.
+// The watch of the default branch, read from GitHub (merge.md, step 6). null when it passed, else the answer.
 function watch({ gh, repo, n, branch, state, now }) {
   for (const file of readdirSync(state).filter(isPrFile)) {
     const other = readState(join(state, file));

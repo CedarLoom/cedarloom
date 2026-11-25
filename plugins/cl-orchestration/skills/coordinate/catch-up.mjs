@@ -97,7 +97,7 @@ function pending({ clone, state, now, run, queue, counts }) {
 
   const prs = gh('pr', 'list', '-R', repo, '--state', 'open', '--limit', '1000', '--json', 'number,headRefName,headRefOid,isCrossRepository,mergeable,statusCheckRollup')
     .sort((a, b) => a.number - b.number);
-  // A head without checks passes while no check is required (review-and-merge.md, Review); the run itself waits for checks that appear late.
+  // A head without checks passes while no check is required (review.md, Review); the run itself waits for checks that appear late.
   const passes = (pr) => checks(pr.statusCheckRollup) === 'green' || (checks(pr.statusCheckRollup) === 'none' && !policy.merge.requiredChecks.length);
   const open = prs.filter((pr) => !spent(pr.number) && !states.get(pr.number)?.held && !states.get(pr.number)?.mergedAt);
   const seen = stored(TIP);

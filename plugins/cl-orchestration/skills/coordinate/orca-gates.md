@@ -4,13 +4,13 @@ Contents: [Questions](#questions), [Gates](#gates), [Tasks and gates](#tasks-and
 
 ## Questions
 
-A worker asks with `ORCA orchestration ask --question <text>`, which returns at once: the worker ends its turn and Orca wakes it with the answer. The question arrives as a `question` message. Answer it as [Worker questions](SKILL.md#worker-questions) says, by its message id, with the answer in a file:
+A worker asks with `ORCA orchestration ask --question <text>`, which returns at once: the worker ends its turn and Orca wakes it with the answer. The question arrives as a `question` message. Answer it as [Worker questions](decisions.md#worker-questions) says, by its message id, with the answer in a file:
 
 ```text
 ORCA orchestration reply --id <message id> --body "$(cat <answer file>)" --json
 ```
 
-The answer's sources are the default branch's: the policy as the reader prints it now, and `AGENTS.md` read in a scratch clone as [review-and-merge.md](review-and-merge.md#scratch-clone) reads it. An issue without a pull request has no clone yet: make one for the answer, with the two commands of that section.
+The answer's sources are the default branch's: the policy as the reader prints it now, and `AGENTS.md` read in a scratch clone as [scratch-clone.md](scratch-clone.md) reads it. An issue without a pull request has no clone yet: make one for the answer, with the two commands of that section.
 
 ## Gates
 
@@ -18,7 +18,7 @@ By ask and reply, in supervised mode ([Gates](modes.md#gates)):
 
 | | Supervised |
 | --- | --- |
-| Which questions | each question that the written sources do not settle; for an owner-only decision, only the sources of [Owner-only decisions](SKILL.md#owner-only-decisions) |
+| Which questions | each question that the written sources do not settle; for an owner-only decision, only the sources of [Owner-only decisions](decisions.md#owner-only-decisions) |
 | The worker | asks ([Questions](#questions)) and waits |
 | While it waits | send no reply; once its turn ended while its `ask`, or a `needs-input` question held for the owner ([Stops](orca-messages.md#stops)), waits for the owner, with no other work left open, it does not count as working until the reply ([Host limit](orca.md#host-limit)), and that turn is no stall ([Watch](orca-watch.md)) |
 | After the answer | once a slot is free, `reply --id <message id>` with the chosen option in a file, as [Questions](#questions) says |
@@ -44,7 +44,7 @@ The coordinator never starts a worker on a task because Orca lists it `ready`, a
 
 ### A hold before the start
 
-An issue held for a `design` answer ([SKILL.md](SKILL.md#risk-class)) gets a decision task with a gate once its approval is filed. Its item task comes at its start, as for any item: its spec needs the worktree, the mode and the batch of that start.
+An issue held for a `design` answer ([decisions.md](decisions.md#risk-class)) gets a decision task with a gate once its approval is filed. Its item task comes at its start, as for any item: its spec needs the worktree, the mode and the batch of that start.
 
 ```text
 ORCA orchestration task-create --spec-file <file with the approval's What line> --task-title 'Decision: <title>' --json

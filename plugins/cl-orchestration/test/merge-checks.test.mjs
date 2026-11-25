@@ -274,7 +274,7 @@ test('risk facts: risky files set the floor, and manifests, migrations and code 
 const FACTS = fileURLToPath(new URL('../skills/coordinate/risk-facts.mjs', import.meta.url));
 const factsCli = (...args) => spawnSync(process.execPath, [FACTS, ...args], { encoding: 'utf8' });
 
-test('merge checks, risk facts: a scratch clone made as review-and-merge.md says, blobless and without a checkout, gives the verdict and the facts', () => {
+test('merge checks, risk facts: a scratch clone made as scratch-clone.md says, blobless and without a checkout, gives the verdict and the facts', () => {
   const { origin, git, out, commit } = world({ 'docs/agents/orchestration.json': '{ "merge": { "allowed": true }, "riskyPaths": ["src"] }', 'src/a.txt': '1\n2\n3\n4\n5\n' });
   // git serves a filter only where the remote allows it, as GitHub does.
   git('config', 'uploadpack.allowFilter', 'true');

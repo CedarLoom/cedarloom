@@ -1,0 +1,5 @@
+interface:
+  display_name: "Lite"
+  short_description: "Run a one-sentence change with its checks"
+policy:
+  allow_implicit_invocation: false
