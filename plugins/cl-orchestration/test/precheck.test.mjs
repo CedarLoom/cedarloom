@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -144,6 +144,22 @@ test('precheck: two repositories share one role bot: each project bot reads only
   assert.deepEqual(full.stdout.trim().split('\n'), [join(alpha.prompts, name('alpha', 12, 'builder')), join(beta.prompts, name('beta', 14, 'reviewer'))]);
   assert.equal(limit('3', '0').status, 0);
   assert.equal(limit('two', '0').status, 2);
+});
+
+test('precheck: starts of two repositories at the same time for one free slot: exactly one reserves it', async () => {
+  const script = fileURLToPath(new URL('../skills/coordinate/precheck.mjs', import.meta.url));
+  for (let round = 0; round < 3; round++) {
+    const alpha = home(), beta = home(), shared = home();
+    const lock = join(shared.prompts, '..', 'host-limit.lock');
+    alpha.prompt(`alpha-12-builder-0-${RUN}`, `Result file: ${join(shared.results, 'alpha-12.md')}\n`);
+    const start = (repo, n) => new Promise((done) => spawn(process.execPath, [script, '--host-limit', '2', '--working', '0',
+      '--reserve', join(repo === 'alpha' ? alpha.prompts : beta.prompts, `${repo}-${n}-builder-0-${RUN}`), '--result', join(shared.results, `${repo}-${n}.md`), '--lock', lock,
+      alpha.prompts, beta.prompts]).on('exit', done));
+    const codes = await Promise.all([1, 2, 3, 4, 5, 6].map((n) => start(n % 2 ? 'alpha' : 'beta', n)));
+    assert.deepEqual(codes.sort(), [0, 1, 1, 1, 1, 1], `round ${round}`);
+    // The run that started and the one that reserved the slot; the refused starts left no file.
+    assert.equal(readdirSync(alpha.prompts).length + readdirSync(beta.prompts).length, 2, `round ${round}`);
+  }
 });
 
 test('precheck: an issue that several projects list starts in none of them', () => {
