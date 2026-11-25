@@ -17,15 +17,9 @@ graders:
     tool: Agent
     input_match: cl-workflow:test
     min: 1
-  - type: regex
-    name: fails-on-base
-    pattern: 'fails on base'
-    flags: i
-  - type: regex
-    name: no-passes-on-base
-    pattern: 'passes on base'
-    flags: i
-    match: not_contains
+  - type: llm
+    name: base-failure-confirmed
+    criteria: 'The report says the new test "a max of 0 clamps to 0" ran on the base commit and failed there. A report that could not run the test on base, could not determine the base result, or says it passes on base does not meet this; a negated claim such as "does not pass on base" next to a confirmed failure does.'
   - type: llm
     name: head-passes
     criteria: 'The report says `node --test` passes on the head commit and the acceptance row clampRuns(3, 0) is 0 is met.'

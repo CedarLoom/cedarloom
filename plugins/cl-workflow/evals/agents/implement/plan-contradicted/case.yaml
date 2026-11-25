@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: agent-implement-plan-contradicted
-description: 'The implement agent stops and reports when a plan step contradicts the code, instead of inventing the design. Needs --scaffold.'
+description: 'The implement agent stops and reports when a plan step contradicts the code, instead of inventing the design. Constructed case for agents/implement.md:16 (a step the code contradicts: stop and report it). Needs --scaffold.'
 tags: [cl-workflow, agent-implement]
 context:
   scaffold_script: setup.sh

@@ -4,6 +4,7 @@ The Orca bots that run a repository's coordinator work, and the steps the setup 
 - `ORCA`: the Orca executable; `<skill folder>`: the `coordinate` skill folder of the installed cl-orchestration plugin; `<maintain folder>`: the `maintain` skill folder of the installed cl-repo plugin.
 - `<repo>`: the repository's name; `<owner/repo>`: what `git remote get-url origin` names.
 - `<home>`: a bot's home, the folder Orca made for it; `<project home>`: the project bot's; `<clone>`: `<project home>/<repo>`, the project bot's checkout.
+- `<host lock folder>`: `$HOME/.cedarloom-host-limit`, outside every bot home; role bots' settings deny it.
 
 ## The bots
 
@@ -34,7 +35,7 @@ Per bot:
       "Bash(gh pr merge *)", "WebFetch", "WebSearch", "mcp__*",
       "Edit(/<home>/*.md)", "Edit(/<home>/.mcp.json)", "Edit(/<home>/state/**)", "Edit(/<home>/.claude/**)",
       "Edit(/<home>/clones/CLAUDE.md)", "Edit(/<home>/clones/CLAUDE.local.md)", "Edit(/<home>/clones/.claude/**)",
-      "Edit(/<other home>/**)"
+      "Edit(/<other home>/**)", "Edit(/<host lock folder>/**)"
     ]
   }
 }
@@ -43,7 +44,7 @@ Per bot:
   Claude Code and Codex load `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.mcp.json` from the folder a run starts in, and Claude Code loads `CLAUDE.md` and `.claude/` from `clones/` once a run reads files below it, so a run that wrote one would steer the next; a refused `MEMORY.md` write keeps the builder's and reviewer's memory off. Each `<...>` is absolute, so every `Edit` rule starts with `//`. Only the isolated environment the bots run in bounds their shell commands: run them only on a dedicated machine or VM you can restore, or in a dev container, with scoped tokens.
 - The maintain bot also denies `"Edit"`, `"MultiEdit"` and `"NotebookEdit"`, as it reads `<maintain folder>/SKILL.md` without that skill's tool limits; the role guard refuses its `Write` outside `<home>/results/` and `<home>/MEMORY.md`, links resolved. Its memory stays on: in place of `Edit(/<home>/*.md)` it denies `Edit(/<home>/SOUL.md)`, `Edit(/<home>/CLAUDE.md)`, `Edit(/<home>/CLAUDE.local.md)` and `Edit(/<home>/AGENTS.md)`, so its file tool writes `MEMORY.md` ([bot-maintain.md](bot-maintain.md)).
 - `<project home>/.claude/settings.json`, the project bot: `env` `{ "CEDARLOOM_ROLE": "project-bot" }`, `permissions.deny` `Bash(gh pr merge *)`, `Edit(/<project home>/SOUL.md)`, `Edit(/<project home>/MEMORY.md)`, `Edit(/<project home>/.claude/**)` and `Edit(/<project home>/pre-merge.json)`. The `Edit` rules cover its file tools only, and `Bash(gh pr merge *)` is a backstop (`gh api` passes it).
-- The project bot's `<clone>` (`gh repo clone <owner/repo> <clone>`) and empty `<project home>/state/` and `<project home>/prompts/`; each role bot's `<home>/state/`, where the builder bot's holds the host limit lock of [bot-project.md](bot-project.md).
+- The project bot's `<clone>` (`gh repo clone <owner/repo> <clone>`) and empty `<project home>/state/` and `<project home>/prompts/`; each role bot's `<home>/state/`.
 
 `<project home>/pre-merge.json`, only when the user names a command: `{ "command": ["<program>", "<args>"] }`, the program by its absolute path. It gets each merge's and each post's text on stdin and must exit 0; none by default.
 
