@@ -1,0 +1,44 @@
+schema_version: "1.1"
+name: coord-resume-check-first
+description: 'Resuming a run checks the start condition, then runs orchestration check before any other orchestration command, then the Resume reads with their exact commands, starts no worker for a task listed ready and names a pending gate the handoff file does not record. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca-resume.md:12. Needs --scaffold.'
+tags: [cl-orchestration, coord-resume]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    The owner asks this session to resume run run-7. Its handoff file is `.cedarloom/runs/handoff.md` in this working directory, written by a coordinator session that has ended. Orca's executable is `orca`.
+
+    Take the steps the skill gives for resuming that run, through step 6 of its Resume steps, and stop there. Then write these lines and stop:
+    Unrecorded gate: <the id of each pending gate that no line of `## Open` records, or none>
+    Worker for t-29: <started | not started>
+  max_turns: 25
+  allowed_tools: [Bash, Edit]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch, CronCreate, CronDelete]
+graders:
+  - type: regex
+    name: start-condition-then-check-first
+    pattern: '^(?:(?![^\n]*"args":\["orchestration")[^\n]*\n)*?[^\n]*"args":\["status","--json"\][^\n]*\n(?:(?![^\n]*"args":\["orchestration")[^\n]*\n)*[^\n]*"args":\["orchestration","check","--json"\]'
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: tasks-and-gates-read
+    pattern: '"args":\["orchestration","task-list","--ready","--brief","--json"\][\s\S]*"args":\["orchestration","gate-list","--status","pending","--json"\]|"args":\["orchestration","gate-list","--status","pending","--json"\][\s\S]*"args":\["orchestration","task-list","--ready","--brief","--json"\]'
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: inbox-read
+    pattern: '"args":\["orchestration","inbox","--terminal","run:run-7","--limit","50","--json"\]'
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: no-start-or-gate-change
+    pattern: '"args":\["orchestration","(worker-start|gate-resolve|gate-create|task-create|send)"'
+    match: not_contains
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: unrecorded-gate-named
+    pattern: 'Unrecorded gate:(?![^\n]*\bg-2\b)[^\n]*\bg-5\b'
+  - type: regex
+    name: ready-task-not-started
+    pattern: 'Worker for t-29:\W*not started'
+    flags: i
+expected_outcome: 'The coordinator runs `orca skills get orchestration` and `orca status --json` (1.4.262 passes), writes its session id into the handoff file''s Session line, runs `orca orchestration check --json` as its first orchestration command, then `run-current --json`, `task-list --ready --brief --json`, `gate-list --status pending --json` and `inbox --terminal run:run-7 --limit 50 --json`; it starts no worker for the ready task t-29, resolves and creates no gate, and names g-5 as the pending gate no line of `## Open` records.'

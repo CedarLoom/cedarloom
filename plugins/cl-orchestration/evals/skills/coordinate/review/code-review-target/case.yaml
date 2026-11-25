@@ -1,0 +1,33 @@
+schema_version: "1.1"
+name: coord-review-code-review-target
+description: 'The reviewer runs in the coordinator working directory, not the clone, and gives `/code-review` the range with the clone in words, never the bare pull request number or the bare range. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/review.md:107. Needs --scaffold.'
+tags: [cl-orchestration, coord-review]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run of the review step for one pull request: run no command and start no subagent; decide from these facts and the skill's files.
+
+    - Pull request 14 of example-org/widget, default branch `main`, head `9d2b7c4e1a6f3b8d0c5e2a7f4b9c1d6e3a8f0b52`, from the worker of issue 14 on branch `fix/14-retry-delay`. Mergeable, every check green. You run in Claude Code with the plugin, in the working directory `/srv/coord`.
+    - Its scratch clone is `/srv/coord/.cedarloom/runs/r1/clones/widget-14-1`, cloned and fetched as scratch-clone.md says.
+    - The change is routine, and the policy reader prints `review.depth` `medium`.
+
+    Write these lines, then stop:
+    `Working directory: <the reviewer's working directory, as an absolute path>`
+    `Code review: <the exact text the reviewer types for /code-review, starting with /code-review>`
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: range-with-clone-in-words
+    pattern: 'Code review:[\s*`]*/code-review medium refs/remotes/origin/main\.\.\.9d2b7c4e1a6f3b8d0c5e2a7f4b9c1d6e3a8f0b52 in the repository at ''?/srv/coord/\.cedarloom/runs/r1/clones/widget-14-1''?,? read only with git (--no-replace-objects )?-C ''?/srv/coord/\.cedarloom/runs/r1/clones/widget-14-1'
+  - type: regex
+    name: no-bare-number-or-short-range
+    match: not_contains
+    pattern: '/code-review\s+medium\s+(#?14\b|origin/main\.\.\.)'
+  - type: regex
+    name: reviewer-not-in-clone
+    pattern: 'Working directory:[\s*`]*/srv/coord(?![/\w.-])'
+expected_outcome: 'Working directory: /srv/coord (the coordinator''s, never the clone); Code review: /code-review medium refs/remotes/origin/main...9d2b7c4e1a6f3b8d0c5e2a7f4b9c1d6e3a8f0b52 in the repository at /srv/coord/.cedarloom/runs/r1/clones/widget-14-1, read only with git -C /srv/coord/.cedarloom/runs/r1/clones/widget-14-1.'

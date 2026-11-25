@@ -1,0 +1,40 @@
+schema_version: "1.1"
+name: coord-host-limit-dialog-holds-slot
+description: 'A start held at a dialog goes to the owner unanswered, is written into `## Open`, and counts as a working worker, so with the host full the next pick waits; starts go one at a time (from CedarLoom/cedarloom#148). Needs --scaffold.'
+tags: [cl-orchestration, coord-host-limit]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    Dry run of a start: run no command, change no file, and decide from these facts as the skill says.
+    - The policy reader printed `workersPerProject` 2 and `hostWorkerLimit` 2 for `project`, mode supervised.
+    - `orca orchestration run-list --json` shows only this run. Its worker of issue 7 has outcome `in_progress`.
+    - The start of issue 12 (one Claude Code worker): its worktree exists, the worker-settings write and `--check` read exited 0, and `orca terminal create` returned `term-12`. `orca terminal wait --terminal term-12 --for tui-idle --timeout-ms 60000 --json` timed out, and `orca terminal read --terminal term-12 --screen --json` shows Claude Code's "Do you trust the files in this folder?" dialog with the choices "1. Yes, proceed" and "2. No, exit".
+    - Issue 31 of `project` is the next pick, a Claude Code worker.
+
+    Write these four lines, then stop:
+    `Issue 12: <held for the owner|failed start|started>`
+    `Dialog answer: <what you type into term-12, or none>`
+    `Working count: <the number of workers counted toward hostWorkerLimit>`
+    `Start 31: <now|wait>`
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: held-for-owner
+    pattern: 'Issue 12:\W*held for the owner'
+    flags: i
+  - type: regex
+    name: dialog-not-answered
+    pattern: 'Dialog answer:\W*none'
+    flags: i
+  - type: regex
+    name: held-start-counts
+    pattern: 'Working count:\W*2\b'
+  - type: regex
+    name: next-pick-waits
+    pattern: 'Start 31:\W*wait\b'
+    flags: i
+expected_outcome: 'Issue 12: held for the owner, written into `## Open` with its terminal and worktree. Dialog answer: none. Working count: 2 (issue 7 and the held start of 12). Start 31: wait.'

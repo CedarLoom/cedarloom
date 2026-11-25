@@ -1,0 +1,35 @@
+schema_version: "1.1"
+name: coord-pick-priority-order
+description: 'The pick takes the precheck''s issues by Priority level, and within one level an issue that another waits on first, naming the reason in one line (pick order at plugins/cl-orchestration/skills/coordinate/policy.md:41, from CedarLoom/cedarloom#110). Needs --scaffold.'
+tags: [cl-orchestration, coord-pick]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run of one pick: run no command and write no file. Decide from these facts only.
+
+    - Project `project`, repository example-org/widget, public. The policy reader prints `"workersPerProject": 1`, `"hostWorkerLimit": 2`, `"issuesPerWorker": 1`, `"mode": "supervised"`. No worker is active, no follow-up waits, and no issue has a worker or outcome in this run.
+    - The precheck printed, in this order: `#17 (high)`, `#21 (high)`, `#30 (low)`, `#9`.
+    - From the thread files: #17 (opened 2026-10-02) adds an export button and needs the export endpoint of #21 first; #21 (opened 2026-10-20) adds that endpoint; #30 fixes a typo in an error message; #9 adds a config option. None has sub-issues or a milestone that defers it. All four are standard depth, low risk, of similar effort, and each states a result you can check.
+
+    Write exactly these three lines:
+    Order: <every issue number, in the order you pick them>
+    First pick: <issue number>
+    Reason: <one line>
+    then stop.
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: dependency-first-within-level
+    pattern: 'Order:[^\n]*#?21\D+17\D+30\D+9\b'
+  - type: regex
+    name: first-pick-21
+    pattern: 'First pick:\s*[`*_]*\s*#?21\b'
+  - type: regex
+    name: reason-names-dependency
+    pattern: 'Reason:[^\n]*(depend|wait|need|block|#?17)'
+    flags: i
+expected_outcome: 'Order: #21, #17, #30, #9; First pick: #21; the reason: #17 waits on #21, both High, so #21 goes first although #17 is older.'

@@ -1,0 +1,40 @@
+schema_version: "1.1"
+name: coord-reconcile-since-last-line
+description: 'The merge check of a later Reconciliation lists the merged pull requests of the default branch since the date of the last `reconciled` line of that same repository, with the exact command of step 1. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/run-files.md:53. Needs --scaffold.'
+tags: [cl-orchestration, coord-reconcile]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command, start nothing and write no file. Decide from the facts below and the file named.
+
+    A run is open in this working directory, and the daily Reconciliation of project is due now (2026-11-25, 08:00 UTC). In project, `gh repo view --json nameWithOwner,defaultBranchRef` prints `{"nameWithOwner":"example-org/widget","defaultBranchRef":{"name":"trunk"}}`, and its origin is https://github.com/example-org/widget.git. The merge log is `.cedarloom/runs/merge-log.md`.
+
+    Write these three lines, then stop:
+    Baseline: <yes or no>
+    Since: <the date step 1 compares from, as YYYY-MM-DD>
+    Command: <the exact command of step 1>
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: not-a-baseline
+    pattern: 'Baseline:\W*no\b'
+    flags: i
+  - type: regex
+    name: since-last-widget-line
+    pattern: 'Since:\W*2026-11-21\b'
+  - type: regex
+    name: exact-step-1-command
+    pattern: 'Command:[^\n]*gh pr list -R example-org/widget --state merged --base trunk --search ["'']?merged:>=2026-11-21["'']? --limit 100 --json number,mergeCommit,mergedAt,mergedBy'
+  - type: regex
+    name: no-other-date
+    pattern: 'merged:>=2026-11-(18|22|23|24|25)'
+    match: not_contains
+  - type: tool_used
+    name: read-the-merge-log
+    tool: Read
+    input_match: 'merge-log\.md'
+expected_outcome: 'Baseline: no. Since: 2026-11-21, the last `reconciled` line of example-org/widget (the 2026-11-23 line is of example-org/gadget). Command: gh pr list -R example-org/widget --state merged --base trunk --search "merged:>=2026-11-21" --limit 100 --json number,mergeCommit,mergedAt,mergedBy.'

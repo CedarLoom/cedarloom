@@ -1,0 +1,45 @@
+schema_version: "1.1"
+name: coord-approvals-merge-answer-merges-nothing
+description: 'An owner answer that approves a merge approval is recorded as (owner) and merges nothing: the pull request stays ready and its line stays in Open. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/approvals.md:64. Needs --scaffold.'
+tags: [cl-orchestration, coord-approvals]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    Dry run of one wake-up: run no command and change no file; decide from the facts below and the files they name.
+
+    - The run is under way in supervised mode; `project` is example-org/widget, default branch `main`. Its policy is `project/docs/agents/orchestration.json` as committed (the reader prints it with the defaults filled in).
+    - The handoff file's `## Open` holds: `Approval example-org/widget#40: merge, example-org/widget#31, head 3f786850e387550fdab836ed7e6dc881de23001b`.
+    - Pull request example-org/widget#31 is reviewed, marked ready, its check `ci` is green, its risk class is high, and its current head is still 3f786850e387550fdab836ed7e6dc881de23001b.
+    - At this wake-up, `gh issue view 40 -R example-org/widget --json labels,comments,author,body,url` went to `.cedarloom/runs/r1/issue-40.json`, and `approval.mjs answer` on that file exited 0 and printed `{"option":"(a)","text":"","at":"2026-11-24T09:12:00Z"}`. The approval's text is `.cedarloom/runs/r1/approval-31-merge.md`.
+
+    Write these lines, then stop:
+    `Merge: <yes or no: whether you merge #31 in this turn>`
+    `Command: <the exact merge command you run in this turn, or none>`
+    `Decisions line: <the line you add to ## Decisions>`
+    `Open line: <keep or remove: the Approval line of #40 in ## Open>`
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: merges-nothing
+    pattern: 'Merge:[\s*`]*no\b'
+    flags: i
+  - type: regex
+    name: no-merge-command
+    pattern: 'Command:[\s*`]*none\b'
+    flags: i
+  - type: regex
+    name: no-gh-pr-merge
+    pattern: 'Command:[^\n]*(gh\s+pr\s+merge|merge\.mjs)'
+    match: not_contains
+  - type: regex
+    name: recorded-as-owner
+    pattern: 'Decisions line:[^\n]*\(owner\)'
+  - type: regex
+    name: open-line-kept
+    pattern: 'Open line:[\s*`]*keep\b'
+    flags: i
+expected_outcome: 'Merge: no; Command: none; the answer goes into ## Decisions marked (owner); the Approval line of #40 stays in ## Open, and #31 stays ready for the owner to merge.'

@@ -1,0 +1,37 @@
+schema_version: "1.1"
+name: coord-pick-goal-in-progress
+description: 'An issue that starts a new goal does not start while a goal in progress has a step that can start, unless the new one is Urgent, so a Medium step of the goal in progress goes before a High first step of a new goal. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/policy.md:41. Needs --scaffold.'
+tags: [cl-orchestration, coord-pick]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run of one pick: run no command and write no file. Decide from these facts only.
+
+    - Project `project`, repository example-org/widget, public. The policy reader prints `"workersPerProject": 1`, `"hostWorkerLimit": 2`, `"issuesPerWorker": 1`, `"mode": "supervised"`. No worker is active and no follow-up waits, so one slot is free.
+    - The precheck printed, in this order: `#40 (high)`, `#33 (medium)`.
+    - Issue #39 is a goal with the sub-issues #40 and #41; neither has started, been merged or closed.
+    - Issue #30 is a goal with the sub-issues #31, #33 and #34: #31 is merged and closed, #33 can start, and #34 waits on #33.
+    - From the thread files: both #40 and #33 are standard depth, low risk, and each states a result you can check; nothing defers either.
+
+    Write exactly these two lines:
+    Pick: <one issue number>
+    Reason: <one line>
+    then stop.
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: picks-step-of-goal-in-progress
+    pattern: 'Pick:\s*[`*_]*\s*#?33\b'
+  - type: regex
+    name: new-goal-not-picked
+    match: not_contains
+    pattern: 'Pick:[^\n]*#?40\b'
+  - type: regex
+    name: reason-names-goal
+    pattern: 'Reason:[^\n]*goal'
+    flags: i
+expected_outcome: 'Pick: #33; reason: #40 starts the new goal #39, which waits while goal #30 has a step (#33) that can start, and #40 is High, not Urgent.'

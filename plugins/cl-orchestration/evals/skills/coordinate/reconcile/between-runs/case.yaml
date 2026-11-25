@@ -1,0 +1,46 @@
+schema_version: "1.1"
+name: coord-reconcile-between-runs
+description: 'The first Reconciliation of a later run is no baseline: it compares against the last recorded values, so a tag, a config key and a settings hash changed between runs are findings, and it runs before the first worker starts. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/run-files.md:51. Needs --scaffold.'
+tags: [cl-orchestration, coord-reconcile]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command, start nothing and write no file. Decide from the facts below and the files named.
+
+    A new run starts in this working directory on 2026-11-25; the earlier run closed on 2026-11-10. No worker has started in project (example-org/widget, default branch main) in this run yet. The merge log is `.cedarloom/runs/merge-log.md`, the config listing beside it `.cedarloom/runs/git-config-example-org-widget.txt`, and the reads of steps 1 to 4 of this Reconciliation are in `.cedarloom/runs/r-1125/reads.md`.
+
+    Write these lines, then stop:
+    Reconcile before the first start: <yes or no>
+    Baseline: <yes or no>
+    then one line `Finding: <what changed>` for each finding (or one line `Finding: none`).
+  max_turns: 12
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: before-first-start
+    pattern: 'Reconcile before the first start:\W*yes\b'
+    flags: i
+  - type: regex
+    name: not-a-baseline
+    pattern: 'Baseline:\W*no\b'
+    flags: i
+  - type: regex
+    name: new-tag
+    pattern: 'Finding:[^\n]*v1\.3\.0'
+  - type: regex
+    name: changed-config-key
+    pattern: 'Finding:[^\n]*core\.hookspath'
+    flags: i
+  - type: regex
+    name: changed-settings-hash
+    pattern: 'Finding:[^\n]*settings'
+    flags: i
+  - type: regex
+    name: rulesets-unchanged
+    pattern: 'Finding:[^\n]*ruleset'
+    flags: i
+    match: not_contains
+expected_outcome: 'Reconcile before the first start: yes. Baseline: no (the 2026-11-10 `reconciled` line is the base). Findings: the new tag v1.3.0, the changed config key core.hookspath, the changed hash of the settings file. The rulesets and the tag v1.2.0 are unchanged.'

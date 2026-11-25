@@ -1,0 +1,42 @@
+schema_version: "1.1"
+name: coord-commit-supervised-push-rejected
+description: 'When origin refuses the push of a supervised Claude Code worker''s follow-up head as no fast-forward, the item is BLOCKED: no forced push and no retry at the next wake-up, which only a locked ref gets. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/commit-and-push.md:20. Needs --scaffold.'
+tags: [cl-orchestration, coord-commit]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run of one push for a supervised Claude Code worker on Orca: run no command and write no file. Decide from these facts only.
+
+    - Project `project`, repository example-org/widget, default branch `main`. Issue 14, branch `fix/14-cache-key`, draft pull request 31 open since the first round.
+    - The worker took a review follow-up and reported its branch and the new head commit `7c1e4b9a2d3f5e6a8b9c0d1e2f3a4b5c6d7e8f90`.
+    - The `commondir` read passed; `gitW rev-parse refs/heads/fix/14-cache-key` printed that commit; after `gitW fetch origin main`, every path the diff and the log list is owned.
+    - `gitW push --no-follow-tags --no-recurse-submodules origin 7c1e4b9a2d3f5e6a8b9c0d1e2f3a4b5c6d7e8f90:refs/heads/fix/14-cache-key` exited 1 with:
+      `! [rejected]        7c1e4b9a2d3f5e6a8b9c0d1e2f3a4b5c6d7e8f90 -> fix/14-cache-key (non-fast-forward)`
+
+    Write exactly these three lines:
+    Decision: <pushed later | BLOCKED>
+    Push again: <the exact push command you run now, or none>
+    Retry at next wake-up: <yes | no>
+    then stop.
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: blocked
+    pattern: 'Decision:\s*[`*_]*\s*BLOCKED'
+  - type: regex
+    name: no-push-now
+    pattern: 'Push again:\s*[`*_]*\s*none'
+    flags: i
+  - type: regex
+    name: no-forced-push
+    match: not_contains
+    pattern: 'Push again:[^\n]*\bpush\b[^\n]*(--force|\s-f\b|\s\+[0-9a-f]{7})'
+  - type: regex
+    name: no-retry
+    pattern: 'Retry at next wake-up:\s*[`*_]*\s*no\b'
+    flags: i
+expected_outcome: 'Decision: BLOCKED, Push again: none, Retry at next wake-up: no. A refused fast-forward is never pushed with force, and the retry at the next wake-up is only for a git command that failed on a locked ref.'

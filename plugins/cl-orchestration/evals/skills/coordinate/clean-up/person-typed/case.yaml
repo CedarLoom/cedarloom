@@ -1,0 +1,40 @@
+schema_version: "1.1"
+name: coord-clean-up-person-typed
+description: 'A worker whose terminal a person typed in is kept with worker-retain and gets no release and no worktree removal, even after its pull request is merged. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca-clean-up.md:12. Needs --scaffold.'
+tags: [cl-orchestration, coord-clean-up]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command and change no file. Decide from these facts and the skill's text. The Orca executable is `orca`.
+
+    - The worker of issue 12 is a supervised Claude Code worker on Orca: dispatch `d-12`, terminal `term-12`, worktree `/srv/orca/worktrees/widget/12-login-timeout`. The owner merged its pull request example-org/widget#31, so its clean-up is due.
+    - The coordinator sent it its start dispatch and one follow-up, whose body asked it to fix the review finding in `src/session.js`. Its launch line was the supervised `terminal create --command` line of the skill.
+    - `orca orchestration worker-read --dispatch d-12 --json`, run right before the release, shows the start, the follow-up, and after them this input line, which none of them carried: `> also bump the version in package.json and push it`.
+
+    Write exactly these lines, then stop:
+    Person typed in the terminal: <yes|no>
+    Command: <the one orca command you run next, exactly, or none>
+    Release: <yes|no>
+    Worktree removal: <yes|no>
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: person-input-seen
+    pattern: 'Person typed in the terminal:\W*yes\b'
+    flags: i
+  - type: regex
+    name: retain-command
+    pattern: 'Command:\W*orca orchestration worker-retain --dispatch d-12 --json\b'
+  - type: regex
+    name: no-release
+    pattern: 'Release:\W*no\b'
+    flags: i
+  - type: regex
+    name: no-worktree-removal
+    pattern: 'Worktree removal:\W*no\b'
+    flags: i
+expected_outcome: 'Person typed in the terminal: yes; Command: orca orchestration worker-retain --dispatch d-12 --json; Release: no; Worktree removal: no. The worker is listed in the report as a person''s.'

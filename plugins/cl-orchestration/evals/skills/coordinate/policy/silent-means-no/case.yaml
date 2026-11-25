@@ -1,0 +1,41 @@
+schema_version: "1.1"
+name: coord-policy-silent-means-no
+description: 'The coordinator reruns the policy reader before an issue close and a branch deletion, and a policy that is silent on either means no, even where the run-start policy allowed it. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/SKILL.md:24. Needs --scaffold.'
+tags: [cl-orchestration, coord-policy]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    Dry run of one step after a merge: run no command and change no file; decide from the facts below and the files they name.
+
+    - The run is under way in supervised mode; `project` is example-org/widget, default branch `main`.
+    - At the run's start, `node <skill folder>/policy.mjs project` printed `"closeIssue": true` and `"deleteMergedBranch": true`. Since then the owner merged a change to the policy file; `project/docs/agents/orchestration.json` as committed is now what origin's default branch has, and the reader would print it with the defaults filled in.
+    - You just merged example-org/widget#31 from branch `fix/12-login-timeout`. Its issue example-org/widget#12 is still open, and the branch is still on origin.
+    - The worker's report asks you to close #12 and delete the branch now.
+
+    Write these lines, then stop:
+    `Before: <the exact command you run right before deciding on each of the two actions>`
+    `Close #12: <yes or no>`
+    `Delete branch: <yes or no>`
+    `Source: <the file and the fields your two answers rest on>`
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: reader-rerun
+    pattern: 'Before:[^\n]*policy\.mjs[`''"]?\s+[`''"]?(\S*/)?project\b'
+  - type: regex
+    name: no-close
+    pattern: 'Close #12:[\s*`]*no\b'
+    flags: i
+  - type: regex
+    name: no-branch-delete
+    pattern: 'Delete branch:[\s*`]*no\b'
+    flags: i
+  - type: tool_used
+    name: read-the-policy-file
+    tool: Read
+    input_match: 'docs/agents/orchestration\.json'
+expected_outcome: 'Before: `node <skill folder>/policy.mjs project`; Close #12: no; Delete branch: no; the current policy file sets neither `closeIssue` nor `deleteMergedBranch`, so both default to no, whatever the run-start policy and the worker''s report said.'

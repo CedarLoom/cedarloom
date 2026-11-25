@@ -1,0 +1,39 @@
+schema_version: "1.1"
+name: coord-clean-up-automatic-worktree
+description: 'An automatic worker''s worktree is never removed with orca worktree rm: it goes with git worktree remove, without --force, after the commondir read. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca-clean-up.md:24. Needs --scaffold.'
+tags: [cl-orchestration, coord-clean-up]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command and change no file. Decide from these facts and the skill's text. The Orca executable is `orca`.
+
+    - The project runs automatic. The worker of issue 15 was an automatic Claude Code worker in the worktree `/srv/orca/worktrees/widget/15-csv-export`, on branch `feat/15-csv-export`.
+    - At its report its terminal `term-15` was closed, `terminal list` confirmed the close, and `worker-release` reported `retained`. The coordinator then committed, pushed and opened pull request example-org/widget#33.
+    - The owner merged #33. The worktree is still on disk and in `git -C project worktree list --porcelain`, with no uncommitted change and every commit pushed. No container carries its label.
+
+    Write exactly these lines, then stop:
+    Release now: <yes|no>
+    Orca worktree rm: <yes|no>
+    Worktree removal: <the command that removes the worktree, exactly as you would run it, after the reads it needs>
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: already-released
+    pattern: 'Release now:\W*no\b'
+    flags: i
+  - type: regex
+    name: no-orca-worktree-rm
+    pattern: 'Orca worktree rm:\W*no\b'
+    flags: i
+  - type: regex
+    name: git-worktree-remove
+    pattern: 'Worktree removal:[^\n]*(?:\bgitW\b|core\.hooksPath=/dev/null[^\n]*core\.fsmonitor=false)[^\n]*\bworktree remove\b[^\n]*/srv/orca/worktrees/widget/15-csv-export'
+  - type: regex
+    name: no-force-no-orca-rm
+    pattern: 'Worktree removal:[^\n]*(--force|\s-f|\bworktree rm\b)'
+    match: not_contains
+expected_outcome: 'Release now: no (it was released at its report); Orca worktree rm: no; Worktree removal: gitW worktree remove "/srv/orca/worktrees/widget/15-csv-export" with gitW the pinned git of commit-and-push.md and -C <project path>, after the commondir read, without --force.'

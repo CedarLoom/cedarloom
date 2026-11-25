@@ -1,0 +1,51 @@
+schema_version: "1.1"
+name: coord-clean-up-untracked-file
+description: 'The clean-up of a supervised Claude Code worker after its merge closes its terminal before worker-release and removes its worktree only with orca worktree rm --run-hooks; when an untracked file blocks the removal, the worktree and the file stay, with no --force, and the report names both. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca-clean-up.md:10. Needs --scaffold.'
+tags: [cl-orchestration, coord-clean-up]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    The run is already under way; this turn is one clean-up only. `worker-12.md` holds the worker's facts: its pull request is merged, so clean it up as the skill says, the release and the worktree removal only (no branch deletion, no reconciliation, no pick, no new start). The Orca executable is `orca`. Change no file but what the clean-up itself removes.
+
+    Then write exactly these lines, and stop:
+    Released: <yes|no>
+    Worktree: <removed|kept> <worktree path>
+    Files left: <the files that block the removal, or none>
+  max_turns: 25
+  allowed_tools: [Bash]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: release-argv
+    pattern: '"args":\["orchestration","worker-release","--dispatch","d-12","--json"\]'
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: terminal-closed-before-release
+    pattern: '"args":\["terminal","close","--terminal","term-12","--json"\][\s\S]*"args":\["orchestration","worker-release","--dispatch","d-12","--json"\]'
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: no-force
+    pattern: '"--force"'
+    match: not_contains
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: worktree-rm-only-in-its-form
+    pattern: '"args":\["worktree","rm"(?!,"--worktree","path:[^"]*/wt/12-login-timeout","--run-hooks","--json"\])'
+    match: not_contains
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: worktree-rm-attempted
+    pattern: '"args":\["worktree","rm","--worktree","path:[^"]*/wt/12-login-timeout","--run-hooks","--json"\]'
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: untracked-file-kept
+    pattern: 'EVAL_ONLY=1'
+    target: { source: file, path: wt/12-login-timeout/.env }
+  - type: regex
+    name: report-names-kept-worktree-and-file
+    pattern: 'Worktree:\W*kept\b[^\n]*/wt/12-login-timeout[\s\S]*Files left:[^\n]*\.env'
+    flags: i
+expected_outcome: 'orca worker-read of d-12 shows no person''s input; orca terminal close --terminal term-12 --json, confirmed by terminal list, then orca orchestration worker-release --dispatch d-12 --json (retained); the rule file deleted; orca worktree rm --worktree path:<workspace>/wt/12-login-timeout --run-hooks --json fails on ?? .env; no --force, .env not deleted. Released: yes; Worktree: kept <workspace>/wt/12-login-timeout; Files left: .env.'

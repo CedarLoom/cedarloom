@@ -1,0 +1,40 @@
+schema_version: "1.1"
+name: coord-start-failed-retry
+description: 'A Claude Code start whose terminal wait timed out with no dialog on screen is a failed start: the coordinator closes that terminal, and the one retry runs in the same worktree with a new terminal, from the rule file and its check on, with no second worktree. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca.md:72. Needs --scaffold.'
+tags: [cl-orchestration, coord-start]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    Dry run of one worker start: run no command, change no file, and decide from these facts as the skill says.
+    - `project` is example-org/widget, mode supervised. Issue 12 (slug `login-timeout`) starts one Claude Code worker; this is its first start in the run, and no retry has run yet.
+    - `orca worktree create --name 12-login-timeout --repo path:<project path> --base-branch main --no-parent --setup run --json` printed the worktree path `/work/widget-worktrees/12-login-timeout`.
+    - Both worker-settings commands (the write and the `--check` read) exited 0, and `orca terminal create` returned the terminal `term-12`.
+    - `orca terminal wait --terminal term-12 --for tui-idle --timeout-ms 60000 --json` timed out.
+    - `orca terminal read --terminal term-12 --screen --json` shows `Error: could not reach the API (ECONNRESET)` and then a shell prompt `$`. No dialog is on the screen.
+
+    Write these four lines, then stop:
+    `Kind: <held for the owner|failed start>`
+    `Close: <the exact orca command you run now, or none>`
+    `Retry worktree: <same|new>`
+    `First retry command: <the exact first command of the retry>`
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: failed-start
+    pattern: 'Kind:\W*failed start'
+    flags: i
+  - type: regex
+    name: terminal-closed
+    pattern: 'Close:[^\n]*orca terminal close --terminal term-12 --json'
+  - type: regex
+    name: same-worktree
+    pattern: 'Retry worktree:\W*same\b'
+    flags: i
+  - type: regex
+    name: retry-starts-at-rule-file
+    pattern: 'First retry command:[^\n]*worker-settings\.mjs --supervised [^\n]*12-login-timeout'
+expected_outcome: 'Kind: failed start (no dialog). Close: `orca terminal close --terminal term-12 --json`. Retry worktree: same, no second worktree. First retry command: `node <skill folder>/worker-settings.mjs --supervised /work/widget-worktrees/12-login-timeout <project path>`, then its `--check`, a new terminal, the wait and `worker-start`.'

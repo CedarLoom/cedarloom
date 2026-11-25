@@ -1,0 +1,42 @@
+schema_version: "1.1"
+name: coord-follow-up-waits-for-slot
+description: 'A follow-up counts like a start for hostWorkerLimit, counted without the worker that takes it, and it takes the free slot before a new pick, which then waits. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca.md:91. Needs --scaffold.'
+tags: [cl-orchestration, coord-follow-up]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command and change no file. Decide from these facts and the skill's text.
+
+    - The run is supervised, with one project. The policy reader prints `hostWorkerLimit` 3 and `workersPerProject` 3. `orca orchestration run-list` shows this run only, and no start is held at a dialog.
+    - `worker-list` of this run: the worker of issue 14 and the worker of issue 15 have `outcome` `in_progress` and are working. The worker of issue 12, a supervised Claude Code worker kept open for follow-ups, reported DONE with pull request example-org/widget#31; its `outcome` is `succeeded`, and it has no unanswered follow-up.
+    - The review of #31 found one finding, so worker 12 needs a follow-up; every check before its `send` passes.
+    - The precheck prints issue 40 as pickable in the project, with no worker or outcome yet in this run.
+
+    Write exactly these lines, then stop:
+    Working, counted before the follow-up: <number>
+    Follow-up to worker 12: <now|waits>
+    Start for issue 40: <now|waits>
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: count-leaves-out-follow-up-worker
+    pattern: 'Working, counted before the follow-up:\W*2\b'
+    flags: i
+  - type: regex
+    name: follow-up-takes-the-slot
+    pattern: 'Follow-up to worker 12:\W*now\b'
+    flags: i
+  - type: regex
+    name: new-pick-waits
+    pattern: 'Start for issue 40:\W*waits\b'
+    flags: i
+  - type: tool_used
+    name: no-file-written
+    tool: Write
+    min: 0
+    max: 0
+expected_outcome: 'Working, counted before the follow-up: 2 (issues 14 and 15; worker 12 is the one that takes the follow-up); Follow-up to worker 12: now; Start for issue 40: waits, since worker 12 counts as working once its follow-up is sent and the cap of 3 is full.'

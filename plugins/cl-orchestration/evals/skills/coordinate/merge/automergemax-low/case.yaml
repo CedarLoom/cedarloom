@@ -1,0 +1,33 @@
+schema_version: "1.1"
+name: coord-merge-automergemax-low
+description: 'With merge.allowed true and merge.autoMergeMax low, a pull request head of risk class medium is left for the owner, not merged by the coordinator. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/decisions.md:35. Needs --scaffold.'
+tags: [cl-orchestration, coord-merge]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run of step 1 of Merge for one pull request: run no command and change no file. Decide from the facts below and the files in `project/`, whose `docs/agents/orchestration.json` is the policy as the default branch has it (the reader prints it with its defaults filled in).
+
+    - Repository example-org/widget, default branch main. Pull request #31 for issue 31 is ready: its review left no Blocking or Important finding, the review of record is posted, `ci` is green, no review thread is unresolved and the body passes.
+    - You decided the head's risk class as medium: the diff changes the retry logic in `src/client.js`, and the worker's `Risk:` line says medium. No changed file is under `riskyPaths`.
+    - The verdict's other fields: `ownerOnly` [], `unsafePaths` [], `pin` reviewed, `upToDate` true.
+
+    Write the line `Next: <the verdict's next: owner, re-review, ready, merge, update or trial>`, then the line `Merges: <coordinator or owner>`, then stop.
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: next-is-owner
+    pattern: 'Next:\W*owner\b'
+    flags: i
+  - type: regex
+    name: owner-merges
+    pattern: 'Merges:\W*(the\s+)?owner\b'
+    flags: i
+  - type: regex
+    name: no-merge-command
+    pattern: 'gh pr merge 31'
+    match: not_contains
+expected_outcome: 'Next: owner, since a medium class is above merge.autoMergeMax low; Merges: owner; no merge command.'

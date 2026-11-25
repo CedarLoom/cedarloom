@@ -29,13 +29,17 @@ The rules block ([rules/project.md](../rules/project.md)) has no skill to trigge
 
 ## Baseline
 
-Runs on `main` at commit `<SHA>`, model `<model>` at effort `<effort>`, judge `<judge>`, `--runs 3`.
+Runs at commit `51b561c45ee850757c5b7c3db6ca09c4ab9c88d4` (the suites as they merged), model `claude-opus-5-5` at the default effort, judge `haiku` (default), `--runs 3`, with the no-plugin arm (`with-without`).
 
 | Suite | Pass rate | Tokens | Wall time | Cost |
 |---|---|---|---|---|
-| `skill-audit` | | | | |
-| `skill-debloat` | | | | |
-| `skill-improve` | | | | |
-| `skill-maintain` | | | | |
-| `skill-setup` | | | | |
-| rules block (`run.sh`) | | | | |
+| `skill-audit` | 8/9 (89%) | 1.26M | 10m56s | $2.24 |
+| `skill-debloat` | 9/9 (100%) | 0.89M | 11m08s | $1.58 |
+| `skill-improve` | 5/9 (56%) | 0.54M | 8m55s | $1.24 |
+| `skill-maintain` | 8/9 (89%) | 1.04M | 9m14s | $1.71 |
+| `skill-setup` | 5/9 (56%) | 1.78M | 15m45s | $3.02 |
+| rules block (`run.sh`) | 2/3 runs passed every check (one run changed dead code outside the task) | not reported | 3m31s | not reported |
+
+Pass rate counts each run. Tokens are the sum of input, cache creation, cache read and output tokens over every model in `modelUsage` of each run's final `result` event. Wall time and cost count the with-plugin runs (cost = `costUsd` + `judgeCostUsd`).
+
+Run total: 35/45 runs (78%), 15.94 USD both arms, 56 min (2 in parallel).

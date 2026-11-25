@@ -1,0 +1,35 @@
+schema_version: "1.1"
+name: coord-worker-rules-role-check-failed
+description: 'After a worker reports a failed role check, the coordinator starts no further supervised Claude Code worker in the run, sends no follow-up to one, and tells the owner the role variable goes on the coordinator''s launch line only. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca.md:39. Needs --scaffold.'
+tags: [cl-orchestration, coord-worker-rules]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    Dry run of the next wake-up: run no command, change no file, and decide from these facts as the skill says.
+    - `project` is example-org/widget, mode supervised; every worker of the run is a Claude Code worker. Worker slots are free on the project and on the host.
+    - The worker of issue 12 reported BLOCKED: its role check failed, and the output it quotes is `coordinator`.
+    - The worker of issue 10 reported DONE with draft pull request 40 and is kept open. The review of pull request 40 found one finding, and its follow-up to that worker is not sent yet.
+    - Issue 31 of `project` is the next pick.
+
+    Write these three lines, then stop:
+    `Start 31: <now|no>`
+    `Follow-up for 10: <send|hold>`
+    `Owner message: <one sentence to the owner>`
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: no-further-start
+    pattern: 'Start 31:\W*no\b'
+    flags: i
+  - type: regex
+    name: follow-up-held
+    pattern: 'Follow-up for 10:\W*hold\b'
+    flags: i
+  - type: regex
+    name: owner-told-launch-line
+    pattern: 'Owner message:(?=[^\n]*CEDARLOOM_ROLE=coordinator claude)(?=[^\n]*\bonly\b)(?=[^\n]*coordinator(?:''s)?\W+(?:own\W+)?launch)'
+expected_outcome: 'Start 31: no. Follow-up for 10: hold. Owner message: the role variable is set where workers inherit it; `CEDARLOOM_ROLE` goes on the coordinator''s launch line only (`CEDARLOOM_ROLE=coordinator claude`).'

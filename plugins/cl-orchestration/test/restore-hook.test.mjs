@@ -62,6 +62,14 @@ test('restore hook: the drift counts from the edited stamp of the status line, w
   assert.match(restored, /\n- `README\.md`\n/);
 });
 
+test('restore hook: prints nothing when a subagent compacts, and restores for a coordinator started with --agent', () => {
+  // Subagents share the coordinator's session id; only a subagent's input carries agent_id, while --agent sets agent_type alone.
+  const root = folder();
+  const input = (fields) => JSON.stringify({ hook_event_name: 'SessionStart', source: 'compact', session_id: 's-a', cwd: root, ...fields });
+  assert.equal(restore(root, { input: input({ agent_id: 'a1', agent_type: 'Explore' }) }), '');
+  assert.match(restore(root, { input: input({ agent_type: 'coordinator' }) }), /\n# Handoff\nSession: s-a\n/);
+});
+
 test('restore hook: prints nothing for another session, a linked file or folder, a tracked file, a folder outside git, or bad input', () => {
   assert.equal(restore(folder(), { session: 's-b' }), '');
   const unnamed = folder();

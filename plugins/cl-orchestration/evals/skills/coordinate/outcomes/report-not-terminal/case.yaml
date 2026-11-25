@@ -1,0 +1,40 @@
+schema_version: "1.1"
+name: coord-outcomes-report-not-terminal
+description: 'A worker''s outcome comes from its report and handoff block, never from its terminal, even when a saved terminal read shows a failed test. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/outcomes.md:5. Needs --scaffold.'
+tags: [cl-orchestration, coord-outcomes]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command, start nothing and write no file. Decide from the facts below and the files named.
+
+    A run is open on project (example-org/widget, supervised). The worker of issue 12, a Codex worker that pushes its own commits, settled, and its report is `.cedarloom/runs/r-1125/report-12.md`. An earlier terminal read of that worker was saved as `.cedarloom/runs/r-1125/terminal-12.txt`.
+
+    Write these lines, then stop:
+    Outcome: <one of the outcomes of outcomes.md>
+    Source: <what you took the outcome from>
+    Next: <the next step for issue 12>
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: done-with-a-pr
+    pattern: 'Outcome:\W*Done,? with a (PR|pull request)'
+    flags: i
+  - type: regex
+    name: from-the-report
+    pattern: 'Source:[^\n]*(report|handoff block)'
+    flags: i
+  - type: regex
+    name: review-next
+    pattern: 'Next:[^\n]*review'
+    flags: i
+  - type: tool_used
+    name: terminal-not-read
+    tool: Read
+    input_match: 'terminal-12'
+    min: 0
+    max: 0
+expected_outcome: 'Outcome: Done with a PR, taken from the report and its handoff block (DONE, draft pull request #57, checks passing), not from the terminal read, which the coordinator does not open. Next: review pull request #57 by review.md.'
