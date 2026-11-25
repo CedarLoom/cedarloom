@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Workspace: example-org/widget with no docs/agents/orchestration.json, a private repository with issues on,
+# Workspace: example-org/widget with no cedarloom.json, a private repository with issues on,
 # so the case checks that the coordinator picks nothing and offers the policy file as an owner decision.
 set -eu
 for program in orca gh; do

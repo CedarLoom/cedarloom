@@ -20,8 +20,8 @@ const config: Config = {
     mermaid: true,
     hooks: {onBrokenMarkdownLinks: 'throw'},
   },
-  // The logos stay in brand/ under their own terms; the site serves them from there.
-  staticDirectories: ['../brand'],
+  // static/ holds the cedarloom.json schema, written by .github/scripts/skills-doc.mjs. The logos stay in brand/ under their own terms; the site serves them from there.
+  staticDirectories: ['static', '../brand'],
   i18n: {defaultLocale: 'en', locales: ['en']},
   presets: [
     [

@@ -8,7 +8,7 @@ These suites check that each `cl-repo` skill does what its text says, on small s
 | `skill-debloat` | whole-line cuts with the Never rule kept; a budget only protected text could meet; a reword request | `Bash`, `Write` |
 | `skill-improve` | one diff per finding; a Never rule stays a flag; a description keeps its trigger sentences | `Edit`, `Write`, `Bash` |
 | `skill-maintain` | grouped dependency updates; a stale knowledge entry re-checked; a fresh one reused | `Bash` |
-| `skill-setup` | read-only plan on a bare repository (block, `AGENTS.md`, policy file, missing labels); no cl-orchestration; an `AGENTS.md` without the block | `Bash` |
+| `skill-setup` | read-only plan on a bare repository (block, `AGENTS.md`, policy file, missing labels); no cl-orchestration; an `AGENTS.md` without the block; a policy at `docs/agents/orchestration.json` moved to `cedarloom.json` | `Bash` |
 
 ## Run
 

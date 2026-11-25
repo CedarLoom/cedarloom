@@ -22,9 +22,9 @@ widget: a small HTTP client library for Node.js.
 - Pull request titles and commit subjects follow Conventional Commits.
 - Pull requests merge with a merge commit, never squashed or rebased, so each commit of a branch stays on main.
 MD
-cat > project/docs/agents/orchestration.json <<'JSON'
+cat > project/cedarloom.json <<'JSON'
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "startLabel": "cl:ready-for-agent",
   "merge": {
     "allowed": true,

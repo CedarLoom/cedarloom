@@ -20,7 +20,7 @@ graders:
     pattern: 'cedarloom start'
   - type: llm
     name: no-policy-no-labels
-    criteria: 'The plan proposes no docs/agents/orchestration.json, no docs/agents/worker-rules.md and no label to create; naming them as skipped because the cl-orchestration plugin is not installed is fine.'
+    criteria: 'The plan proposes no cedarloom.json, no docs/agents/worker-rules.md and no label to create; naming them as skipped because the cl-orchestration plugin is not installed is fine.'
   - type: file_exists
     name: writes-nothing
     path: '**'

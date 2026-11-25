@@ -1,6 +1,6 @@
-// Writes the skill table of docs/skills.md from the SKILL.md front matter of the plugins' skills.
-// Usage: node .github/scripts/skills-doc.mjs [--check]   (--check: exit 1 when the page differs)
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+// Writes the skill table of docs/skills.md from the SKILL.md front matter of the plugins' skills, and the site's copy of the cedarloom.json schema from the plugin's.
+// Usage: node .github/scripts/skills-doc.mjs [--check]   (--check: exit 1 when a file differs)
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMain } from './main.mjs';
@@ -55,13 +55,21 @@ export function sources() {
 }
 
 if (isMain(import.meta.url)) {
-  const file = `${root}/docs/skills.md`;
-  const page = readFileSync(file, 'utf8');
-  const next = update(page, sources());
-  if (process.argv[2] === '--check') {
-    if (next !== page) {
-      console.log('::error::docs/skills.md differs from the skill front matter: run node .github/scripts/skills-doc.mjs');
-      process.exit(1);
+  // The site serves its copy at the URL a cedarloom.json names in "$schema"; the plugin validates against its own.
+  const files = [
+    ['docs/skills.md', 'the skill front matter', (page) => update(page, sources())],
+    ['site/static/schema/cedarloom.json', 'plugins/cl-orchestration/skills/coordinate/cedarloom.schema.json', () => readFileSync(`${root}/plugins/cl-orchestration/skills/coordinate/cedarloom.schema.json`, 'utf8')],
+  ];
+  for (const [name, source, expected] of files) {
+    const file = `${root}/${name}`;
+    const page = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    const next = expected(page);
+    if (process.argv[2] !== '--check') {
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, next);
+    } else if (next !== page) {
+      console.log(`::error::${name} differs from ${source}: run node .github/scripts/skills-doc.mjs`);
+      process.exitCode = 1;
     }
-  } else writeFileSync(file, next);
+  }
 }

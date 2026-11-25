@@ -8,7 +8,7 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
-    This is a dry run of the trial merge for one pull request: run no command and change no file. Decide from the facts below and the files in `project/`, which hold the default branch's commit: its `AGENTS.md`, `.devcontainer/` and `docs/agents/orchestration.json` are the default branch's.
+    This is a dry run of the trial merge for one pull request: run no command and change no file. Decide from the facts below and the files in `project/`, which hold the default branch's commit: its `AGENTS.md`, `.devcontainer/` and `cedarloom.json` are the default branch's.
 
     - Repository example-org/widget, default branch main. Pull request #31 for issue 31, `<head>` 4c1d9e0a7b2f3c4d5e6f708192a3b4c5d6e7f809, which is also the reviewed head.
     - The pull request changes `src/client.js`, `test/client.test.js`, `tools/container-prep.sh` and adds `docs/changelog.d/31.md`. The default branch has changed only `docs/changelog.d/29.md` since, so `shared` is empty.

@@ -17,7 +17,7 @@ const stub = (issue, comments, policy = POLICY, tracker = 'owner/project', { ori
   if (args[0] === 'config' || args[0] === 'fetch') return '';
   if (args[0] === 'ls-remote') return 'c0ffee0000000000000000000000000000000001\tHEAD\n';
   if (args[0] === 'remote') return `${origin}\n`;
-  if (args[0] === 'ls-tree') return 'docs/agents/orchestration.json\n';
+  if (args[0] === 'ls-tree') return 'cedarloom.json\n';
   if (args[0] === 'show') return JSON.stringify(policy);
   if (args[1] === 'graphql' && args.includes('owner=owner') && args.includes('name=project') && args.includes('n=12')) return JSON.stringify(pages);
   if (args[1] === `repos/${tracker}/issues/7`) return JSON.stringify(issue);
@@ -140,7 +140,7 @@ test('thread: the command line reads the issue from the project\'s repository', 
   writeFileSync(join(bin, 'policy.json'), JSON.stringify(POLICY));
   writeFileSync(join(bin, 'project.json'), JSON.stringify({ ...ISSUE, title: 'Project issue' }));
   // Stand-ins for git (the policy read and the origin) and gh (the issue 7, without comments).
-  writeFileSync(join(bin, 'git'), `#!/bin/sh\ncase "$*" in\n  *'config --show-scope'*) ;;\n  *ls-remote*) printf 'c0ffee0000000000000000000000000000000001\\tHEAD\\n' ;;\n  *fetch*) ;;\n  *ls-tree*) echo docs/agents/orchestration.json ;;\n  *'show '*) cat '${bin}/policy.json' ;;\n  *'remote get-url origin'*) echo git@github.com:owner/project.git ;;\n  *) exit 1 ;;\nesac\n`, { mode: 0o755 });
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\ncase "$*" in\n  *'config --show-scope'*) ;;\n  *ls-remote*) printf 'c0ffee0000000000000000000000000000000001\\tHEAD\\n' ;;\n  *fetch*) ;;\n  *ls-tree*) echo cedarloom.json ;;\n  *'show '*) cat '${bin}/policy.json' ;;\n  *'remote get-url origin'*) echo git@github.com:owner/project.git ;;\n  *) exit 1 ;;\nesac\n`, { mode: 0o755 });
   writeFileSync(join(bin, 'gh'), `#!/bin/sh\ncase "$*" in\n  *issues/7/comments*) echo '[[]]' ;;\n  *repos/owner/project/issues/7) cat '${bin}/project.json' ;;\n  *) exit 1 ;;\nesac\n`, { mode: 0o755 });
   const done = spawnSync(process.execPath, [script, join(dir, 'project'), '7', '.cedarloom/runs/r1/thread.md'], { cwd: dir, encoding: 'utf8', env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GH_HOST: '' } });
   assert.equal(done.status, 0, done.stderr);

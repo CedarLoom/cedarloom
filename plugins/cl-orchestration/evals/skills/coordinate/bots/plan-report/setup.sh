@@ -35,9 +35,9 @@ test('a session past its timeout is expired', () => {
   assert.equal(isExpired({ lastSeen: 0, timeoutMs: 10 }, 11), true);
 });
 JS
-cat > project/docs/agents/orchestration.json <<'JSON'
+cat > project/cedarloom.json <<'JSON'
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "startLabel": "cl:ready-for-agent",
   "workersPerProject": 1,
   "hostWorkerLimit": 2,

@@ -20,9 +20,9 @@ Widget is a small Node.js web service.
 
 Tests: `node --test`. Commits follow Conventional Commits.
 EOT
-cat > project/docs/agents/orchestration.json <<'EOT'
+cat > project/cedarloom.json <<'EOT'
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "startLabel": "cl:ready-for-agent",
   "workersPerProject": 3,
   "hostWorkerLimit": 3

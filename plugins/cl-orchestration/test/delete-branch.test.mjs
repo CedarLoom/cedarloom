@@ -23,8 +23,7 @@ function setup(policyText = '{ "deleteMergedBranch": true }\n') {
   const origin = join(dir, 'origin'), project = join(dir, 'project');
   mkdirSync(origin);
   const git = initRepo(origin);
-  mkdirSync(join(origin, 'docs/agents'), { recursive: true });
-  writeFileSync(join(origin, 'docs/agents/orchestration.json'), policyText);
+  writeFileSync(join(origin, 'cedarloom.json'), policyText);
   git('add', '-A');
   git('commit', '-qm', 'policy');
   git('clone', '-q', origin, project);

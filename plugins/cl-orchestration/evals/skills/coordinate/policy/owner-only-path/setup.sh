@@ -19,9 +19,9 @@ cat > project/AGENTS.md <<'EOF'
 
 widget: a small Node.js web library. Tests: `node --test`.
 EOF
-cat > project/docs/agents/orchestration.json <<'EOF'
+cat > project/cedarloom.json <<'EOF'
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "startLabel": "cl:ready-for-agent",
   "merge": {
     "allowed": true,

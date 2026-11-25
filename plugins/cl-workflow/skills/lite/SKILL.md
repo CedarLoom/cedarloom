@@ -16,7 +16,7 @@ Typed as `/cl-workflow:lite <task>`. No task: ask for it, or without terminal qu
    - a bug, a review-thread follow-up, a log line that logs user data, any dependency change (a dependency major or security advisory too);
    - any migration (a schema migration too), infrastructure as code, CI, a performance change, a refactor across modules or with a changed interface, any changed interface;
    - authentication, permissions, secrets, input validation, production data, deploy or production configuration, an irreversible action;
-   - a file under `riskyPaths` in `docs/agents/orchestration.json` as the default branch has it;
+   - a file under `riskyPaths` in `cedarloom.json` as the default branch has it;
    - a depth or `Depth minimum:` line above quick, or a risk above low.
 2. **Lines.** Before the first edit: `Depth: quick (lite: <change type>)`, `Risk: low (<reason>)` and the done check (typo: docs build; config value: tests, schema or lint; UI tweak: browser check, screenshot baselines updated only for intended changes).
 3. **Edit**, with fast checks (types, lint, the touched code's tests) after each edit.

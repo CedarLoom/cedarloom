@@ -18,9 +18,9 @@ cat > project/AGENTS.md <<'MD'
 
 widget is a small Node.js library. Tests: `node --test`. A worker's worktree is removed with Orca's `worktree rm`; the project starts no dev containers.
 MD
-cat > project/docs/agents/orchestration.json <<'JSON'
+cat > project/cedarloom.json <<'JSON'
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "startLabel": "cl:ready-for-agent",
   "workersPerProject": 2,
   "hostWorkerLimit": 3,
@@ -53,7 +53,7 @@ Models: opus = claude-opus-4-8
 The steps of the Resume section of orca-resume.md in the coordinate skill's folder, run id run-7.
 
 ## Decisions
-- Issue 31: deep depth, held for a design approval (docs/agents/orchestration.json).
+- Issue 31: deep depth, held for a design approval (cedarloom.json).
 
 ## Open
 - Issue 31: design approval, approval issue example-org/widget#45, decision task t-31d, gate g-2; no answer yet.

@@ -14,13 +14,13 @@ import { initRepo } from './git-repo.mjs';
 const [E_ACUTE, ACUTE, LONG_S, ESC, LINE_SEPARATOR] = [0xe9, 0x301, 0x17f, 0x1b, 0x2028].map((code) => String.fromCodePoint(code));
 
 const POLICY = {
-  merge: { ownerOnlyPaths: ['.github', 'CODEOWNERS', 'docs/CODEOWNERS', 'docs/agents/orchestration.json', 'infra/', 'deploy', `caf${E_ACUTE}`], ownerOnlyNames: ['.claude', '.mcp.json'] },
+  merge: { ownerOnlyPaths: ['.github', 'CODEOWNERS', 'docs/CODEOWNERS', 'cedarloom.json', 'infra/', 'deploy', `caf${E_ACUTE}`], ownerOnlyNames: ['.claude', '.mcp.json'] },
   review: { sensitivePaths: ['src/billing'] },
   riskyPaths: ['src/auth'],
 };
 
 test('merge checks: an owner-only file is one under a path entry or with a name as a segment, at any depth and in any case', () => {
-  const owners = ['.github/workflows/ci.yml', 'CODEOWNERS', 'docs/CODEOWNERS', 'packages/ui/.claude/skills/x/SKILL.md', 'tools/.MCP.json', '.GitHub/workflows/x.yml', 'infra/main.tf', 'infra', 'deploy/run.sh', 'docs/agents/orchestration.json'];
+  const owners = ['.github/workflows/ci.yml', 'CODEOWNERS', 'docs/CODEOWNERS', 'packages/ui/.claude/skills/x/SKILL.md', 'tools/.MCP.json', '.GitHub/workflows/x.yml', 'infra/main.tf', 'infra', 'deploy/run.sh', 'cedarloom.json'];
   const others = ['src/CODEOWNERS', '.githubx/y', 'my.claude/x', 'deployment/run.sh', 'README.md'];
   assert.deepEqual(ownerOnly(POLICY, [...others, ...owners]), owners);
   // A sensitive file is one under review.sensitivePaths or riskyPaths, and every owner-only file.
@@ -140,7 +140,7 @@ function world(files) {
 }
 
 test('merge checks: the command line prints the verdict of a head in its scratch clone, and exits 2 without one on a bad argument, a failed git command or a folder that is no clone of its own', () => {
-  const { origin, git, out, commit, clones } = world({ 'docs/agents/orchestration.json': '{ "merge": { "allowed": true, "requiredChecks": ["ci"], "mode": "disjoint" }, "riskyPaths": ["src/a.txt"] }', '.github/workflows/ci.yml': 'on: push\n', 'src/a.txt': 'a\n', 'src/b.txt': 'b\n' });
+  const { origin, git, out, commit, clones } = world({ 'cedarloom.json': '{ "merge": { "allowed": true, "requiredChecks": ["ci"], "mode": "disjoint" }, "riskyPaths": ["src/a.txt"] }', '.github/workflows/ci.yml': 'on: push\n', 'src/a.txt': 'a\n', 'src/b.txt': 'b\n' });
   git('checkout', '-q', '-b', 'feat/1-workflow');
   const workflow = commit({ '.github/workflows/new.yml': 'on: push\n', 'src/b.txt': 'worker\n' });
   git('checkout', '-q', '-b', 'feat/2-move', 'main');
@@ -238,8 +238,7 @@ test('merge checks: a head with several merge bases is the owner\'s to judge, an
   const { project, scratch } = clones();
   // A setting in the project's shared git directory sends its origin to a repository whose policy allows merges: the verdict reads the policy in the clone.
   const other = folder(), elsewhere = initRepo(other);
-  mkdirSync(join(other, 'docs/agents'), { recursive: true });
-  writeFileSync(join(other, 'docs/agents/orchestration.json'), '{ "merge": { "allowed": true } }');
+  writeFileSync(join(other, 'cedarloom.json'), '{ "merge": { "allowed": true } }');
   elsewhere('add', '-A');
   elsewhere('commit', '-qm', 'policy');
   git('-C', project, 'config', `url.${other}.insteadOf`, git('-C', project, 'remote', 'get-url', 'origin').toString().trim());
@@ -275,7 +274,7 @@ const FACTS = fileURLToPath(new URL('../skills/coordinate/risk-facts.mjs', impor
 const factsCli = (...args) => spawnSync(process.execPath, [FACTS, ...args], { encoding: 'utf8' });
 
 test('merge checks, risk facts: a scratch clone made as scratch-clone.md says, blobless and without a checkout, gives the verdict and the facts', () => {
-  const { origin, git, out, commit } = world({ 'docs/agents/orchestration.json': '{ "merge": { "allowed": true }, "riskyPaths": ["src"] }', 'src/a.txt': '1\n2\n3\n4\n5\n' });
+  const { origin, git, out, commit } = world({ 'cedarloom.json': '{ "merge": { "allowed": true }, "riskyPaths": ["src"] }', 'src/a.txt': '1\n2\n3\n4\n5\n' });
   // git serves a filter only where the remote allows it, as GitHub does.
   git('config', 'uploadpack.allowFilter', 'true');
   git('checkout', '-q', '-b', 'feat/1-first');
@@ -304,13 +303,13 @@ test('merge checks, risk facts: a scratch clone made as scratch-clone.md says, b
 test('risk facts: the command line reads the diff of a clone and the policy of its origin, and exits 2 on a bad argument', () => {
   const origin = folder();
   const git = initRepo(origin);
-  mkdirSync(join(origin, 'docs/agents'), { recursive: true });
-  writeFileSync(join(origin, 'docs/agents/orchestration.json'), '{ "riskyPaths": ["src"] }');
+  writeFileSync(join(origin, 'cedarloom.json'), '{ "riskyPaths": ["src"] }');
   git('add', '-A');
   git('commit', '-qm', 'policy');
   const base = git('rev-parse', 'HEAD').toString().trim();
   git('checkout', '-q', '-b', 'feat/1-change');
   mkdirSync(join(origin, 'src'));
+  mkdirSync(join(origin, 'docs'));
   writeFileSync(join(origin, 'src/a.mjs'), 'x\ny\n');
   writeFileSync(join(origin, 'docs/two words.md'), 'z\n');
   writeFileSync(join(origin, 'img.bin'), Buffer.from([0, 1, 2, 0]));

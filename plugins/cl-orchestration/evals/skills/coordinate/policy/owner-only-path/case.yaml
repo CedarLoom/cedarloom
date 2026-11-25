@@ -10,7 +10,7 @@ execution:
 
     Dry run of one Merge step: run no command and change no file; decide from the facts below and the files they name.
 
-    - The run is under way in supervised mode; `project` is example-org/widget, default branch `main`. Its policy is `project/docs/agents/orchestration.json` as committed (the reader prints it with the defaults filled in).
+    - The run is under way in supervised mode; `project` is example-org/widget, default branch `main`. Its policy is `project/cedarloom.json` as committed (the reader prints it with the defaults filled in).
     - Pull request example-org/widget#31 for issue example-org/widget#12 is reviewed with no open finding, its check `ci` is green, and its risk class is low. It changes `src/login.js`, `test/login.test.js` and `infra/alerts.yml`.
 
     Write these lines, then stop:

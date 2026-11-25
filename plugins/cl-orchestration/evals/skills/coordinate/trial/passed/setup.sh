@@ -31,9 +31,9 @@ cat > project/.devcontainer/devcontainer.json <<'JSON'
   "image": "mcr.microsoft.com/devcontainers/javascript-node:22"
 }
 JSON
-cat > project/docs/agents/orchestration.json <<'JSON'
+cat > project/cedarloom.json <<'JSON'
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "startLabel": "cl:ready-for-agent",
   "merge": {
     "allowed": true,
