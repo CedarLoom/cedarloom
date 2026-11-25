@@ -2,7 +2,7 @@
 //   node commit-push.mjs sync --project <path> --worktree <path> --branch <name> [--merge]
 //   node commit-push.mjs commit --project <path> --worktree <path> --repo <owner/name> --branch <name> --default-branch <name> --message <file> --file <path> (repeated) --owned <path> (repeated) [--merged <sha>] [--title <text> --body <file>]
 //   node commit-push.mjs supervised --project <path> --worktree <path> --repo <owner/name> --branch <name> --default-branch <name> --commit <sha> --owned <path> (repeated) [--title <text> --body <file>]
-// Commit and push of modes.md for a worker's worktree. sync is steps 4 and 5: it merges origin's branch (with --merge, origin's default branch, without a commit) into the worktree and prints { merged, conflicts }. commit is steps 1 to 3 for an automatic worker: it checks the base and the staged files, commits from the message file, checks that commit, pushes it, opens the draft pull request when --title and --body are given (the first round) and prints { commit, pullRequest }; --merged names the sha sync merged, for a merge round. supervised checks a supervised worker's reported commit and every file it publishes, then pushes and opens the pull request the same way.
+// Commit and push of commit-and-push.md for a worker's worktree. sync is steps 4 and 5: it merges origin's branch (with --merge, origin's default branch, without a commit) into the worktree and prints { merged, conflicts }. commit is steps 1 to 3 for an automatic worker: it checks the base and the staged files, commits from the message file, checks that commit, pushes it, opens the draft pull request when --title and --body are given (the first round) and prints { commit, pullRequest }; --merged names the sha sync merged, for a merge round. supervised checks a supervised worker's reported commit and every file it publishes, then pushes and opens the pull request the same way.
 // Every refusal, and every failed command, prints one line naming its step and exits 1; nothing is pushed before every check passed.
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync } from 'node:fs';
 import { devNull } from 'node:os';
@@ -16,7 +16,7 @@ import { linkedWorktree } from './worker-settings.mjs';
 const BRANCH = /^(?!-)(?!.*\.\.)(?!.*\/\.)(?!.*\.lock$)(?!HEAD$)[A-Za-z0-9._/-]+$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 
-// A check that fails names the step of modes.md it belongs to.
+// A check that fails names the step of commit-and-push.md it belongs to.
 class Refused extends Error {
   constructor(step, message) {
     // Escaped here, so a path with a line break still ends as one line.
@@ -43,7 +43,7 @@ const plainFile = (step, path) => {
   } finally { closeSync(fd); }
 };
 
-// The worktree's folder in the shared .git, after the reads of modes.md: git would otherwise load configuration, and so commands, that the worker wrote.
+// The worktree's folder in the shared .git, after the reads of commit-and-push.md: git would otherwise load configuration, and so commands, that the worker wrote.
 export function checkWorktree(project, worktree) {
   const step = 'commondir';
   during(step, () => {

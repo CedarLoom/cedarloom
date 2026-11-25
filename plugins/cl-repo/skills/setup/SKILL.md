@@ -87,7 +87,7 @@ Where the repository has no `.github/ISSUE_TEMPLATE` folder and its owner has no
 
 ## 6. Bots (ask)
 
-The bots that run the coordinator's work in this repository (a project bot and its builder, reviewer and maintain bots) come with the cl-orchestration plugin. Where it is installed, ask whether to set them up, recommending yes where `docs/agents/orchestration.json` exists or is proposed. Yes: take the Setup steps of `<coordinate skill folder>/setup-bots.md` in Read only, Plan and Apply. Its plan items include the committed `docs/agents/bots.md`. Setup creates no bot: the user creates each one. Otherwise skip the step, naming why.
+The bots that run the coordinator's work in this repository (a project bot per repository, and the builder, reviewer and maintain bots every repository shares) come with the cl-orchestration plugin. Where it is installed, ask whether to set them up, recommending yes where `docs/agents/orchestration.json` exists or is proposed. Yes: take the Setup steps of `<coordinate skill folder>/setup-bots.md` in Read only, Plan and Apply. Its plan items include the committed `docs/agents/bots.md`. Setup creates no bot: the user creates each one. Otherwise skip the step, naming why.
 
 ## 7. Other configuration (ask)
 

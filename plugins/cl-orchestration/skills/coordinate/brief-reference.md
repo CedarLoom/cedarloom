@@ -2,7 +2,7 @@
 
 ## Names
 
-- The one exception to the command rule: a pull request's file path inside single quotes, in a scratch clone ([review-and-merge.md](review-and-merge.md#scratch-clone)).
+- The one exception to the command rule: a pull request's file path inside single quotes, in a scratch clone ([scratch-clone.md](scratch-clone.md)).
 - `<owner/repo>` and `<default branch>` are what `gh repo view --json nameWithOwner,defaultBranchRef` prints in the bot's checkout, used only when both are plain (letters, digits, `.`, `_`, `/`, `-`; no `-` at the start, no `..`) and `nameWithOwner` is the repository of `origin`. Otherwise nothing starts there: report it.
 - Every other `gh` command names its repository with `-R` or in the API path.
 - A branch is `<type>/<number>-<slug>`, type and slug in lower-case letters, digits and hyphens. A branch name goes into a command only when it is plain as `merge-checks.mjs` requires.

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { argsOf, check, distinct, pickable, priorities, report, unread } from '../skills/coordinate/precheck.mjs';
+import { argsOf, check, distinct, pickable, priorities, report, unfinished, unread } from '../skills/coordinate/precheck.mjs';
 
 const POLICY = { startLabel: 'agent-ready', trustedAuthors: ['helper[bot]'] };
 const issue = (number, extra = {}) => ({ number, author_association: 'OWNER', user: { login: 'owner' }, labels: [{ name: 'agent-ready' }], ...extra });
@@ -120,6 +120,46 @@ test('precheck: an unread result exits 0 with no issue to pick and is named on s
   assert.equal(run.status, 0, run.stderr);
   assert.equal(run.stdout, '');
   assert.ok(run.stderr.split('\n').includes(`${h.prompts}: project-12-builder-0-${RUN}: the builder result is unread`), run.stderr);
+});
+
+test('precheck: two repositories share one role bot: each project bot reads only its own results, and the host limit counts the unfinished runs of both', () => {
+  const alpha = home(), beta = home(), shared = home();
+  const name = (repo, n, role) => `${repo}-${n}-${role}-0-${RUN}`;
+  // Same issue number and run id in both repositories: the repository prefix keeps the shared bot's result files apart.
+  alpha.prompt(name('alpha', 12, 'builder'), `Result file: ${join(shared.results, name('alpha', 12, 'builder'))}\n`);
+  beta.prompt(name('beta', 12, 'builder'), `Result file: ${join(shared.results, name('beta', 12, 'builder'))}\n`);
+  shared.result(name('beta', 12, 'builder'), 'The plan.\n');
+  assert.deepEqual(unread(alpha.prompts), []);
+  assert.deepEqual(unread(beta.prompts), [`${name('beta', 12, 'builder')}: the builder result is unread`]);
+  assert.deepEqual(unfinished([alpha.prompts, beta.prompts]), [join(alpha.prompts, name('alpha', 12, 'builder'))]);
+
+  const script = fileURLToPath(new URL('../skills/coordinate/precheck.mjs', import.meta.url));
+  const limit = (limit, working) => spawnSync(process.execPath, [script, '--host-limit', limit, '--working', working, alpha.prompts, beta.prompts], { encoding: 'utf8' });
+  assert.equal(limit('2', '0').status, 0);
+  assert.equal(limit('2', '1').status, 1);
+  // A reviewer run of the other repository, not started yet, fills the second slot.
+  beta.prompt(name('beta', 14, 'reviewer'), `Result file: ${join(shared.results, name('beta', 14, 'reviewer'))}\n`);
+  const full = limit('2', '0');
+  assert.equal(full.status, 1);
+  assert.deepEqual(full.stdout.trim().split('\n'), [join(alpha.prompts, name('alpha', 12, 'builder')), join(beta.prompts, name('beta', 14, 'reviewer'))]);
+  assert.equal(limit('3', '0').status, 0);
+  assert.equal(limit('two', '0').status, 2);
+});
+
+test('precheck: starts of two repositories at the same time for one free slot: exactly one reserves it', async () => {
+  const script = fileURLToPath(new URL('../skills/coordinate/precheck.mjs', import.meta.url));
+  for (let round = 0; round < 3; round++) {
+    const alpha = home(), beta = home(), shared = home();
+    const lock = join(shared.prompts, '..', 'host-limit.lock');
+    alpha.prompt(`alpha-12-builder-0-${RUN}`, `Result file: ${join(shared.results, 'alpha-12.md')}\n`);
+    const start = (repo, n) => new Promise((done) => spawn(process.execPath, [script, '--host-limit', '2', '--working', '0',
+      '--reserve', join(repo === 'alpha' ? alpha.prompts : beta.prompts, `${repo}-${n}-builder-0-${RUN}`), '--result', join(shared.results, `${repo}-${n}.md`), '--lock', lock,
+      alpha.prompts, beta.prompts]).on('exit', done));
+    const codes = await Promise.all([1, 2, 3, 4, 5, 6].map((n) => start(n % 2 ? 'alpha' : 'beta', n)));
+    assert.deepEqual(codes.sort(), [0, 1, 1, 1, 1, 1], `round ${round}`);
+    // The run that started and the one that reserved the slot; the refused starts left no file.
+    assert.equal(readdirSync(alpha.prompts).length + readdirSync(beta.prompts).length, 2, `round ${round}`);
+  }
 });
 
 test('precheck: an issue that several projects list starts in none of them', () => {
