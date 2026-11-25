@@ -20,7 +20,7 @@ graders:
   - type: regex
     name: package-json-kept
     target: {source: file, path: package.json}
-    pattern: '"vitest"'
+    pattern: '^\{ "type": "module", "devDependencies": \{ "vitest": "\^3\.2\.0" \} \}\n$'
   - type: regex
     name: names-the-dependency
     pattern: 'vitest'
