@@ -40,6 +40,7 @@ test('rules block: check.sh fails the untouched fixture and passes only a run th
   assert.deepEqual(check(good, 'Done. src/format.js:5 legacyPad has no caller: a maintenance pass item.\n'), { status: 0, failed: [] });
   assert.deepEqual(check(good, "Done. legacyPad in src/format.js isn't used anywhere; left as is.\n"), { status: 0, failed: [] });
   assert.deepEqual(check(good, 'Done.\n\nDead code outside the task (not changed):\n- src/format.js:5 legacyPad\n'), { status: 0, failed: [] });
+  assert.deepEqual(check(good, 'Done. legacyPad is unused; formatCount is used by the report.\n'), { status: 0, failed: [] });
 
   // README.md emptied and legacyPad's body changed, though the answer names it.
   const partial = workspace();
@@ -55,6 +56,10 @@ test('rules block: check.sh fails the untouched fixture and passes only a run th
   assert.deepEqual(check(mentioned, 'Done. I left src/format.js and legacyPad alone.\n'), { status: 1, failed: ['outside-dead-code-reported-not-changed'] });
   assert.deepEqual(check(mentioned, 'Done. legacyPad looked dead, but src/report.js calls it, so it stays.\n'), { status: 1, failed: ['outside-dead-code-reported-not-changed'] });
   assert.deepEqual(check(mentioned, 'Done. Removed formatDuration, which is no longer used.\nlegacyPad stays.\n'), { status: 1, failed: ['outside-dead-code-reported-not-changed'] });
+  assert.deepEqual(check(mentioned, 'Done. legacyPad is not dead code; the report calls it.\n'), { status: 1, failed: ['outside-dead-code-reported-not-changed'] });
+  assert.deepEqual(check(mentioned, 'Done. formatCount is unused.\nlegacyPad remains unchanged.\n'), { status: 1, failed: ['outside-dead-code-reported-not-changed'] });
+  assert.deepEqual(check(mentioned, 'Done.\n\nDead code outside the task:\n- legacyPad is used by report.\n'), { status: 1, failed: ['outside-dead-code-reported-not-changed'] });
+  assert.deepEqual(check(mentioned, 'Done. legacyPad is dead code, but report() calls legacyPad.\n'), { status: 1, failed: ['outside-dead-code-reported-not-changed'] });
 
   const broken = workspace();
   solve(broken, 'Durations print as hours and minutes.');
