@@ -78,7 +78,34 @@ export const originRepo = (dir, run, env = process.env) => {
   return repo;
 };
 
-// { tracker, numbers }: the repository that holds the project's issues and the pickable ones; no tracker is read without a startLabel.
+// GitHub's Priority issue field, highest first; an issue without it, or with another option, comes after Low.
+const PRIORITIES = ['urgent', 'high', 'medium', 'low'];
+const rank = (option) => {
+  const i = PRIORITIES.indexOf(option?.toLowerCase());
+  return i < 0 ? PRIORITIES.length : i;
+};
+
+// { <number>: <option> }: the Priority issue field of each of the numbered issues of repo, read through GraphQL since the REST issue carries no issue fields. An API without issue fields (a schema error that names them) gives {}, so the order stays oldest first; any other failure throws. exec(cmd, args) gives stdout or throws.
+export function priorities(repo, numbers, exec) {
+  if (!numbers.length) return {};
+  const [owner, name] = repo.split('/');
+  const fields = 'issueFieldValues(first: 50) { nodes { ... on IssueFieldSingleSelectValue { name field { ... on IssueFieldSingleSelect { name } } } } }';
+  const query = `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${numbers.map((n) => `i${n}: issue(number: ${n}) { number ${fields} }`).join(' ')} } }`;
+  let out;
+  try { out = exec('gh', ['api', 'graphql', '-f', `query=${query}`, '-f', `owner=${owner}`, '-f', `name=${name}`]); } catch (e) {
+    // stderr, not the message, which quotes the query.
+    if (/issueField/i.test(String(e.stderr ?? ''))) return {};
+    throw e;
+  }
+  const found = {};
+  for (const issue of Object.values(JSON.parse(out).data.repository)) {
+    const value = (issue?.issueFieldValues?.nodes ?? []).find((v) => v.field?.name?.toLowerCase() === 'priority');
+    if (value) found[issue.number] = value.name;
+  }
+  return found;
+}
+
+// { tracker, numbers, priority }: the repository that holds the project's issues, the pickable ones and their Priority field; no tracker is read without a startLabel.
 function picks(dir, run, env, queue) {
   const { policy, errors, warnings = [] } = read(dir, run);
   // Thrown, so the command line names the project and why nothing starts there, as it does for a failed command.
@@ -97,7 +124,8 @@ function picks(dir, run, env, queue) {
   const held = waiting(repo, asked, queue(), writes);
   // An answer that names no single option row holds its issue too: the line says why it is not picked.
   const said = [...held].sort((a, b) => a - b).map((n) => ({ rule: 'question', message: `a question without an answer that releases it holds ${repo}#${n}` }));
-  return { tracker: repo, numbers: pickable(policy, issues, pulls, writes, held), warnings: [...warnings, ...said] };
+  const numbers = pickable(policy, issues, pulls, writes, held);
+  return { tracker: repo, numbers, priority: priorities(repo, numbers, (cmd, args) => run(dir, cmd, args)), warnings: [...warnings, ...said] };
 }
 
 // queue() lists the local questions as approval.mjs queue does.
@@ -149,7 +177,7 @@ export function unread(folder, now = Date.now()) {
   return found;
 }
 
-// What the command line prints and its exit code: { out, err, code }. pick(dir) gives a project's { tracker, numbers, warnings } or throws why nothing starts there; results are the lines on unread results, each of which starts the run.
+// What the command line prints and its exit code: { out, err, code }. pick(dir) gives a project's { tracker, numbers, priority, warnings } or throws why nothing starts there; results are the lines on unread results, each of which starts the run.
 export function report(dirs, pick, results = []) {
   const found = [], err = [];
   for (const dir of dirs) {
@@ -162,8 +190,9 @@ export function report(dirs, pick, results = []) {
   const { lists, shared } = distinct(found);
   for (const { tracker, number, dirs: listing } of shared) err.push(`several projects: ${tracker}#${number} (${listing.join(', ')})`);
   err.push(...results);
-  // Oldest first, which is the lowest number.
-  const out = lists.filter(({ numbers }) => numbers.length).map(({ dir, numbers }) => `${dir}: ${[...numbers].sort((a, b) => a - b).map((n) => `#${n}`).join(' ')}`);
+  // By Priority, then oldest first, which is the lowest number; each number with a level is followed by it from PRIORITIES, never the field's own text.
+  const level = (option) => (rank(option) < PRIORITIES.length ? ` (${PRIORITIES[rank(option)]})` : '');
+  const out = lists.filter(({ numbers }) => numbers.length).map(({ dir, numbers, priority = {} }) => `${dir}: ${[...numbers].sort((a, b) => rank(priority[a]) - rank(priority[b]) || a - b).map((n) => `#${n}${level(priority[n])}`).join(' ')}`);
   return { out: out.map((line) => escaped(line)), err: err.map((line) => escaped(line)), code: out.length || results.length ? 0 : 1 };
 }
 
