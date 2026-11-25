@@ -276,7 +276,7 @@ export function report(dirs, pick, results = []) {
   return { out: out.map((line) => escaped(line)), err: err.map((line) => escaped(line)), code: out.length || results.length ? 0 : 1 };
 }
 
-// { dirs, prompts }: the project paths and the prompts folder; another option fails, so an old schedule's arguments are not read as a path.
+// { dirs, prompts }: the project paths and the prompts folder; another option fails instead of being read as a path.
 export function argsOf(argv) {
   const { values, positionals } = parseArgs({ args: argv, options: { prompts: { type: 'string' } }, allowPositionals: true });
   return { dirs: positionals, prompts: values.prompts };

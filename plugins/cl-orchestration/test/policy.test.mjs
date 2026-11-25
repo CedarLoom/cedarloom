@@ -295,7 +295,7 @@ test('policy: a repository whose own git config redirects origin or runs a comma
     assert.deepEqual(rules(errors), [['unreadable', '']], config[0]);
     assert.equal(existsSync(marker), false, config[0]);
   }
-  // Origin as the promisor is the blobless scratch clone, in the older spelling too.
+  // Origin as the promisor is the blobless scratch clone, also when extensions.partialClone names it.
   assert.equal(read(project()('extensions.partialclone', 'origin')).policy.startLabel, 'go');
   // The user's config can name such a remote as well: the scope does not matter.
   const userConfig = join(mkdtempSync(join(tmpdir(), 'cl-policy-')), 'gitconfig');
