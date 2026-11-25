@@ -22,7 +22,7 @@ graders:
     pattern: 'raise the run limit to 6'
   - type: regex
     name: old-value
-    pattern: 'maxRuns[^0-9\n]{0,40}\b4\b'
+    pattern: 'maxRuns[^0-9\n]{0,40}(?<![~^])\b4\b|(?<![~^])\b4\b[^0-9\n]{0,15}maxRuns'
   - type: regex
     name: cites-git
     pattern: 'git (log|show|diff)'
