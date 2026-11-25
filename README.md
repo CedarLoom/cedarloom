@@ -11,7 +11,7 @@ CedarLoom gives Claude Code a workflow: it sizes the planning, checks and review
 
 ## Requirements
 
-- [Claude Code](https://code.claude.com/docs/en/setup) 2.1.323 or later, the minimum for every CedarLoom feature.
+- [Claude Code](https://code.claude.com/docs/en/setup) 2.1.330 or later, the minimum for every CedarLoom feature.
 - [Node.js](https://nodejs.org/) on the PATH: the plugins' hooks run `node`. CI runs the plugin tests on Node.js 22.
 - Git and the [GitHub CLI](https://cli.github.com/) (`gh`), for setting up repositories and coordinating issue work.
 - For `cl-orchestration`: [Orca](https://github.com/stablyai/orca) 1.4.259 or later ([release](https://github.com/stablyai/orca/releases/tag/v1.4.259)), which runs each worker in a terminal of its own. The coordinator starts workers only through Orca and reads its `orchestration` guide with `orca skills get orchestration`.

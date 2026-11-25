@@ -49,8 +49,8 @@ jobs:
       - name: Claude Code version
         run: |
           rc=0
-          git grep -nIP '(?<![\d.])2\.1\.(?!323(?!\d))\d+' -- . ':!*CHANGELOG.md' ':!.github/claude-code' ':!*.test.*' ':!*/test/*' ':!.github/workflows' ':!*package-lock.json' ':!*package.json' || rc=$?
-          if [ "$rc" -eq 0 ]; then echo "::error::a Claude Code version other than the minimum 2.1.323 found"; exit 1; fi
+          git grep -nIP '(?<![\d.])2\.1\.(?!330(?!\d))\d+' -- . ':!*CHANGELOG.md' ':!.github/claude-code' ':!*.test.*' ':!*/test/*' ':!.github/workflows' ':!*package-lock.json' ':!*package.json' || rc=$?
+          if [ "$rc" -eq 0 ]; then echo "::error::a Claude Code version other than the minimum 2.1.330 found"; exit 1; fi
           if [ "$rc" -ne 1 ]; then echo "::error::git grep failed ($rc)"; exit 1; fi
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -76,7 +76,7 @@ jobs:
       - name: Token budget
         run: node plugins/*/skills/debloat/token-budget.mjs check --budget-only
 
-  # Each plugin as Claude Code reads it: manifest and skill front matter (strict), the marketplace file, the mod tests, an install of each plugin. Claude Code is pinned by `.github/claude-code/package-lock.json` (the `stable` tag of its npm package); bump it by hand.
+  # Each plugin as Claude Code reads it: manifest and skill front matter (strict), the marketplace file, the mod tests, an install of each plugin. Claude Code is pinned by `.github/claude-code/package-lock.json` at the minimum in the README's Requirements, which `engines` in each `.claude-plugin/plugin.json` declares; bump it by hand.
   plugin-checks:
     if: github.repository == 'CedarLoom/cedarloom'
     runs-on: ubuntu-latest
