@@ -68,7 +68,7 @@ Only the coordinator's session runs with `CEDARLOOM_ROLE=coordinator` ([how to s
 
 ### Bot roles
 
-A bot role in `CEDARLOOM_ROLE` (`env` in its home's `.claude/settings.json`) guards a session like any other and also refuses what its procedure does not need, for its subagents too. Any other set value (empty, misspelled, `builder`, `worker-bot`) runs and writes nothing. No role, the coordinator included, runs `gh pr merge --admin`; the merge endpoints are not read for it.
+A bot role in `CEDARLOOM_ROLE` (`env` in its home's `.claude/settings.json`) guards a session like any other and also refuses what its procedure does not need, for its subagents too. Any other set value (empty, misspelled, `builder`, `worker-bot`) runs and writes nothing. No role, the coordinator included, runs `gh pr merge --admin` (the merge endpoints are not read for it) or `git commit --no-verify`, which skips the commit hooks, in any spelling git takes: `-n`, grouped with other short options (`-an`, `-nm <message>`), or a prefix such as `--no-veri`, anywhere before `--`.
 
 | `CEDARLOOM_ROLE` | Also refused |
 |---|---|
