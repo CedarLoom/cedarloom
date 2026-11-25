@@ -149,9 +149,9 @@ test('precheck: the command line prints no issue that several projects list, nam
   assert.deepEqual(report(['/a'], () => ({ tracker: 'owner/project', numbers: [], warnings: [{ rule: 'refused', path: 'issues.repository', message: 'is refused' }] })), { out: [], err: ['/a: refused at issues.repository: is refused'], code: 1 });
 });
 
-test('precheck: prints the issues by Priority, Urgent to Low and then none, oldest first within a level', () => {
+test('precheck: prints the issues by Priority, Urgent to Low and then none, oldest first within a level, each with its level', () => {
   const priority = { 3: 'Low', 8: 'Urgent', 9: 'high', 12: 'Medium', 14: 'High', 15: 'Someday' };
-  assert.deepEqual(report(['/a'], () => ({ tracker: 'owner/project', numbers: [15, 14, 12, 9, 8, 5, 3], priority })).out, ['/a: #8 #9 #14 #12 #3 #5 #15']);
+  assert.deepEqual(report(['/a'], () => ({ tracker: 'owner/project', numbers: [15, 14, 12, 9, 8, 5, 3], priority })).out, ['/a: #8 (urgent) #9 (high) #14 (high) #12 (medium) #3 (low) #5 #15']);
 });
 
 test('precheck: reads the Priority field through GraphQL, and an issue without it or an API without issue fields has none', () => {

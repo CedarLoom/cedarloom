@@ -190,8 +190,9 @@ export function report(dirs, pick, results = []) {
   const { lists, shared } = distinct(found);
   for (const { tracker, number, dirs: listing } of shared) err.push(`several projects: ${tracker}#${number} (${listing.join(', ')})`);
   err.push(...results);
-  // By Priority, then oldest first, which is the lowest number.
-  const out = lists.filter(({ numbers }) => numbers.length).map(({ dir, numbers, priority = {} }) => `${dir}: ${[...numbers].sort((a, b) => rank(priority[a]) - rank(priority[b]) || a - b).map((n) => `#${n}`).join(' ')}`);
+  // By Priority, then oldest first, which is the lowest number; each number with a level is followed by it from PRIORITIES, never the field's own text.
+  const level = (option) => (rank(option) < PRIORITIES.length ? ` (${PRIORITIES[rank(option)]})` : '');
+  const out = lists.filter(({ numbers }) => numbers.length).map(({ dir, numbers, priority = {} }) => `${dir}: ${[...numbers].sort((a, b) => rank(priority[a]) - rank(priority[b]) || a - b).map((n) => `#${n}${level(priority[n])}`).join(' ')}`);
   return { out: out.map((line) => escaped(line)), err: err.map((line) => escaped(line)), code: out.length || results.length ? 0 : 1 };
 }
 
