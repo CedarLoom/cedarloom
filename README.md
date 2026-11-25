@@ -14,7 +14,8 @@ CedarLoom gives Claude Code a workflow: it sizes the planning, checks and review
 - [Claude Code](https://code.claude.com/docs/en/setup) 2.1.323 or later, the minimum for every CedarLoom feature.
 - [Node.js](https://nodejs.org/) on the PATH: the plugins' hooks run `node`. CI runs the plugin tests on Node.js 22.
 - Git and the [GitHub CLI](https://cli.github.com/) (`gh`), for setting up repositories and coordinating issue work.
-- For `cl-orchestration`: [Orca](https://github.com/stablyai/orca) 1.4.259 or later ([release](https://github.com/stablyai/orca/releases/tag/v1.4.259)), which runs each worker in a terminal of its own. The coordinator starts workers only through Orca and reads its `orchestration` guide with `orca skills get orchestration`. Run unattended workers in Claude Code's [sandbox](https://code.claude.com/docs/en/sandboxing) or a dev container with a network allow-list: it limits what a misled worker can reach or send.
+- For `cl-orchestration`: [Orca](https://github.com/stablyai/orca) 1.4.259 or later ([release](https://github.com/stablyai/orca/releases/tag/v1.4.259)), which runs each worker in a terminal of its own. The coordinator starts workers only through Orca and reads its `orchestration` guide with `orca skills get orchestration`.
+- An isolated environment for unattended CedarLoom work: a dedicated machine or VM you can restore, or a [dev container](https://code.claude.com/docs/en/devcontainer), with tokens scoped to the repositories and rights the work needs. CedarLoom does not support the Claude Code sandbox yet.
 
 ## Install
 

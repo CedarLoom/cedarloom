@@ -162,4 +162,4 @@ Every switch except one environment variable is a Claude Code setting: in `.clau
 | Unresolved review threads | `thread.mjs --pull` writes each thread a trusted author opened, with its trusted comments, and counts the rest; the reviewer's brief and the worker's follow-up carry it. Access counts in the project's repository |
 | Any other comment or review | not passed: the spec and `rules/worker.md` tell workers and reviewers to read none themselves |
 
-Run unattended workers in a sandbox or a dev container with a network allow-list ([Requirements](../README.md#requirements)).
+Run unattended CedarLoom work only in an isolated environment: a dedicated machine or VM you can restore, or a [dev container](https://code.claude.com/docs/en/devcontainer), with scoped tokens. CedarLoom does not support the Claude Code sandbox yet ([Requirements](../README.md#requirements)).

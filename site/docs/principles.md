@@ -43,6 +43,6 @@ flowchart LR
   A -->|no, or lookup failed| X[Left out and counted]
 ```
 
-Text from an issue, a pull request or a worker's message never becomes part of a command the coordinator types. Run unattended workers in a sandbox or a dev container with a network allow-list: it limits what a misled worker can reach or send.
+Text from an issue, a pull request or a worker's message never becomes part of a command the coordinator types. Run unattended CedarLoom work only in an isolated environment: a dedicated machine or VM you can restore, or a [dev container](https://code.claude.com/docs/en/devcontainer), with scoped tokens. It limits what a misled worker can reach or send. CedarLoom does not support the Claude Code sandbox yet.
 
 Details: [untrusted input](https://github.com/CedarLoom/cedarloom/blob/main/docs/plugins.md#untrusted-input), [repository rules](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-repo/rules/project.md).
