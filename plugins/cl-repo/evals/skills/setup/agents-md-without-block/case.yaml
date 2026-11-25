@@ -1,0 +1,34 @@
+schema_version: "1.1"
+name: skill-setup-agents-md-without-block
+description: 'A committed AGENTS.md without the CedarLoom block gets nothing merged unasked: the plan lists the differences as choices, puts the block in an ignored CLAUDE.local.md and leaves CLAUDE.md as it is. Constructed: plugins/cl-repo/skills/setup/SKILL.md, sections "3. The CedarLoom block" and "4. AGENTS.md and CLAUDE.md". Needs --scaffold.'
+tags: [cl-repo, skill-setup]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-repo:setup
+
+    Answers known before the run: Claude Code is the only agent used here, and it has the cl-workflow plugin installed; the cl-orchestration plugin is not installed. The agent runs on the host with no container (`host`). The stack is Node.js 22 with `node --test`. Terminal questions are off: put every other question with your recommendation into the plan and stop before Apply.
+  max_turns: 40
+  allowed_tools: [Bash]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: plans-local-block
+    pattern: 'CLAUDE\.local\.md'
+  - type: llm
+    name: merges-nothing-unasked
+    criteria: 'The plan writes no CedarLoom block and no rule into the committed AGENTS.md on its own: it lists the differences between the block and AGENTS.md as choices for the user (with a recommendation), puts the block in CLAUDE.local.md kept out of git, and proposes no change to CLAUDE.md.'
+  - type: file_exists
+    name: writes-nothing
+    path: '**'
+    exists: false
+  - type: regex
+    name: agents-md-unchanged
+    target: { source: file, path: AGENTS.md }
+    pattern: '- Keep functions short\.\n$'
+  - type: regex
+    name: claude-md-unchanged
+    target: { source: file, path: CLAUDE.md }
+    pattern: '^# CLAUDE\.md\n\nAnswer in English\.\n$'
+expected_outcome: 'A plan with the block in CLAUDE.local.md (excluded from git), the AGENTS.md differences as choices, CLAUDE.md unchanged; no file written.'

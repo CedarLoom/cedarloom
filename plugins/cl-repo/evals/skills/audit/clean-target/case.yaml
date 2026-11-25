@@ -1,0 +1,26 @@
+schema_version: "1.1"
+name: skill-audit-clean-target
+description: 'The audit of a doc that matches its code reports it clean in one line and manufactures no finding. Constructed: plugins/cl-repo/skills/audit/SKILL.md:19 and 22. Needs --scaffold.'
+tags: [cl-repo, skill-audit]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-repo:audit docs/usage.md
+  max_turns: 25
+  allowed_tools: [Bash]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: says-clean
+    pattern: 'clean'
+    flags: i
+  - type: regex
+    name: no-numbered-finding
+    pattern: '^\s*1\.\s+\S+:\d+'
+    flags: m
+    match: not_contains
+  - type: llm
+    name: no-manufactured-finding
+    criteria: 'The report calls docs/usage.md clean and lists no finding for it (no Must fix, Should fix or Nice to have item).'
+expected_outcome: 'A one-line report that docs/usage.md is clean.'

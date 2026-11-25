@@ -1,0 +1,52 @@
+schema_version: "1.1"
+name: skill-improve-one-diff-per-finding
+description: 'improve turns an audit report into one numbered diff per rewrite and add finding, leaves the remove finding to debloat and applies nothing before approval. Constructed: plugins/cl-repo/skills/improve/SKILL.md:19, 26 and 31. Needs --scaffold.'
+tags: [cl-repo, skill-improve]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-repo:improve docs
+
+    The audit of this target, from earlier in this conversation (no file changed since):
+
+    Audit of docs: 3 files, 180 tokens
+
+    Must fix
+    1. docs/config.md:7 wrong, rewrite, confidence high
+       "| `maxDepth` | `8` | how many folder levels tally walks into |"
+       Why: src/config.js:1 sets `maxDepth: 4`; a user who relies on 8 gets shallower counts.
+    Should fix
+    2. docs/install.md:3-5 duplicate, remove, confidence high
+       "1. Install Node.js 22. ... 3. Run `tally --version` to check the install."
+       Why: README.md:7-9 holds the same steps; the two copies drift apart.
+    3. README.md:3 missing, add, confidence medium
+       "Tally counts the lines of code per language in a folder and prints a table."
+       Why: no doc says how to start it; src/config.js is the `bin` in package.json:1 but no command line is shown.
+    Protected, flagged only: none
+    Not checked: src/
+    The findings are suggestions; no file changed.
+  max_turns: 20
+  allowed_tools: [Edit, Write, Bash]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: rewrite-diff-uses-code-value
+    pattern: '`maxDepth` \| `4`'
+  - type: regex
+    name: remove-left-to-debloat
+    pattern: '/cl-repo:debloat'
+  - type: llm
+    name: one-diff-per-finding
+    criteria: 'The answer shows one diff for finding 1 (docs/config.md) and one for finding 3 (README.md), numbered 1 and 3, no diff for finding 2, which it lists for /cl-repo:debloat, and asks which diffs to apply.'
+  - type: tool_used
+    name: applies-nothing-unapproved
+    tool: Edit
+    min: 0
+    max: 0
+  - type: tool_used
+    name: writes-nothing-unapproved
+    tool: Write
+    min: 0
+    max: 0
+expected_outcome: 'Diff 1 sets the documented maxDepth default to 4, diff 3 adds a usage line to README.md, finding 2 is listed for /cl-repo:debloat, and the answer asks which diffs to apply; no file changed.'

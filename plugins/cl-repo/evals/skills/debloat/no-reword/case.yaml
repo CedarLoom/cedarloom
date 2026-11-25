@@ -1,0 +1,35 @@
+schema_version: "1.1"
+name: skill-debloat-no-reword
+description: 'Asked to shorten a sentence, debloat rewords nothing and names the change as a finding for /cl-repo:improve. Constructed: plugins/cl-repo/skills/debloat/SKILL.md:17. Needs --scaffold.'
+tags: [cl-repo, skill-debloat]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-repo:debloat docs/setup.md
+
+    Line 3 is too long: shorten that sentence to half its length. Approved in advance, as my answer to each question of this run: the protect list you show, and every cut whose dry run shows no error. Apply them without asking, then report. Do not write a baseline.
+  max_turns: 30
+  allowed_tools: [Bash, Write]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: sentence-unchanged
+    target: { source: file, path: docs/setup.md }
+    pattern: 'To set up the project on a new machine you should first make sure that you have Node\.js 22 installed, and once you have it you can run `npm ci` in the root folder of the repository, which installs every dependency from the lockfile\.'
+  - type: regex
+    name: points-to-improve
+    pattern: '/cl-repo:improve'
+  - type: tool_used
+    name: never-writes-the-doc
+    tool: Write
+    input_match: 'docs/setup\.md'
+    min: 0
+    max: 0
+  - type: tool_used
+    name: no-in-place-rewrite
+    tool: Bash
+    input_match: 'sed -i|perl -pi|> *docs/setup\.md'
+    min: 0
+    max: 0
+expected_outcome: 'docs/setup.md unchanged; the report names the shorter wording as a finding for /cl-repo:improve.'

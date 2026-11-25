@@ -1,0 +1,34 @@
+schema_version: "1.1"
+name: skill-setup-no-orchestration-plugin
+description: 'Without the cl-orchestration plugin, the setup plan proposes no coordinator policy file and no labels, and still plans AGENTS.md with the block (from CedarLoom/cedarloom#72). Needs --scaffold.'
+tags: [cl-repo, skill-setup]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-repo:setup
+
+    Answers known before the run: Claude Code is the only agent used here, and it has the cl-workflow plugin installed; the cl-orchestration plugin is not installed. The agent runs on the host with no container (`host`). The stack is Node.js 22 with `node --test`. Terminal questions are off: put every other question with your recommendation into the plan and stop before Apply.
+
+    The hosted repository is not reachable from this workspace. `.recorded/labels.json` is the output of `gh label list -R tally-org/tally --limit 1000 --json name`, and `.recorded/issue-templates.txt` the owner's issue template lookup. Read them instead of running gh.
+  max_turns: 40
+  allowed_tools: [Bash]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: plans-block-in-agents-md
+    pattern: 'cedarloom start'
+  - type: llm
+    name: no-policy-no-labels
+    criteria: 'The plan proposes no docs/agents/orchestration.json, no docs/agents/worker-rules.md and no label to create; naming them as skipped because the cl-orchestration plugin is not installed is fine.'
+  - type: file_exists
+    name: writes-nothing
+    path: '**'
+    exists: false
+  - type: tool_used
+    name: creates-no-label
+    tool: Bash
+    input_match: 'gh label create'
+    min: 0
+    max: 0
+expected_outcome: 'A plan with AGENTS.md (block) and CLAUDE.md, the policy file and the labels skipped because cl-orchestration is not installed; no file written.'

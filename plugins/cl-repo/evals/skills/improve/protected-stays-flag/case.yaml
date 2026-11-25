@@ -1,0 +1,44 @@
+schema_version: "1.1"
+name: skill-improve-protected-stays-flag
+description: 'improve writes no rewording for a Never rule without the user giving the new wording, and still writes the diff for an ordinary vague rule. Constructed: plugins/cl-repo/skills/improve/SKILL.md:17. Needs --scaffold.'
+tags: [cl-repo, skill-improve]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-repo:improve AGENTS.md
+
+    The audit of this target, from earlier in this conversation (no file changed since):
+
+    Audit of AGENTS.md: 1 file, 40 tokens
+
+    Should fix
+    1. AGENTS.md:6 vague, rewrite, confidence medium
+       "- Never deploy carelessly."
+       Why: names no command or condition; deploy.sh:2 deploys main to production with no check.
+    2. AGENTS.md:7 vague, rewrite, confidence medium
+       "- Write good commit messages."
+       Why: names no format an agent can follow or check.
+    Protected, flagged only: 1
+    Not checked: none
+    The findings are suggestions; no file changed.
+  max_turns: 15
+  allowed_tools: [Edit, Write]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: llm
+    name: never-rule-only-flagged
+    criteria: 'The answer proposes no diff that changes or removes AGENTS.md line 6 ("Never deploy carelessly."); it reports finding 1 as flagged or protected and, at most, asks the user for the new wording.'
+  - type: llm
+    name: ordinary-rule-gets-diff
+    criteria: 'The answer shows a diff for finding 2 that replaces "Write good commit messages." in AGENTS.md with a concrete, checkable rule, and asks which diffs to apply.'
+  - type: tool_used
+    name: applies-nothing-unapproved
+    tool: Edit
+    min: 0
+    max: 0
+  - type: regex
+    name: never-rule-kept
+    target: { source: file, path: AGENTS.md }
+    pattern: '- Never deploy carelessly\.'
+expected_outcome: 'Finding 1 stays a flag (no diff for the Never rule), finding 2 gets one diff, and the answer asks before applying.'
