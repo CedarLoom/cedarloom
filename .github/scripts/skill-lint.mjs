@@ -48,6 +48,9 @@ export function lintSkill(dir) {
   if (!/^".*"$/.test(fm.description ?? '')) errors.push(`${skillFile}: description must be in double quotes`);
   else if (fm.description.length - 2 > 1024) errors.push(`${skillFile}: description longer than 1024 characters`);
   if (text.split('\n').length > 500) errors.push(`${skillFile}: more than 500 lines`);
+  // Hidden from the / menu and closed to the model: nobody can start it (https://code.claude.com/docs/en/skills).
+  if (fm['user-invocable'] === 'false' && fm['disable-model-invocation'] === 'true')
+    errors.push(`${skillFile}: user-invocable: false with disable-model-invocation: true leaves no way to start the skill`);
   const files = markdownFiles(dir);
   const all = files.map((f) => readFileSync(f, 'utf8')).join('\n');
   if (/\bworkers?\b/i.test(all) && HANDS_TEXT.test(all) && !AUTHOR_FILTER.every((re) => re.test(all)))
@@ -121,12 +124,8 @@ const BUDGETS = [
 
 // Files that were over their hard cap when the budgets began, capped at that size: they may shrink, never grow.
 const AT_SIZE = {
-  'plugins/cl-orchestration/skills/coordinate/SKILL.md': 6344,
-  'plugins/cl-orchestration/skills/coordinate/SOUL.md': 1412,
-  'plugins/cl-orchestration/skills/coordinate/bot-project.md': 2064,
-  'plugins/cl-orchestration/skills/coordinate/orca.md': 9008,
-  'plugins/cl-orchestration/skills/coordinate/review-and-merge.md': 6459,
-  'plugins/cl-repo/rules/project.md': 915,
+  'plugins/cl-orchestration/skills/coordinate/bot-project.md': 2207,
+  'plugins/cl-repo/rules/project.md': 914,
   'plugins/cl-workflow/agents/review.md': 715,
   'plugins/cl-workflow/skills/workflow/SKILL.md': 1869,
   'plugins/cl-workflow/skills/workflow/software.md': 1155,

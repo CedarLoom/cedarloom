@@ -31,6 +31,42 @@ test('dispatch guard: an Orca dispatch that hands a session /cl-workflow:away of
   assert.equal(decision('orca.exe orchestration send --to dispatch:d1 --body "/questions"', 'PowerShell'), 'deny');
 });
 
+// The commands as written: String.raw keeps the backslashes of the shell's escapes.
+const raw = String.raw;
+
+test('dispatch guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh do, and quotes joined into the name of Orca', () => {
+  const dispatched = [
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\x20off'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\040off'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\u0020off'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\toff'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\cIoff'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\C-ioff'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\Cioff'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away\C\x69off'`,
+    // zsh hands a program each word up to its first NUL.
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:awa\y off\0x'`,
+    raw`orca orchestration send --to dispatch:d1 --body "/cl-workflow:away"$'\x20off'`,
+    raw`orca orchestration worker-start --spec $'/cl-workflow:\x71uestions'`,
+    raw`$'\x6frca' orchestration send --to dispatch:d1 --body /questions`,
+    // zsh reads \c as a plain c.
+    raw`$'or\ca' orchestration send --to dispatch:d1 --body /questions`,
+    raw`o""rca orchestration send --to dispatch:d1 --body /questions`,
+    // bash 3.2's \c takes one backslash of \c\\, so the second starts an escape of its own.
+    raw`bash -c $'\c\\x3b\x6frca orchestration send --body "/cl-workflow:away off"'`,
+    raw`eval $'\c\\norca orchestration send --body "/cl-workflow:away off"'`,
+    raw`bash -c $'\c\\073orca orchestration send --body "/cl-workflow:away off"'`,
+    raw`bash -c $'\c\\\\\\x3b\x6frca orchestration send --body "/cl-workflow:away off"'`,
+    raw`bash -c $'echo a\c\\x3b\x6frca orchestration send --body "/cl-workflow:away off"'`,
+  ];
+  for (const command of dispatched) assert.equal(decision(command), 'deny', command);
+  const passed = [
+    raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away 2h\n'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'run the questions skill\x21'`,
+  ];
+  for (const command of passed) assert.equal(decision(command), 'none', command);
+});
+
 test('dispatch guard: other Orca commands and commands that only name the queue command pass', () => {
   const passed = [
     'orca orchestration worker-start --spec-file spec.md --terminal t1 --json',
