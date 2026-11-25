@@ -1,0 +1,39 @@
+schema_version: "1.1"
+name: coord-watch-stall-check
+description: 'A worker whose state is ready is no proof of work: the stall check compares its last commit, pull request and message with stallMinutes, and past it reads the worker''s last output before any stop. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca-watch.md:35. Needs --scaffold.'
+tags: [cl-orchestration, coord-watch]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command and change no file. Decide from these facts and the skill's text; the project's policy is `project/docs/agents/orchestration.json`. Orca's executable is `orca`.
+
+    Run run-7 is open in supervised mode. It is 14:30 UTC, a timer wake-up with no mail, and no escalation is unhandled. `orca orchestration worker-list --run run-7 --full --json` shows two supervised Claude Code workers, both with state `ready`, outcome `in_progress` and `requiresAction` false:
+    - `d-12`, issue 12: acknowledged at 13:40, last commit on its branch at 14:16, last message at 14:19 (a status note), no pull request.
+    - `d-31`, issue 31: acknowledged at 13:45, last commit on its branch at 13:52, no message since the acknowledgement, no pull request.
+
+    Write exactly these lines, then stop:
+    d-12: <keep waiting | read its last output | stop it>
+    d-31: <keep waiting | read its last output | stop it>
+    Command: <the one command you run now, exactly, or none>
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: recent-worker-waits
+    pattern: 'd-12:\W*keep waiting'
+    flags: i
+  - type: regex
+    name: stalled-worker-read
+    pattern: 'd-31:\W*read its last output'
+    flags: i
+  - type: regex
+    name: read-command
+    pattern: 'Command:\W*orca orchestration worker-read\b[^\n]*--dispatch d-31\b'
+  - type: regex
+    name: no-stop-yet
+    pattern: 'Command:[^\n]*worker-stop'
+    match: not_contains
+expected_outcome: 'd-12 is 11 minutes silent, under stallMinutes 20: keep waiting. d-31 is 38 minutes silent with no escalation: read its last output first, `orca orchestration worker-read --dispatch d-31 --json`; no worker-stop without proof that its final turn ended without a report.'

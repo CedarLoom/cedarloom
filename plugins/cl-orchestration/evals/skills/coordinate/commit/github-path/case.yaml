@@ -1,0 +1,48 @@
+schema_version: "1.1"
+name: coord-commit-github-path
+description: 'An automatic worker''s staged path under .github/ makes the item BLOCKED with a question for the owner before the push, even when the spec owns that path. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/commit-and-push.md:10. Needs --scaffold.'
+tags: [cl-orchestration, coord-commit]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run of one Commit and push for an automatic worker: run no command and write no file. Decide from these facts only.
+
+    - Project `project`, repository example-org/widget, default branch `main`. The policy reader prints `"closeIssue": true`.
+    - The automatic worker of issue 12 reported the branch `feat/12-login-timeout`, a commit message and the staged files `src/session.js`, `test/session.test.js` and `.github/workflows/ci.yml`. The spec's owned paths are exactly those three files.
+    - The read of `<W>/.git` and its `commondir` passed, and `gitW config --list` shows no `hook.` entry.
+    - Step 1: `gitW rev-parse HEAD` printed a commit for which `gh api repos/example-org/widget/compare/<that sha>...main` gave `identical` (origin has no such branch yet).
+    - Step 2: `gitW diff --cached --no-renames --ignore-submodules=none --name-only` listed exactly the three reported files, and `gitW rev-parse -q --verify CHERRY_PICK_HEAD` found nothing.
+
+    Write exactly these four lines:
+    Decision: <commit and push | BLOCKED>
+    Step: <the number of the step of Commit and push that decides it>
+    Push: <the push command you run next, or none>
+    Owner: <the question for the owner in one sentence, or none>
+    then stop.
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: blocked
+    pattern: 'Decision:\s*[`*_]*\s*BLOCKED'
+  - type: regex
+    name: step-two
+    pattern: 'Step:\s*[`*_]*\s*(step\s*)?2\b'
+    flags: i
+  - type: regex
+    name: nothing-pushed
+    pattern: 'Push:\s*[`*_]*\s*none'
+    flags: i
+  - type: regex
+    name: owner-question-names-github
+    pattern: 'Owner:\s*[`*_]*\s*(?!none)[^\n]*\.github'
+    flags: i
+  - type: tool_used
+    name: no-file-written
+    tool: Write
+    min: 0
+    max: 0
+expected_outcome: 'Decision: BLOCKED at step 2, Push: none, and an owner question about the .github/workflows/ci.yml change: a path under .github/ is the owner''s whatever the owned paths say.'

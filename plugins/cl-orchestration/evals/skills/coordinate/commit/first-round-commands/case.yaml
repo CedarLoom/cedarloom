@@ -1,0 +1,46 @@
+schema_version: "1.1"
+name: coord-commit-first-round-commands
+description: 'After the checks of an automatic worker''s commit pass, the push names the checked sha with the hook-free gitW options, and the first round opens the draft pull request with gh pr create from a body file in the run folder that carries Closes #<number> when closeIssue is true. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/commit-and-push.md:16 (gitW at commit-and-push.md:7). Needs --scaffold.'
+tags: [cl-orchestration, coord-commit]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run of the end of step 3 of Commit and push for an automatic worker: run no command and write no file. Decide from these facts only.
+
+    - Project `project`, repository example-org/widget, default branch `main`. The policy reader prints `"closeIssue": true`. The pull request is not one of an approved pull request list.
+    - Issue 12, branch `feat/12-login-timeout`, first round: origin has no such branch and no pull request exists.
+    - The worker's worktree `<W>` is `../worktrees/widget-12`; the run folder is `.cedarloom/runs/20261125T101500Z-a1b2c3/`.
+    - `gitW config --list` shows no `hook.` entry.
+    - The worker's commit message, written to `.cedarloom/runs/20261125T101500Z-a1b2c3/msg-12.txt`, is the single line `fix: expire idle login sessions`.
+    - Right after `gitW commit -F` on that file, `gitW rev-parse HEAD` printed `3f9c2a7e1b4d5c6f708192a3b4c5d6e7f8091a2b`, and every check of step 3 on that commit passed.
+
+    Write exactly these four lines, each command in full with `gitW` written out:
+    Push: <the exact push command>
+    PR: <the exact command that opens the pull request>
+    PR runs in: <the folder that command runs in>
+    Body: <the lines of the body file, joined with " | ">
+    then stop.
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: hook-free-push-of-checked-sha
+    pattern: 'Push:[^\n]*git --no-replace-objects -C ["'']?\.\./worktrees/widget-12/?["'']? (?=[^\n]*?-c core\.hooksPath=/dev/null [^\n]*?\bpush )(?=[^\n]*?-c core\.fsmonitor=false [^\n]*?\bpush )(?=[^\n]*?-c protocol\.ext\.allow=never [^\n]*?\bpush )[^\n]*\bpush --no-follow-tags --no-recurse-submodules origin 3f9c2a7e1b4d5c6f708192a3b4c5d6e7f8091a2b:refs/heads/feat/12-login-timeout(?=[\s"''`]|$)'
+  - type: regex
+    name: no-head-or-force-push
+    match: not_contains
+    pattern: 'Push:[^\n]*(origin HEAD|--force|\s-f\b|\s\+[0-9a-f])'
+  - type: regex
+    name: draft-pr-from-body-file
+    pattern: 'PR:(?=[^\n]*gh pr create)(?=[^\n]*-R example-org/widget(?=[\s"''`]|$))(?=[^\n]*--draft)(?=[^\n]*--base main(?=[\s"''`]|$))(?=[^\n]*--head feat/12-login-timeout(?=[\s"''`]|$))(?=[^\n]*--title\s+["''`]?[^\s"''`-])(?=[^\n]*--body-file\s+["''`]?(?:\./)?(?:[^\s"''`/]+|[^\s"''`]*\.cedarloom/runs/20261125T101500Z-a1b2c3/[^\s"''`/]+)(?=[\s"''`]|$))'
+  - type: regex
+    name: pr-runs-in-run-folder
+    pattern: 'PR runs in:[^\n]*(run folder|\.cedarloom/runs/20261125T101500Z-a1b2c3)'
+    flags: i
+  - type: regex
+    name: body-closes-issue
+    pattern: 'Body:[^\n]*fix: expire idle login sessions[^\n]*Closes #12\b'
+expected_outcome: 'Push: git --no-replace-objects -C ../worktrees/widget-12 -c core.hooksPath=/dev/null -c core.fsmonitor=false -c protocol.ext.allow=never push --no-follow-tags --no-recurse-submodules origin 3f9c2a7e1b4d5c6f708192a3b4c5d6e7f8091a2b:refs/heads/feat/12-login-timeout; PR: gh pr create -R example-org/widget --draft --base main --head feat/12-login-timeout --title "<own words>" --body-file <file in the run folder>; run in the run folder, never in <W>; the body holds the commit message and Closes #12.'

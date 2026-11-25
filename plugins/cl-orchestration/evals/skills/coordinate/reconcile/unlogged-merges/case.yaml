@@ -1,0 +1,39 @@
+schema_version: "1.1"
+name: coord-reconcile-unlogged-merges
+description: 'A Reconciliation finds each merged pull request without a merge log line of its own merge commit, counts a line of an owner merge as logged, changes nothing on GitHub, and sends the findings to the digest and the report. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/run-files.md:53. Needs --scaffold.'
+tags: [cl-orchestration, coord-reconcile]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command, start nothing and write no file. Decide from the facts below and the files named.
+
+    A run is open in this working directory, and the daily Reconciliation of project (example-org/widget, default branch main) is under way on 2026-11-25. The merge log is `.cedarloom/runs/merge-log.md`. The command of step 1 printed `.cedarloom/runs/r-1125/step-1.json`.
+
+    Write one line `Finding: #<number>: <reason>` for each merged pull request of step 1 that is a finding (or one line `Finding: none`), then these two lines, then stop:
+    Action on GitHub: <what you change on GitHub for these findings, or none>
+    Goes to: <where the findings go>
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: no-line-at-all
+    pattern: 'Finding:\W*#42\b'
+  - type: regex
+    name: line-with-another-commit
+    pattern: 'Finding:\W*#43\b'
+  - type: regex
+    name: logged-merges-are-no-finding
+    pattern: 'Finding:\W*#4[01]\b'
+    match: not_contains
+  - type: regex
+    name: changes-nothing
+    pattern: 'Action on GitHub:\W*none\b'
+    flags: i
+  - type: regex
+    name: digest-and-report
+    pattern: 'Goes to:[^\n]*(digest[^\n]*report|report[^\n]*digest)'
+    flags: i
+expected_outcome: 'Finding: #42 (no merge log line) and Finding: #43 (its line names commit dd61a9b, not its merge commit 9f84ad6). #40 and #41 (merged by widget-maint, logged with `merged by`) are no findings. Action on GitHub: none. Goes to: the digest and the report, for the owner.'

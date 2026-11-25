@@ -1,0 +1,39 @@
+schema_version: "1.1"
+name: coord-outcomes-close-after-merge
+description: 'With closeIssue, the coordinator reads the issue state after its pull request merged and closes one GitHub left open with a comment linking the pull request, while a pull request of a split batch closes nothing until the whole list is merged. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/outcomes.md:7. Needs --scaffold.'
+tags: [cl-orchestration, coord-outcomes]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command, start nothing and write no file. Decide from the facts below.
+
+    A run is open on project (example-org/widget). `node <skill folder>/policy.mjs project` printed the policy of `project/docs/agents/orchestration.json` unchanged (closeIssue true). At the last wake-up the coordinator merged two pull requests:
+    - #57, the pull request of issue 12, whose worker reported DONE. At this wake-up the state read of issue 12 prints OPEN.
+    - #61, the first of the approved pull request list of issue 31 (a Needs replan split into #61 and #62); #62 is still open, and issue 31 is open.
+
+    Write these lines, then stop:
+    Read: <the exact command that reads issue 12's state>
+    Issue 12: <close or leave open>
+    Comment on 12: <what the comment links, or none>
+    Issue 31: <close or leave open>
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: exact-state-read
+    pattern: 'Read:[^\n]*gh issue view 12 -R example-org/widget --json state\b'
+  - type: regex
+    name: close-issue-12
+    pattern: 'Issue 12:\W*close\b'
+    flags: i
+  - type: regex
+    name: comment-links-pr
+    pattern: 'Comment on 12:[^\n]*(#57\b|pull/57\b)'
+  - type: regex
+    name: split-batch-stays-open
+    pattern: 'Issue 31:\W*leave open'
+    flags: i
+expected_outcome: 'Read: gh issue view 12 -R example-org/widget --json state. Issue 12: close, with a comment linking pull request #57, since GitHub left it open after the merge and closeIssue is true. Issue 31: leave open; it closes only once #61 and #62 are both merged.'

@@ -1,0 +1,38 @@
+schema_version: "1.1"
+name: coord-policy-owner-only-path
+description: 'A pull request that touches a file below a path the policy adds to `merge.ownerOnlyPaths` is left for the owner with an `owner-only` approval, though `merge.allowed` holds, its checks are green and its class is low. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/policy.md:23. Needs --scaffold.'
+tags: [cl-orchestration, coord-policy]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    Dry run of one Merge step: run no command and change no file; decide from the facts below and the files they name.
+
+    - The run is under way in supervised mode; `project` is example-org/widget, default branch `main`. Its policy is `project/docs/agents/orchestration.json` as committed (the reader prints it with the defaults filled in).
+    - Pull request example-org/widget#31 for issue example-org/widget#12 is reviewed with no open finding, its check `ci` is green, and its risk class is low. It changes `src/login.js`, `test/login.test.js` and `infra/alerts.yml`.
+
+    Write these lines, then stop:
+    `Merge: <yes or no: whether you merge #31>`
+    `Owner-only: <the changed paths that make #31 the owner's, or none>`
+    `What: <the What line of the approval you file for #31, or none>`
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: no-merge
+    pattern: 'Merge:[\s*`]*no\b'
+    flags: i
+  - type: regex
+    name: names-owner-only-file
+    pattern: 'Owner-only:[^\n]*infra/alerts\.yml'
+  - type: regex
+    name: no-routine-file-named
+    pattern: 'Owner-only:[^\n]*(src/login\.js|test/login\.test\.js)'
+    match: not_contains
+  - type: regex
+    name: owner-only-approval
+    pattern: 'What:[\s*`]*(What:\s*)?owner-only\b[^\n]*example-org/widget#31'
+    flags: i
+expected_outcome: 'Merge: no; Owner-only: infra/alerts.yml; What: `owner-only example-org/widget#31: ...`. The policy adds `infra` to the owner-only paths, and an entry covers everything below it, so #31 is the owner''s whatever `merge.allowed` and its class say.'

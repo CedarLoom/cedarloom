@@ -1,0 +1,48 @@
+schema_version: "1.1"
+name: coord-approvals-later-head-comment
+description: 'A new head of a pull request with a filed merge approval files no new approval: one comment whose first line is `Head: <head>` on the same issue, `cl:needs-human` put back, and the earlier answer void. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/approvals.md:48. Needs --scaffold.'
+tags: [cl-orchestration, coord-approvals]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    Dry run of one wake-up: run no command and change no file; decide from the facts below and the files they name.
+
+    - The run is under way in supervised mode; `project` is example-org/widget, default branch `main`. Its policy is `project/docs/agents/orchestration.json` as committed.
+    - The handoff file's `## Open` holds: `Approval example-org/widget#40: merge, example-org/widget#31, head 3f786850e387550fdab836ed7e6dc881de23001b`. Its text is `.cedarloom/runs/r1/approval-31-merge.md`.
+    - The owner answered (a) on issue example-org/widget#40 for that head; `approval.mjs apply` then took `cl:needs-human` off, and the issue is open with no label. The saved `gh issue view` output is `.cedarloom/runs/r1/issue-40.json`.
+    - Since then the worker pushed a fix for a review finding. `gh pr view 31 -R example-org/widget --json headRefOid` now prints head 89e6c98d92887913cadf06b2adb97f26cde4849b. The fix changes no row of the approval.
+
+    Write these lines, then stop:
+    `New approval: <yes or no: whether you file a new approval issue>`
+    `Earlier answer: <valid or void>`
+    `Command 1: <the exact gh command you run first, with <file> for a file path>`
+    `Command 2: <the exact gh command you run next, or none>`
+    `First line: <the first line of the comment you post, or none>`
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: no-new-approval
+    pattern: 'New approval:[\s*`]*no\b'
+    flags: i
+  - type: regex
+    name: no-issue-create
+    pattern: 'Command [12]:[^\n]*gh\s+issue\s+create'
+    match: not_contains
+  - type: regex
+    name: answer-void
+    pattern: 'Earlier answer:[\s*`]*void\b'
+    flags: i
+  - type: regex
+    name: head-comment-command
+    pattern: 'Command [12]:[\s*`]*gh issue comment 40 -R example-org/widget --body-file\s+\S'
+  - type: regex
+    name: label-back-command
+    pattern: 'Command [12]:[\s*`]*gh issue edit 40 -R example-org/widget --add-label cl:needs-human\b'
+  - type: regex
+    name: head-first-line
+    pattern: 'First line:[\s*`]*Head: 89e6c98d92887913cadf06b2adb97f26cde4849b\b'
+expected_outcome: 'No new approval; the earlier answer is void; the commands are `gh issue comment 40 -R example-org/widget --body-file <file>` and `gh issue edit 40 -R example-org/widget --add-label cl:needs-human`, in either order; the comment starts with `Head: 89e6c98d92887913cadf06b2adb97f26cde4849b`.'

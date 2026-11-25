@@ -1,0 +1,40 @@
+schema_version: "1.1"
+name: coord-follow-up-other-terminal
+description: 'A follow-up send that Orca delivers as follow_up into a terminal other than the worker''s own is not accepted in place: the new dispatch is kept with worker-retain, nothing is stopped, closed, released or started, and the owner is told at once. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca-follow-ups.md:11. Needs --scaffold.'
+tags: [cl-orchestration, coord-follow-up]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command and change no file. Decide from these facts and the skill's text. The Orca executable is `orca`.
+
+    - The worker of issue 12 is a supervised Claude Code worker on Orca, kept open while its pull request example-org/widget#31 is in review. Its dispatch is `d-12a`; `terminal create` returned its terminal `term-12`; its worktree is `/srv/orca/worktrees/widget/12-login-timeout`.
+    - Before the follow-up for a review finding, every check passed: the rule file's `--check` read exited 0, `terminal list` listed `term-12`, `worker-show` read `d-12a` as unreleased, `worker-read` showed no person's input, and the terminal read ended in Claude Code's status bar with `auto mode on`.
+    - The `send` returned `{"delivery":"follow_up","terminal":"term-58","dispatchId":"d-12b","taskId":"t-90"}`. `orca terminal list --worktree path:/srv/orca/worktrees/widget/12-login-timeout --json` still lists `term-12`.
+
+    Write exactly these lines, then stop:
+    Accepted in place: <yes|no>
+    Command: <the one orca command you run next, exactly, or none>
+    Stop, close, release or new start: <which of these you do now, or none>
+    Owner: <told now|not told>
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: not-in-place
+    pattern: 'Accepted in place:\W*no\b'
+    flags: i
+  - type: regex
+    name: retain-new-dispatch
+    pattern: 'Command:\W*orca orchestration worker-retain --dispatch d-12b --json\b'
+  - type: regex
+    name: nothing-stopped-or-started
+    pattern: 'Stop, close, release or new start:\W*none\b'
+    flags: i
+  - type: regex
+    name: owner-told
+    pattern: 'Owner:\W*told now\b'
+    flags: i
+expected_outcome: 'Accepted in place: no (Orca named term-58, not term-12); Command: orca orchestration worker-retain --dispatch d-12b --json; Stop, close, release or new start: none; Owner: told now, with the worker written into the handoff file''s Open section.'
