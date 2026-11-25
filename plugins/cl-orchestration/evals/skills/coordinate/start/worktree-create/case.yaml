@@ -29,7 +29,7 @@ graders:
     target: { source: file, path: .fake/orca-calls.jsonl }
   - type: regex
     name: worktree-create-argv
-    pattern: '"args":\["worktree","create","--name","12-login-timeout","--repo","path:[^"]*project","--base-branch","main","--no-parent","--setup","run","--json"\]'
+    pattern: '"run-create"[\s\S]*"args":\["worktree","create","--name","12-login-timeout","--repo","path:[^"]*project","--base-branch","main","--no-parent","--setup","run","--json"\]'
     target: { source: file, path: .fake/orca-calls.jsonl }
   - type: regex
     name: no-terminal-or-worker-start

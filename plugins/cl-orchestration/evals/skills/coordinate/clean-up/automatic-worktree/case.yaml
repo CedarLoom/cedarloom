@@ -31,9 +31,9 @@ graders:
     flags: i
   - type: regex
     name: git-worktree-remove
-    pattern: 'Worktree removal:[^\n]*\bworktree remove\b[^\n]*/srv/orca/worktrees/widget/15-csv-export'
+    pattern: 'Worktree removal:[^\n]*(?:\bgitW\b|core\.hooksPath=/dev/null[^\n]*core\.fsmonitor=false)[^\n]*\bworktree remove\b[^\n]*/srv/orca/worktrees/widget/15-csv-export'
   - type: regex
     name: no-force-no-orca-rm
-    pattern: 'Worktree removal:[^\n]*(--force|\bworktree rm\b)'
+    pattern: 'Worktree removal:[^\n]*(--force|\s-f|\bworktree rm\b)'
     match: not_contains
 expected_outcome: 'Release now: no (it was released at its report); Orca worktree rm: no; Worktree removal: gitW worktree remove "/srv/orca/worktrees/widget/15-csv-export" with gitW the pinned git of commit-and-push.md and -C <project path>, after the commondir read, without --force.'

@@ -25,7 +25,7 @@ execution:
 graders:
   - type: regex
     name: reader-command
-    pattern: 'Before the pick:[^\n]*\bnode\s[^\n]*policy\.mjs\s+[`''"]?\S*project'
+    pattern: 'Before the pick:[^\n]*\bnode\s[^\n]*policy\.mjs[`''"]?\s+[`''"]?\S*project'
   - type: regex
     name: current-policy
     pattern: 'Policy used:\s*[`*_]*\s*now\b'

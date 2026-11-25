@@ -38,7 +38,7 @@ graders:
     flags: i
   - type: regex
     name: minimal-file
-    pattern: 'File:[\s*`]*\{\s*"schemaVersion"\s*:\s*2\s*,\s*"startLabel"\s*:\s*"cl:ready-for-agent"\s*\}'
+    pattern: 'File:[\s*`]*\{\s*(?:"schemaVersion"\s*:\s*2\s*,\s*"startLabel"\s*:\s*"cl:ready-for-agent"|"startLabel"\s*:\s*"cl:ready-for-agent"\s*,\s*"schemaVersion"\s*:\s*2)\s*\}'
   - type: regex
     name: open-line-without-head
     pattern: 'Open line:[\s*`]*Approval example-org/widget#[^\s:]+: policy, example-org/widget(?![\w/,-])'

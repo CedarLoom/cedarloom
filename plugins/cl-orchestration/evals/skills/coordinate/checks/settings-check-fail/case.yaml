@@ -21,7 +21,7 @@ execution:
 graders:
   - type: regex
     name: item-blocked
-    pattern: 'Issue 15:\W*BLOCKED\b'
+    pattern: 'Issue 15:\W*BLOCKED\W+no worker\b'
     flags: i
   - type: regex
     name: no-fallback

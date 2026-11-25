@@ -27,7 +27,7 @@ graders:
     target: { source: file, path: .fake/gh-calls.jsonl }
   - type: regex
     name: no-second-merge-command
-    pattern: '"args":\["pr","merge"[^\]]*"--(squash|merge|rebase|admin|auto|match-head-commit)"'
+    pattern: '"args":\["pr","merge"(?!,"31","-R","example-org/widget","--disable-auto"\])'
     match: not_contains
     target: { source: file, path: .fake/gh-calls.jsonl }
   - type: regex

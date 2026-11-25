@@ -31,5 +31,5 @@ graders:
     flags: i
   - type: regex
     name: owner-told-launch-line
-    pattern: 'Owner message:[^\n]*CEDARLOOM_ROLE=coordinator claude'
+    pattern: 'Owner message:(?=[^\n]*CEDARLOOM_ROLE=coordinator claude)(?=[^\n]*\bonly\b)(?=[^\n]*coordinator(?:''s)?\W+(?:own\W+)?launch)'
 expected_outcome: 'Start 31: no. Follow-up for 10: hold. Owner message: the role variable is set where workers inherit it; `CEDARLOOM_ROLE` goes on the coordinator''s launch line only (`CEDARLOOM_ROLE=coordinator claude`).'

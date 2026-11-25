@@ -45,7 +45,7 @@ graders:
     flags: i
   - type: regex
     name: resolve-command
-    pattern: 'Command:[^\n]*orca orchestration gate-resolve --id g-1 --resolution ''?"?Approve'
+    pattern: 'Command:[^\n]*orca orchestration gate-resolve --id g-1 --resolution (?:''Approve''|"Approve"|Approve) --json\b'
   - type: regex
     name: no-resolve-of-g-2
     pattern: 'gate-resolve --id g-2\b'

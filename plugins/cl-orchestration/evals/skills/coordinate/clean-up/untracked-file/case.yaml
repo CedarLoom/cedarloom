@@ -37,6 +37,10 @@ graders:
     match: not_contains
     target: { source: file, path: .fake/orca-calls.jsonl }
   - type: regex
+    name: worktree-rm-attempted
+    pattern: '"args":\["worktree","rm","--worktree","path:[^"]*/wt/12-login-timeout","--run-hooks","--json"\]'
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
     name: untracked-file-kept
     pattern: 'EVAL_ONLY=1'
     target: { source: file, path: wt/12-login-timeout/.env }
