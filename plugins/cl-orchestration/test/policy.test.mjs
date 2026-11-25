@@ -49,9 +49,9 @@ test('policy: sh kills a command that outlives its timeout, also one that ignore
   assert.throws(() => sh(tmpdir(), process.execPath, ['-e', ignoring], 1000), { code: 'ETIMEDOUT', signal: 'SIGKILL' });
 });
 
-test('policy: a version 1 file, or one without schemaVersion, keeps its fields and gets every default', () => {
+test('policy: a file without schemaVersion, or of version 2, keeps its fields and gets every default', () => {
   assert.deepEqual(effective({}, '0.1.0'), { policy: DEFAULTS, errors: [], warnings: [] });
-  const file = { schemaVersion: 1, startLabel: 'agent-ready', trustedAuthors: ['review-bot[bot]'], hostWorkerLimit: 3, merge: { allowed: true, requiredChecks: ['ci'] }, closeIssue: true };
+  const file = { schemaVersion: 2, startLabel: 'agent-ready', trustedAuthors: ['review-bot[bot]'], hostWorkerLimit: 3, merge: { allowed: true, requiredChecks: ['ci'] }, closeIssue: true };
   assert.deepEqual(effective(file, '0.1.0').policy, { ...DEFAULTS, startLabel: 'agent-ready', trustedAuthors: ['review-bot[bot]'], hostWorkerLimit: 3, merge: { ...DEFAULTS.merge, allowed: true, requiredChecks: ['ci'] }, closeIssue: true });
 });
 
@@ -61,8 +61,8 @@ test('policy: a value the schema rejects gives no policy, not the default', () =
   assert.deepEqual(rules(errors), [['enum', 'merge.mode']]);
 });
 
-test('policy: the built-in owner-only paths stay first, whatever the file lists and whatever its schemaVersion', () => {
-  const paths = (ownerOnlyPaths) => effective({ schemaVersion: 1, merge: { ownerOnlyPaths } }, '0.1.0').policy.merge.ownerOnlyPaths;
+test('policy: the built-in owner-only paths stay first, whatever the file lists', () => {
+  const paths = (ownerOnlyPaths) => effective({ schemaVersion: 2, merge: { ownerOnlyPaths } }, '0.1.0').policy.merge.ownerOnlyPaths;
   assert.deepEqual(paths([]), BUILT_IN);
   assert.deepEqual(paths(['infra', '.github']), [...BUILT_IN, 'infra']);
 });
@@ -95,10 +95,12 @@ test('policy: mode is supervised unless the file sets automatic, which takes its
   assert.equal(effective({ mode: 'automatic' }, '0.1.0').policy, null);
 });
 
-test('policy: a schemaVersion the reader does not know gives no policy', () => {
-  const { policy, errors } = effective({ schemaVersion: 3 }, '0.1.0');
-  assert.equal(policy, null);
-  assert.deepEqual(rules(errors), [['enum', 'schemaVersion']]);
+test('policy: a schemaVersion other than 2 gives no policy', () => {
+  for (const schemaVersion of [1, 3]) {
+    const { policy, errors } = effective({ schemaVersion }, '0.1.0');
+    assert.equal(policy, null, schemaVersion);
+    assert.deepEqual(rules(errors), [['enum', 'schemaVersion']], schemaVersion);
+  }
 });
 
 test('policy: minPlugin newer than the plugin gives no policy, and versions compare by number', () => {
@@ -173,6 +175,10 @@ test('policy: each refused value is named with its rule and path', () => {
   }
   // The longest name and the characters of a full model name stay allowed.
   for (const model of ['opus[1m]', 'vendor.family-4-5-v1:0', 'team/model@2026-01-01', 'p'.repeat(128)]) assert.deepEqual(validate({ models: { worker: { model } } }), [], model);
+});
+
+test('policy: permissionPrompts takes block alone', () => {
+  assert.deepEqual(validate({ permissionPrompts: 'decline' }), [{ rule: 'enum', path: 'permissionPrompts', message: 'must be one of "block"' }]);
 });
 
 test('policy: a skill folder copied alone, as for an agent without plugins, checks with its own schema; minPlugin cannot be checked there and gives no policy', async () => {

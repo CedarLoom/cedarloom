@@ -536,25 +536,23 @@ test('role guard: a command reaches the queue or the window files through a cd, 
   assert.equal(decision('/bin/sh /tmp/answer.sh', { cwd: join(session, '.cedarloom', 'questions'), env }), 'deny');
   assert.equal(decision(undefined, { tool: 'Write', toolInput: { file_path: 'project-1.md', content: 'x' }, cwd: join(session, '.cedarloom', 'questions'), env }), 'deny');
   // A session started with the command would hold the flag, in any role.
-  const versioned = ['npx -y @anthropic-ai/claude-code@latest -p "/cl-workflow:questions"', 'npx @anthropic-ai/claude-code@2.1.300 -p /questions', 'pnpm dlx @anthropic-ai/claude-code@latest -p /questions'];
+  const versioned = ['npx -y @anthropic-ai/claude-code@latest -p "/cl-workflow:away off"', 'npx @anthropic-ai/claude-code@2.1.300 -p "/away off"', 'pnpm dlx @anthropic-ai/claude-code@latest -p "/away off"'];
   for (const role of [undefined, 'coordinator']) {
-    assert.equal(decision('claude -p "/cl-workflow:questions"', { cwd: session, env, role }), 'deny', role);
-    assert.equal(decision("echo '/questions' | claude -p", { cwd: session, env, role }), 'deny', role);
     assert.equal(decision('claude -p "/cl-workflow:away off"', { cwd: session, env, role }), 'deny', role);
     assert.equal(decision("echo '/away  OFF' | claude -p", { cwd: session, env, role }), 'deny', role);
     assert.equal(decision('claude -p "/cl-workflow:away"$\' off\'', { cwd: session, env, role }), 'deny', role);
     assert.equal(decision('claude -p "/cl-workflow:away"$" off"', { cwd: session, env, role }), 'deny', role);
     // npx names the package with a version, and a Windows npm install starts claude through a script file.
     for (const command of versioned) assert.equal(decision(command, { cwd: session, env, role }), 'deny', `${role}: ${command}`);
-    for (const command of ['claude.cmd -p /questions', 'claude.ps1 -p /questions', 'claude.bat -p /questions']) assert.equal(decision(command, { tool: 'PowerShell', cwd: session, env, role }), 'deny', `${role}: ${command}`);
+    for (const command of ['claude.cmd -p "/away off"', 'claude.ps1 -p "/away off"', 'claude.bat -p "/away off"']) assert.equal(decision(command, { tool: 'PowerShell', cwd: session, env, role }), 'deny', `${role}: ${command}`);
   }
   // Names that only look alike pass, as do wildcard pairs, cd chains and prose that reach neither folder.
   const alike = [
     'cd docs && echo x > questions.md',
-    'grep -rn /cl-workflow:questions plugins',
+    'grep -rn "/cl-workflow:away off" plugins',
     'cat .cedarloom/questions-old/a.md',
-    'grep -n "/questions" CLAUDE.md',
-    'grep -rn "/cl-workflow:questions" plugins/cl-workflow/hooks/claude-code.json',
+    'grep -n "/away off" CLAUDE.md',
+    'grep -rn "/cl-workflow:away off" plugins/cl-workflow/hooks/claude-code.json',
     'ls */*',
     'du -sh */*',
     'ls plugins/*/*',
@@ -634,9 +632,9 @@ test('role guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh do, i
     raw`claude -p $'/cl-workflow:away\C\x69off'`,
     raw`claude -p $'/cl-workflow:awa\y off\0x'`,
     raw`claude -p /cl-workflow:away$'\x20'off`,
-    raw`claude -p $'/cl-workflow:\x71uestions'`,
-    raw`$'\x63laude' -p /questions`,
-    raw`$'c\laude' -p /questions`,
+    raw`claude -p $'/cl-workflow:\x61way off'`,
+    raw`$'\x63laude' -p "/away off"`,
+    raw`$'c\laude' -p "/away off"`,
     // A path into the queue.
     raw`echo x >> .cedarloom/$'\x71'uestions/project-1.md`,
     raw`cd $'.cedarloom\x2fquestions' && echo x > project-1.md`,

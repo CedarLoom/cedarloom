@@ -61,12 +61,12 @@ export function missing(text) {
   const options = tables(text, 'Option')[0] ?? [];
   // The owner answers with a label, such as "a": each option row starts with its own.
   const labels = options.map(([option]) => labelOf(option));
-  // The questions skill offers the recommended option first; every cell is filled.
+  // The question queue offers the recommended option first; every cell is filled.
   const chosen = options.length >= 2
     && options.every(([option, impact, tradeOff], i) => filled(option) && filled(impact) && filled(tradeOff) && option.includes('(Recommended)') === (i === 0))
     && labels.every(Boolean) && new Set(labels.map((label) => label.toLowerCase())).size === labels.length
     && !options.flat().some((cell) => PLACEHOLDER.test(cell));
-  // The questions skill takes its recommendation from the Recommended line and the first option from the table: every such line must name that option.
+  // The question queue takes its recommendation from the Recommended line and the first option from the table: every such line must name that option.
   const label = labels[0];
   const agrees = !chosen || (label && [...text.matchAll(/^Recommended:(.*)$/gm)].every(([, said]) => shown(said).startsWith(label)));
   return [
@@ -229,7 +229,7 @@ const FENCED = /^ {0,3}(`{3,}(?![^\n]*`)|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[^\n]
 const named = (text) => /^Issue: ([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#[1-9]\d*)\r?$/m.exec(String(text).split(/<!--[\s\S]*?-->/).join('').replace(FENCED, ''))?.[1] ?? null;
 
 // Whether an answer keeps the work its question holds back: it does unless its option names exactly one option row of body that is no Hold,
-// by label ("b" or "(b)"), by text, or both, as the questions skill records the option it offered; "(Recommended)" is no part of the name.
+// by label ("b" or "(b)"), by text, or both, as the question queue records the option it offered; "(Recommended)" is no part of the name.
 export function holds(option, body = '') {
   const plain = (text) => text.replace(/\(recommended\)/gi, '').replace(/\s+/g, ' ').trim().toLowerCase();
   const said = plain(String(option).replace(/\.$/, ''));
