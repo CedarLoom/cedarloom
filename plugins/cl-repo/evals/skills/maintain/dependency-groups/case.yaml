@@ -1,0 +1,36 @@
+schema_version: "1.1"
+name: skill-maintain-dependency-groups
+description: 'The dependency pass of maintain puts the advisory fix first, keeps packages released together in one group, a major alone and the other minors and patches together, and finds the breaking change and the deprecation each changelog names in the code (from CedarLoom/cedarloom#146). Needs --scaffold.'
+tags: [cl-repo, skill-maintain]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-repo:maintain Run only the dependency part.
+
+    This run checks the groups only. Write one line per group, in the order the pass gives: `Group <n>: <package>@<new version>, <package>@<new version>`. Under each group, one line per breaking change or deprecation its changelogs name: `Change: <package> <version>: <what> at <file>:<line>`, or `... not used here`. Then stop: edit no file and open no pull request.
+  max_turns: 25
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: advisory-first
+    pattern: 'Group 1:[^\n]*yaml-lite@0\.9\.4'
+  - type: regex
+    name: released-together
+    pattern: 'Group \d+:[^\n]*(@lumen/core@3\.3\.0[^\n]*@lumen/render@3\.3\.0|@lumen/render@3\.3\.0[^\n]*@lumen/core@3\.3\.0)'
+  - type: regex
+    name: major-alone
+    pattern: 'Group \d+:[^\n@]*quill-args@5\.0\.0[^\n@]*(\n|$)'
+  - type: regex
+    name: minors-together
+    pattern: 'Group \d+:[^\n]*(hue-text@2\.2\.0[^\n]*tinydate@1\.4\.3|tinydate@1\.4\.3[^\n]*hue-text@2\.2\.0)'
+  - type: regex
+    name: breaking-change-found
+    pattern: 'quill-args[^\n]*src/cli\.js'
+  - type: regex
+    name: deprecation-found
+    pattern: 'hue-text[^\n]*src/report\.js'
+  - type: llm
+    name: unused-changes-marked
+    criteria: 'The answer marks the yaml-lite deprecation of `loadAll()` without a callback as not used in this repository, and names the `parse()` string-to-array change of quill-args 5.0.0 as the breaking change to handle.'
+expected_outcome: 'Group 1 yaml-lite@0.9.4 (the high advisory); @lumen/core and @lumen/render 3.3.0 together; quill-args@5.0.0 alone, with its `parse()` change at src/cli.js:7; hue-text@2.2.0 and tinydate@1.4.3 together, with the `hue.bold()` deprecation at src/report.js:8; the yaml-lite `loadAll()` deprecation not used here.'
