@@ -23,4 +23,4 @@
 
 ## Evals
 
-Each plugin keeps its `claude plugin eval` suites in `plugins/<plugin>/evals/`, run locally on your own credential, not in CI. A pull request that changes a skill or agent text reruns the suites it affects and reports pass rate, tokens, wall time and cost before and after: [cl-workflow evals](../plugins/cl-workflow/evals/README.md).
+Each plugin keeps its `claude plugin eval` suites in `plugins/<plugin>/evals/`, run locally on your own credential, not in CI. A pull request that changes a skill or agent text reruns the suites it affects and reports pass rate (passing runs over all runs), tokens, wall time and cost before and after: [cl-workflow evals](../plugins/cl-workflow/evals/README.md). A lower pass rate on an affected suite blocks the merge until the case is fixed, or the drop is explained in the pull request and accepted in its review.

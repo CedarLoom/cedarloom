@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: skill-research-code-question-quick
-description: 'A question the code answers is quick research, answered from the file without subagents. Needs --scaffold.'
+description: 'A question the code answers is quick research, answered from the file without subagents (like the token-budget lookup behind CedarLoom/cedarloom#119). Needs --scaffold.'
 tags: [cl-workflow, skill-research]
 context:
   scaffold_script: setup.sh

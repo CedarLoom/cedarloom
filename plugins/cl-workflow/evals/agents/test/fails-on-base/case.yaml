@@ -23,7 +23,7 @@ graders:
     flags: i
   - type: regex
     name: no-passes-on-base
-    pattern: 'passes on base \(flag|flagged'
+    pattern: 'passes on base'
     flags: i
     match: not_contains
   - type: llm

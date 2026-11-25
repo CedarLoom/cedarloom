@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: agent-verify-research-claim-check
-description: 'The verify agent checks a research answer claim by claim and catches one that its own cited source contradicts (the answer check of standard research).'
+description: 'The verify agent checks a research answer claim by claim and catches one that its own cited source contradicts (the answer check of standard research, on the title format of CedarLoom/cedarloom#52, whose `!` marks a breaking change).'
 tags: [cl-workflow, agent-verify]
 execution:
   prompt: |

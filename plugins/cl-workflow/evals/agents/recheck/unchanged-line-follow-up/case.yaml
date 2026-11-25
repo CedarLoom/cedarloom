@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: agent-recheck-unchanged-line-follow-up
-description: 'A defect the recheck agent sees on a line the fix did not change is a follow-up, not a new finding. Needs --scaffold.'
+description: 'A defect the recheck agent sees on a line the fix did not change is a follow-up, not a new finding (like CedarLoom/cedarloom#54, defects found in the review of CedarLoom/cedarloom#53 outside its diff). Needs --scaffold.'
 tags: [cl-workflow, agent-recheck]
 context:
   scaffold_script: setup.sh

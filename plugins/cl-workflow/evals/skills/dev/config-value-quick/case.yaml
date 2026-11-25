@@ -8,6 +8,7 @@ execution:
 
     This run checks the classification only: write the lines the workflow asks for before the first edit or command, then stop. Edit no file and run no command.
   max_turns: 6
+  allowed_tools: [Edit]
 graders:
   - type: tool_used
     name: loads-workflow-skill

@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: agent-implement-loop-back-finding
-description: 'On a loop back the implement agent fixes the review finding in its brief and reruns the check it came from. Needs --scaffold.'
+description: 'On a loop back the implement agent fixes the review finding in its brief and reruns the check it came from (like CedarLoom/cedarloom#61, the fix of review findings that made token-budget reject negative file caps). Needs --scaffold.'
 tags: [cl-workflow, agent-implement]
 context:
   scaffold_script: setup.sh

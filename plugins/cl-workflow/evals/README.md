@@ -47,4 +47,6 @@ A pull request that changes a skill or agent text reruns the suites it affects, 
 | Suite | Pass rate before | Pass rate after | Tokens before | Tokens after | Wall time before | Wall time after | Cost before | Cost after |
 |---|---|---|---|---|---|---|---|---|
 
-Pass rate is cases passed over cases run, tokens and cost are the sums the run reports, wall time is the run's duration. Name the model, the judge and the run count above the table.
+Pass rate is passing runs over all runs of the suite, counting each of a case's `--runs` runs on its own: a case that passes 2 of its 3 runs adds 2 passing runs and 3 runs. Tokens and cost are the sums the run reports, wall time is the run's duration. Name the model, the judge and the run count above the table.
+
+A pull request that lowers the pass rate of an affected suite does not merge until the case is fixed, or the drop is explained in the pull request and accepted in its review.

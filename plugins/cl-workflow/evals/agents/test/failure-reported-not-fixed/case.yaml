@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: agent-test-failure-reported-not-fixed
-description: 'The test agent reports a failing check as it is and leaves the fix to the implement phase. Needs --scaffold.'
+description: 'The test agent reports a failing check as it is and leaves the fix to the implement phase (the test-phase records of CedarLoom/cedarloom#96). Needs --scaffold.'
 tags: [cl-workflow, agent-test]
 context:
   scaffold_script: setup.sh

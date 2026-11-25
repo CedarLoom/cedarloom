@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: agent-recheck-disputed-dropped
-description: 'The recheck agent drops an earlier finding when the evidence against it holds at the cited line, and says why (a disputed finding answered with evidence, as review threads in CedarLoom/cedarloom are). Needs --scaffold.'
+description: 'The recheck agent drops an earlier finding when the evidence against it holds at the cited line, and says why (like finding 1 of the review of OpenReloading/Ballistics#1268, disproved with evidence at the cited line and dropped). Needs --scaffold.'
 tags: [cl-workflow, agent-recheck]
 context:
   scaffold_script: setup.sh

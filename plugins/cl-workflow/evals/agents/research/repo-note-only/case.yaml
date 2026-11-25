@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: agent-research-repo-note-only
-description: 'The research agent answers with file and line per claim, writes only the note file the brief names and leaves the rest of the repository as it is (like the version-pin check of the Claude Code version gate in CedarLoom/cedarloom). Needs --scaffold.'
+description: 'The research agent answers with file and line per claim, writes only the note file the brief names and leaves the rest of the repository as it is (like the workflow pin updates of CedarLoom/cedarloom#58). Needs --scaffold.'
 tags: [cl-workflow, agent-research]
 context:
   scaffold_script: setup.sh
