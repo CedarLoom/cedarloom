@@ -6,7 +6,7 @@ import { join, sep } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isMain } from './main.mjs';
-import { bareLaunches, LAUNCHERS, launchCommands, launchModes, lintAgent, lintSkill, ownAgents, ownSkills, pluginFiles } from './skill-lint.mjs';
+import { bareLaunches, descriptionWarnings, LAUNCHERS, launchCommands, launchModes, lintAgent, lintSkill, ownAgents, ownSkills, pluginFiles, wordBudget } from './skill-lint.mjs';
 
 function skill(name, { fm = `name: ${name}\ndescription: "Does a thing. Use when asked."`, body = '', yaml = 'interface:\n  display_name: "X"\n' } = {}) {
   const dir = join(mkdtempSync(join(tmpdir(), 'lint-')), name);
@@ -66,6 +66,49 @@ test('a plugin agent needs a name and description, a model alias, and no key plu
 test('a Depth line naming the Depth minimum line ahead of the workflow skill fails', () => {
   assert.match(lintSkill(skill('a', { body: '```text\nDepth: <issue depth, else the Depth minimum line of AGENTS.md, else the workflow skill decides>\n```' })).join(), /Depth minimum line ahead/);
   assert.deepEqual(lintSkill(skill('a', { body: 'Depth: <issue depth, else leave this line out: the workflow skill decides>' })), []);
+});
+
+const words = (n) => 'word '.repeat(n);
+// [path, kind, soft budget, hard cap] per class of instruction text.
+const classes = [
+  ['plugins/p/skills/s/SKILL.md', 'SKILL.md', 1200, 3000],
+  ['plugins/p/skills/s/ref.md', 'skill reference file', 1500, 3000],
+  ['plugins/cl-workflow/skills/workflow/SKILL.md', 'cl-workflow entry skill file', 450, 900],
+  ['plugins/cl-workflow/skills/workflow/deep.md', 'cl-workflow entry skill file', 450, 900],
+  ['plugins/cl-workflow/skills/workflow/references/x.md', 'cl-workflow entry skill file', 450, 900],
+  ['plugins/p/agents/a.md', 'subagent prompt', 400, 600],
+  ['plugins/p/rules/r.md', 'rules file', 450, 600],
+  ['plugins/p/skills/coordinate/SOUL.md', 'bot brief', 600, 800],
+  ['plugins/p/skills/coordinate/bot-worker.md', 'bot procedure', 450, 900],
+];
+test('an instruction file over its hard word cap fails; at the cap it passes', () => {
+  for (const [path, kind, , hard] of classes) {
+    assert.deepEqual(wordBudget(path, words(hard + 1), {}).errors, [`${path}: ${hard + 1} words, over the ${hard}-word cap of a ${kind}`]);
+    assert.deepEqual(wordBudget(path, words(hard), {}).errors, [], path);
+  }
+});
+test('an instruction file over its soft word budget warns and passes', () => {
+  for (const [path, kind, soft] of classes) {
+    assert.deepEqual(wordBudget(path, words(soft + 1), {}), { errors: [], warnings: [`${path}: ${soft + 1} words, over the ${soft}-word budget of a ${kind}`] });
+    assert.deepEqual(wordBudget(path, words(soft), {}), { errors: [], warnings: [] }, path);
+  }
+});
+test('front matter words do not count', () =>
+  assert.deepEqual(wordBudget('plugins/p/agents/a.md', `---\nname: a\ndescription: "${words(50)}"\n---\n${words(400)}`, {}), { errors: [], warnings: [] }));
+test('a file at size may keep its size, never grow past it', () => {
+  const atSize = { 'plugins/p/skills/s/SKILL.md': 3005 };
+  assert.deepEqual(wordBudget('plugins/p/skills/s/SKILL.md', words(3005), atSize).errors, []);
+  assert.deepEqual(wordBudget('plugins/p/skills/s/SKILL.md', words(3006), atSize).errors,
+    ['plugins/p/skills/s/SKILL.md: 3006 words, over its at-size cap of 3005 (a SKILL.md allows 3000)']);
+  assert.equal(wordBudget('plugins/p/skills/s/ref.md', words(3001), atSize).errors.length, 1);
+});
+test('a listed description over 300 characters warns; an agent description over 1024 fails', () => {
+  const dir = skill('a', { fm: `name: a\ndescription: "${'x'.repeat(301)}"` });
+  assert.deepEqual(descriptionWarnings(dir), [`${join(dir, 'SKILL.md')}: description of 301 characters, over the 300-character budget`]);
+  assert.deepEqual(descriptionWarnings(skill('a', { fm: `name: a\ndescription: "${'x'.repeat(300)}"` })), []);
+  const file = join(mkdtempSync(join(tmpdir(), 'lint-')), 'a.md');
+  writeFileSync(file, `---\nname: a\ndescription: "${'x'.repeat(1025)}"\n---\n\nBody.\n`);
+  assert.deepEqual(lintAgent(file), [`${file}: description longer than 1024 characters`]);
 });
 
 test('a plugin file that starts claude with --bare fails, in a command line and in a spawn call', () => {
