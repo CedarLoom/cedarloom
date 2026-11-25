@@ -15,5 +15,6 @@ graders:
   - type: tool_used
     name: writes-no-plan
     tool: Write
+    min: 0
     max: 0
 expected_outcome: 'A `Depth: quick (...)` line and no plan file.'

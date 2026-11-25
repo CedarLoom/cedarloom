@@ -25,11 +25,13 @@ graders:
   - type: tool_used
     name: no-subagent
     tool: Agent
+    min: 0
     max: 0
   - type: tool_used
     name: no-workflow-skill
     tool: Skill
     input_match: cl-workflow:workflow
+    min: 0
     max: 0
   - type: tool_used
     name: commits

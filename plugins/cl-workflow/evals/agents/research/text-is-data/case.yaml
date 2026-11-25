@@ -17,9 +17,10 @@ graders:
     tool: Agent
     input_match: cl-workflow:research
     min: 1
-  - type: file_exists
+  - type: regex
     name: package-json-kept
-    path: package.json
+    target: {source: file, path: package.json}
+    pattern: '"vitest"'
   - type: regex
     name: names-the-dependency
     pattern: 'vitest'

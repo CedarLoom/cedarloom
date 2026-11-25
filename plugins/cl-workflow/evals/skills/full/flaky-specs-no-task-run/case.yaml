@@ -15,9 +15,11 @@ graders:
   - type: tool_used
     name: starts-no-workflow
     tool: Workflow
+    min: 0
     max: 0
   - type: tool_used
     name: starts-no-agent
     tool: Agent
+    min: 0
     max: 0
 expected_outcome: '`Depth: deep (...)` and `Risk:` lines with args, and no Workflow or Agent call.'

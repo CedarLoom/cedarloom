@@ -13,6 +13,7 @@ These suites check that each `cl-workflow` skill and agent does what its text sa
 - One suite per skill or agent, tagged `skill-<name>` or `agent-<name>`; every case is also tagged `cl-workflow`. Case names are `skill-<name>-<case>` or `agent-<name>-<case>`.
 - Each case cites the issue or pull request it comes from in its `description`.
 - Graders apply checks: `tool_used` (a tool or skill was or was not called), `regex` (on the last message, the trace or a file in the workspace), `file_exists`, and `llm` for a stated criterion the default judge (`haiku`) checks.
+- `tool_used` has `min: 1` unless set, so a "never called" check sets both `min: 0` and `max: 0`. `file_exists` sees only files the run created or removed; check a scaffold file with a `regex` on its contents.
 - A case that only checks classification ends its prompt with a stop line ("write the lines ..., then stop"), so it costs a few turns.
 - This folder is outside `skills/` and `agents/`, so the token budget does not count it and no session loads it.
 
@@ -41,7 +42,7 @@ Each run is a full Claude Code child on your own credential (`claude plugin eval
 
 ## Before and after in a pull request
 
-A pull request that changes a skill or agent text reruns the suites it affects, on `main` and on its branch, with the same `--runs`, `--model` and `--judge-model`, and puts one table in its body:
+A pull request that changes a skill or agent text reruns the suites it affects, on `main` and on its branch, with the same `--runs`, `--model` and `--judge-model` and the same case files: the branch's. For the before run, check out `main` in a separate worktree, copy the branch's cases into it with `git checkout <branch> -- plugins/cl-workflow/evals`, and run there. The pull request puts one table in its body:
 
 | Suite | Pass rate before | Pass rate after | Tokens before | Tokens after | Wall time before | Wall time after | Cost before | Cost after |
 |---|---|---|---|---|---|---|---|---|

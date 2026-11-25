@@ -15,5 +15,6 @@ graders:
   - type: tool_used
     name: asks-nothing
     tool: AskUserQuestion
+    min: 0
     max: 0
 expected_outcome: 'One line naming 18:00, nothing else.'

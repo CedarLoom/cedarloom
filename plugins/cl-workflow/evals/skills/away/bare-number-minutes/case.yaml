@@ -12,5 +12,6 @@ graders:
   - type: tool_used
     name: asks-nothing
     tool: AskUserQuestion
+    min: 0
     max: 0
 expected_outcome: 'One line with the away span of 30 minutes, nothing else.'

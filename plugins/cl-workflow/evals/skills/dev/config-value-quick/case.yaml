@@ -23,5 +23,6 @@ graders:
   - type: tool_used
     name: edits-nothing
     tool: Edit
+    min: 0
     max: 0
 expected_outcome: '`Depth: quick (...)` and `Risk: low (...)` after loading cl-workflow:workflow.'
