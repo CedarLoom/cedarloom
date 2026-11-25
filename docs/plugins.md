@@ -68,16 +68,16 @@ Only the coordinator's session runs with `CEDARLOOM_ROLE=coordinator` ([how to s
 
 ### Bot roles
 
-A bot role in `CEDARLOOM_ROLE` (`env` in its home's `.claude/settings.json`) guards a session like any other and also refuses what its procedure does not need, for its subagents too. Any other set value (empty, misspelled, `planner`) runs and writes nothing. No role, the coordinator included, runs `gh pr merge --admin`; the merge endpoints are not read for it.
+A bot role in `CEDARLOOM_ROLE` (`env` in its home's `.claude/settings.json`) guards a session like any other and also refuses what its procedure does not need, for its subagents too. Any other set value (empty, misspelled, `builder`, `worker-bot`) runs and writes nothing. No role, the coordinator included, runs `gh pr merge --admin`; the merge endpoints are not read for it.
 
 | `CEDARLOOM_ROLE` | Also refused |
 |---|---|
 | `project-bot` | every `git push`; it may delete a head branch named `<type>/<number>-<slug>` (the shape fits `release/2026-11` too) with `gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>`; the hook does not check that the branch is merged or refuse `gh pr close --delete-branch` |
-| `planner-bot`, `reviewer-bot`, `maintainer-bot` | every `git push`; `gh` commands other than `repo clone`, `view` and `list`, `pr view`, `diff`, `list`, `checks` and `status`, `issue view`, `list` and `status`, `run view`, `list` and `watch`, `search`, and `gh api` with GET only, so no GraphQL (a GET to `graphql` runs no query); the maintainer's file tool writes outside `<home>/results/` |
-| `fixer-bot`, `worker-bot` | the `gh` commands the reviewer bot is refused; a push whose refspec names any branch but the one checked out where git runs (on both sides), a push after `git checkout`, `git switch`, `git rebase`, `git bisect`, `git symbolic-ref HEAD <ref>` or a branch rename or copy in the same command, and a force or delete push (`--force`, `-f`, `--force-with-lease`, `--force-if-includes`, `--delete`, `-d`, `--prune`, a refspec starting with `+` or `:`) |
+| `reviewer-bot`, `maintain-bot` | every `git push`; `gh` commands other than `repo clone`, `view` and `list`, `pr view`, `diff`, `list`, `checks` and `status`, `issue view`, `list` and `status`, `run view`, `list` and `watch`, `search`, and `gh api` with GET only, so no GraphQL (a GET to `graphql` runs no query); the maintain bot's file tool writes outside `<home>/results/` and `<home>/MEMORY.md` |
+| `builder-bot` | the `gh` commands the reviewer bot is refused; a push whose refspec names any branch but the one checked out where git runs (on both sides), a push after `git checkout`, `git switch`, `git rebase`, `git bisect`, `git symbolic-ref HEAD <ref>` or a branch rename or copy in the same command, and a force or delete push (`--force`, `-f`, `--force-with-lease`, `--force-if-includes`, `--delete`, `-d`, `--prune`, a refspec starting with `+` or `:`) |
 
 - The table's `gh` rules apply where `gh` runs as the command: first, or after env assignments, shell keywords (`do`, `then`) and wrappers such as `env`, `sudo`, `xargs`, `timeout` and `eval`; in PowerShell also after an assignment, `&` or `.`, and first in a script block. Elsewhere, as in `grep gh`, a guarded session's rules apply.
-- A fixer or worker bot pushes from a local branch named like its remote branch.
+- The builder bot pushes from a local branch named like its remote branch.
 - Merges go through `merge.mjs`, whose `gh` child process no hook sees, so no bot needs a merge exception.
 
 ## Coordinator context rotation
