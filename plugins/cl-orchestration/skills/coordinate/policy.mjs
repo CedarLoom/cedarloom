@@ -105,7 +105,7 @@ const older = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').m
 // Comment keys explain the file to its reader; the policy holds only what the coordinator acts on.
 const plain = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => !k.startsWith('//')));
 
-// { policy, errors, warnings }: the policy with every default filled in, or null with the errors. Fields are read by name, whatever the file's schemaVersion.
+// { policy, errors, warnings }: the policy with every default filled in, or null with the errors.
 export function effective(file, version = pluginVersion()) {
   // A committed file never sends work, questions or answers to another repository: the reader drops issues.repository with a warning and keeps the project repository as the tracker.
   const named = kind(file?.issues) === 'object' && Object.hasOwn(file.issues, 'repository');

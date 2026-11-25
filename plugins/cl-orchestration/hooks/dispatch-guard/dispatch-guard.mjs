@@ -1,4 +1,4 @@
-// PreToolUse hook for Bash, Monitor and PowerShell: no session hands /cl-workflow:away off (or /cl-workflow:questions) to another session through Orca's CLI
+// PreToolUse hook for Bash, Monitor and PowerShell: no session hands /cl-workflow:away off to another session through Orca's CLI
 // (worker-start and send give a session its prompt, typed into its terminal). Such a session could set the answer flag of the local
 // question queue, since its hook input looks like a typed command (cl-workflow's ask hook).
 // It reads the command's text only: a prompt in a file the command names, Orca's path in a variable and text the shell builds when
@@ -7,7 +7,7 @@ import { text } from 'node:stream/consumers';
 import { ansiC } from '../ansi-c-quote.mjs';
 
 // The command's own and its short form, as cl-workflow's role guard reads them.
-const QUESTIONS = /(^|[^\w-])\/(cl-workflow:)?(questions|away\s+off)(?![\w.-])/i;
+const QUESTIONS = /(^|[^\w-])\/(cl-workflow:)?away\s+off(?![\w.-])/i;
 // A word ends at blanks, shell separators and quotes; Orca's executable by its name, with a Windows suffix too.
 const WORDS = /[\s;&|()`'"{}<>=]+/;
 const program = (word) => word.split(/[/\\]/).pop().toLowerCase().replace(/\.(exe|cmd|ps1|bat)$/, '');
@@ -57,7 +57,7 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
     const zsh = joined(command, 'zsh');
     const texts = [command, joined(command, 'bash'), joined(command, 'bash3'), zsh.replace(/\0\S*/g, ''), zsh.replaceAll('\0', ''), command.replace(/\$?["'\\]/g, '')];
     if (texts.some((t) => QUESTIONS.test(t)) && texts.some((t) => t.split(WORDS).some((word) => program(word) === 'orca'))) {
-      const reason = 'CedarLoom dispatch guard: an Orca command with /cl-workflow:away off or /cl-workflow:questions in it would hand that command to a session, which could then write answers into the local question queue (.cedarloom/questions/); only the owner runs it, typed into their own terminal session. Text a session receives names it without the leading slash. The guard reads text only, so a command that merely mentions orca and the command, as a commit message or a search may, is refused too: take that text from a file (git commit -F, gh --body-file, rg -f).';
+      const reason = 'CedarLoom dispatch guard: an Orca command with /cl-workflow:away off in it would hand that command to a session, which could then write answers into the local question queue (.cedarloom/questions/); only the owner runs it, typed into their own terminal session. Text a session receives names it without the leading slash. The guard reads text only, so a command that merely mentions orca and the command, as a commit message or a search may, is refused too: take that text from a file (git commit -F, gh --body-file, rg -f).';
       process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } }));
     }
   }
