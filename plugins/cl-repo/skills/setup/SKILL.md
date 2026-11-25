@@ -107,7 +107,7 @@ After the apply step, give the diff (`git diff` against the default branch plus 
 - Statements in `AGENTS.md` that the run checked (commands, test status, build output, reproducibility) match what the checks showed.
 - Each link in a touched `AGENTS.md` resolves. An `AGENTS.md` that holds the block has Commands, the block, Every change considers and Pointers in that order, and `CLAUDE.md` is exactly `@AGENTS.md`. A committed `AGENTS.md` without the block: its diff holds only the parts the user picked, and `CLAUDE.md` is unchanged.
 - The text between the block's markers is the one [project-rules.md](project-rules.md) gives for the chosen answer, and the block appears once in the file. A local `CLAUDE.local.md` is ignored by git.
-- A new `cedarloom.json` is valid JSON and holds `$schema`, `schemaVersion` 3 and only the fields above, with the values the user approved. A moved one holds the old file's other fields unchanged, and `docs/agents/orchestration.json` is gone.
+- A new `cedarloom.json` is valid JSON and holds `$schema`, `schemaVersion` 3 and only the fields above, with the values the user approved. A moved one holds `$schema`, `schemaVersion` 3 and the old file's other fields unchanged, and `docs/agents/orchestration.json` is gone.
 - A new `docs/agents/bots.md` holds no local path, and each bot home file is valid JSON or the text `setup-bots.md` gives.
 - A folder `AGENTS.md` or `CLAUDE.md` added inside a docs or site source folder is excluded from that build (for example `exclude_docs` in MkDocs).
 - Each removal left no folder or lock entry.
