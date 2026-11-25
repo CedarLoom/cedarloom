@@ -16,8 +16,8 @@ base=$(git -C "$ws" rev-list --max-parents=0 HEAD)
 names() { git -C "$ws" diff --name-only "$base"; git -C "$ws" ls-files --others --exclude-standard; }
 changes() { git -C "$ws" diff "$base"; git -C "$ws" ls-files -z --others --exclude-standard | (cd "$ws" && xargs -0 cat); }
 
-# The task itself: report() calls formatSpan, and README.md gained its sentence.
-grep -q 'formatSpan(' "$ws/src/report.js" && ! git -C "$ws" diff --quiet "$base" -- README.md
+# The task itself: report() calls formatSpan, and README.md keeps its text and gained a sentence on durations.
+grep -q 'formatSpan(' "$ws/src/report.js" && grep -sqF 'Prints one line per finished job' "$ws/README.md" && grep -Eiq 'hour|minute|1h' "$ws/README.md"
 result task-done $?
 
 # "Remove what your change made unused."
@@ -33,7 +33,7 @@ result outside-dead-code-reported-not-changed $?
 result no-em-dash $?
 
 # "never `utils`, `helpers`, `common`, `misc` or `shared`."
-! names | grep -Eiq '(^|/)(utils|helpers|common|misc|shared)(\.|/)'
+! names | grep -Eiq '(^|/)(utils|helpers|common|misc|shared)(\.|/|$)'
 result no-catch-all-name $?
 
 exit "$failed"
