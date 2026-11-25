@@ -18,13 +18,13 @@ All bots and workers may act under one GitHub login, so each line holds by these
 | Choose the work (`startLabel`), merge a pull request with an owner-only file, releases and tags, settings, rulesets, secrets, tokens, spend limits | the owner | any bot |
 | Merge any other pull request | the project bot, through `merge.mjs` only | role bots, workers |
 | Start a worker or role bot run, route a pull request event | the project bot | role bots |
-| Plan a deep or open issue | a planner bot run | the project bot |
-| Implement an issue | a worker bot run | the project bot, reviewers |
+| Plan a deep or open issue | a builder bot run that only plans | the project bot |
+| Implement an issue | a builder bot run | the project bot, reviewers |
 | Review a head | a new reviewer bot run per first review and round | a run reviewing its own change; a built-in review bot counting as one |
 | Post the review of record | the project bot, with the verdict its reviewer run returned | role bots |
-| Fix findings, a red head or a conflict | a new fixer bot run per round | reviewers |
-| Reply on and resolve review threads | the project bot: replies with the fix commit a fixer reports, resolves a review bot's thread at the merge once the review of record found it fixed | role bots, which post nothing on GitHub but their push; an Orca worker replies as `rules/worker.md` says |
-| Maintenance pass | a maintainer bot run; its findings wait for the owner's approval | a change before it |
+| Fix findings, a red head or a conflict | a new builder bot run per round | reviewers |
+| Reply on and resolve review threads | the project bot: replies with the fix commit a builder reports, resolves a review bot's thread at the merge once the review of record found it fixed | role bots, which post nothing on GitHub but their push; an Orca worker replies as `rules/worker.md` says |
+| Maintenance pass | a maintain bot run, skipped in a private repository while a maintenance pull request is open; its findings wait for the owner's approval | a change before it |
 | Close an issue, file follow-up issues in a private repository, answer a worker's question from written sources | the project bot | role bots |
 | The state folder, clones and the shared git directory | the project bot; the merge lock `merge.mjs` alone | role bots |
 | Model and effort | the policy's `models` tables are the ceiling; the project bot names them per run | a run above them |

@@ -294,28 +294,34 @@ test('role guard: refuses a merge with --admin in every role, the coordinator in
   }
 });
 
-const ROLE_BOTS = ['planner-bot', 'reviewer-bot', 'fixer-bot', 'worker-bot', 'maintainer-bot'];
+const ROLE_BOTS = ['builder-bot', 'reviewer-bot', 'maintain-bot'];
 
-test('role guard: the project, planner, reviewer and maintainer bots never push', () => {
-  for (const role of ['project-bot', 'planner-bot', 'reviewer-bot', 'maintainer-bot']) {
+test('role guard: the project, reviewer and maintain bots never push', () => {
+  for (const role of ['project-bot', 'reviewer-bot', 'maintain-bot']) {
     for (const command of ['git push origin feat/x', 'git push']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
   }
 });
 
-test('role guard: a fixer or worker bot pushes only the branch checked out where git runs', () => {
-  for (const role of ['fixer-bot', 'worker-bot']) {
+test('role guard: the builder bot pushes only the branch checked out where git runs', () => {
+  for (const role of ['builder-bot']) {
     for (const command of ['git push origin feat/x', 'git push -u origin HEAD', `git -C ${feature} push origin feat/x`, 'git push origin feat/x && git checkout main']) assert.equal(decision(command, { role, cwd: feature }), 'none', `${role}: ${command}`);
     for (const command of ['git push origin feat/other', 'git push origin HEAD:feat/other', 'git push origin feat/x feat/other', 'git push origin feat/other:feat/x']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
     // The guard reads the branch before the command runs, so a push after a switch in the same command is refused.
     for (const command of ['git checkout feat/other && git push', 'git switch -c feat/y && git push origin HEAD', 'git branch -M feat/y && git push origin feat/x', 'git rebase origin/trunk trunk && git push', 'git symbolic-ref HEAD refs/heads/feat/other && git push', 'git branch --mov feat/y && git push origin HEAD', 'git bisect reset trunk && git push']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
     // git's folder is unknown after a later cd, so the checked-out branch cannot be read.
     assert.equal(decision(`git status && cd ${feature} && git push origin feat/x`, { role, cwd: feature }), 'deny', role);
+    // Only zsh runs the switch or cd: it keeps the NUL that ends the eval string in bash. The push is the same in every reading.
+    for (const command of [
+      `zsh -c 'eval $'"'"'\\0; git checkout trunk'"'"'; git push origin feat/x'`,
+      String.raw`zsh -c $'eval $\'\\0; git checkout trunk\'; git push origin feat/x'`,
+      `zsh -c 'eval $'"'"'\\0; cd /tmp'"'"'; git push origin feat/x'`,
+    ]) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
   }
 });
 
-test('role guard: a fixer or worker bot never force-pushes or deletes its branch', () => {
-  const forced = ['git push -f origin feat/x', 'git push -uf origin feat/x', 'git push --force origin feat/x', 'git push --force-with-lease origin feat/x', 'git push --forc origin feat/x', 'git push origin +feat/x', 'git push origin +HEAD:feat/x', 'git push -d origin feat/x', 'git push --delete origin feat/x', 'git push origin :feat/x'];
-  for (const role of ['fixer-bot', 'worker-bot']) for (const command of forced) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
+test('role guard: the builder bot never force-pushes or deletes its branch', () => {
+  const forced = ['git push -f origin feat/x', 'git push -uf origin feat/x', 'git push --force origin feat/x', 'git push --force-with-lease origin feat/x', 'git push --forc origin feat/x', 'git push origin +feat/x', 'git push origin +HEAD:feat/x', 'git push -d origin feat/x', 'git push --delete origin feat/x', 'git push origin :feat/x', 'git push origin `echo main`', 'git push origin `echo +feat/x`', 'git push origin `echo HEAD:main`', 'echo main | xargs git push origin'];
+  for (const role of ['builder-bot']) for (const command of forced) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
 });
 
 test('role guard: a role bot runs only gh commands that read', () => {
@@ -409,7 +415,8 @@ test('role guard: in PowerShell a bot is refused a merge or a write after any as
 });
 
 test('role guard: a set role it does not know, empty or without the -bot suffix included, runs no command and writes no file', () => {
-  for (const role of ['fixer_bot', 'Fixer-Bot', 'fixer-bot ', '', 'planner', 'maintainer', 'Coordinator']) {
+  // A bot role the guard does not list (planner-bot and the others below) runs nothing either.
+  for (const role of ['builder_bot', 'Builder-Bot', 'builder-bot ', '', 'builder', 'maintain', 'Coordinator', 'planner-bot', 'worker-bot', 'fixer-bot', 'maintainer-bot']) {
     assert.equal(decision('gh pr view 12', { role }), 'deny', JSON.stringify(role));
     assert.equal(decision(undefined, { role, tool: 'Write', toolInput: { file_path: 'notes.md', content: 'x' } }), 'deny', JSON.stringify(role));
   }
@@ -419,7 +426,7 @@ test('role guard: a set role it does not know, empty or without the -bot suffix 
   assert.equal(decision(undefined, { tool: 'Write', toolInput: { file_path: 'notes.md', content: 'x' } }), 'none');
 });
 
-test('role guard: the maintainer bot writes with a file tool only below results/ of its home, through links too', () => {
+test('role guard: the maintain bot writes with a file tool only below results/ and MEMORY.md of its home, through links too', () => {
   const home = mkdtempSync(join(tmpdir(), 'role-guard-home-'));
   const elsewhere = mkdtempSync(join(tmpdir(), 'role-guard-elsewhere-'));
   try {
@@ -427,22 +434,28 @@ test('role guard: the maintainer bot writes with a file tool only below results/
     mkdirSync(join(home, 'clones'));
     symlinkSync(elsewhere, join(home, 'results', 'out'));
     symlinkSync(join(elsewhere, 'missing.md'), join(home, 'results', 'dangling.md'));
-    const write = (file_path, { role = 'maintainer-bot', env = { CLAUDE_PROJECT_DIR: home }, cwd = home } = {}) =>
+    const write = (file_path, { role = 'maintain-bot', env = { CLAUDE_PROJECT_DIR: home }, cwd = home } = {}) =>
       decision(undefined, { role, cwd, env, tool: 'Write', toolInput: { file_path, content: 'x' } });
     assert.equal(write(join(home, 'results', 'r.md')), 'none');
     assert.equal(write('results/r.md'), 'none');
-    for (const path of [join(home, 'clones', 'r.md'), 'results/../x.md', join(home, 'results'), join(home, 'results', 'out', 'r.md'), join(home, 'results', 'dangling.md'), join(home, 'results', 'new', 'r.md'), join(elsewhere, 'r.md')]) {
+    assert.equal(write(join(home, 'MEMORY.md')), 'none');
+    assert.equal(write('clones/../MEMORY.md'), 'none');
+    for (const path of [join(home, 'SOUL.md'), join(home, 'memory.md'), join(home, 'clones', 'MEMORY.md'), join(home, 'clones', 'r.md'), 'results/../x.md', join(home, 'results'), join(home, 'results', 'out', 'r.md'), join(home, 'results', 'dangling.md'), join(home, 'results', 'new', 'r.md'), join(elsewhere, 'r.md')]) {
       assert.equal(write(path), 'deny', path);
     }
     assert.equal(write(join(home, 'results', 'r.md'), { env: {} }), 'deny');
+    assert.equal(write(join(home, 'MEMORY.md'), { env: {} }), 'deny');
+    // A MEMORY.md that links out of the home is no memory of this bot.
+    symlinkSync(join(elsewhere, 'MEMORY.md'), join(home, 'MEMORY.md'));
+    assert.equal(write(join(home, 'MEMORY.md')), 'deny');
     // The refusal sends the knowledge base write to the shell instead of telling the run to leave the step out.
     const clone = { hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: join(home, 'clones', 'maintain', '.cedarloom', 'knowledge', 'k.md'), content: 'x' }, tool_use_id: 'toolu_01', cwd: home };
-    const reason = JSON.parse(run(JSON.stringify(clone), 'maintainer-bot', undefined, { CLAUDE_PROJECT_DIR: home }).stdout).hookSpecificOutput.permissionDecisionReason;
+    const reason = JSON.parse(run(JSON.stringify(clone), 'maintain-bot', undefined, { CLAUDE_PROJECT_DIR: home }).stdout).hookSpecificOutput.permissionDecisionReason;
     assert.match(reason, /write the knowledge base and the clone from the shell\.$/);
     assert.doesNotMatch(reason, /Leave the step out/);
-    assert.equal(decision(undefined, { role: 'maintainer-bot', cwd: home, env: { CLAUDE_PROJECT_DIR: home }, tool: 'NotebookEdit', toolInput: { notebook_path: join(home, 'clones', 'n.ipynb'), new_source: 'x' } }), 'deny');
+    assert.equal(decision(undefined, { role: 'maintain-bot', cwd: home, env: { CLAUDE_PROJECT_DIR: home }, tool: 'NotebookEdit', toolInput: { notebook_path: join(home, 'clones', 'n.ipynb'), new_source: 'x' } }), 'deny');
     // The other roles keep their file tools wherever the settings let them.
-    for (const role of ['worker-bot', 'project-bot', 'coordinator']) assert.equal(write(join(home, 'clones', 'r.md'), { role }), 'none', role);
+    for (const role of ['builder-bot', 'reviewer-bot', 'project-bot', 'coordinator']) assert.equal(write(join(home, 'clones', 'r.md'), { role }), 'none', role);
     assert.equal(decision(undefined, { cwd: home, env: { CLAUDE_PROJECT_DIR: home }, tool: 'Write', toolInput: { file_path: join(home, 'clones', 'r.md'), content: 'x' } }), 'none');
   } finally {
     rmSync(home, { recursive: true, force: true });
@@ -557,6 +570,89 @@ test('role guard: a command reaches the queue or the window files through a cd, 
   ];
   for (const command of alike) assert.equal(decision(command, { cwd: session, env }), 'none', command);
   assert.equal(decision('Get-ChildItem *\\*', { tool: 'PowerShell', cwd: session, env }), 'none');
+});
+
+// The commands as written: String.raw keeps the backslashes of the shell's escapes.
+const raw = String.raw;
+
+test('role guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh do, in every check', () => {
+  const denied = [
+    // The role variable, with the parts of its name joined by an ANSI-C or locale string.
+    raw`env CEDARLOOM$'_'ROLE=coordinator claude -p "merge 12"`,
+    raw`env CEDARLOOM$'\x5f'ROLE=coordinator claude -p "merge 12"`,
+    raw`export CEDARLOOM$'\137'ROLE=coordinator`,
+    raw`export CEDARLOOM$'\u005f'ROLE=coordinator`,
+    raw`export CEDARLOOM$"_"ROLE=coordinator`,
+    // gh and git by hex, octal and unicode escapes, mixed with other quotes, and in text bash -c reads again.
+    raw`$'\x67h' pr merge 12`,
+    raw`g$'\150' pr merge 12`,
+    raw`$'\u0067\U00000068' release create v1.0.0`,
+    raw`"g"$'\x68' pr 'mer'$'\x67'e 12`,
+    raw`gh pr $'\x6derge' 12`,
+    raw`$'gi\x74' push --tags`,
+    raw`git $'\x73tash'`,
+    raw`bash -c $'gh\x20pr merge 12'`,
+    raw`bash -c $'echo ok\ngh pr merge 12'`,
+    // bash 3.2's \c takes one backslash of \c\\, so the second starts an escape of its own.
+    raw`bash -c $'\c\\x3b\x67h pr merge 12'`,
+    raw`eval $'\c\\x3b\x67h pr merge 12'`,
+    raw`eval $'\c\\ngh pr merge 12'`,
+    raw`bash -c $'\c\\073gh pr merge 12'`,
+    raw`bash -c $'\c\\\\\\x3b\x67h pr merge 12'`,
+    raw`bash -c $'echo a\c\\x3b\x67h pr merge 12'`,
+    // A nested shell decodes its own way: an outer zsh with an inner bash 3.2, and an outer bash with an inner zsh.
+    raw`bash -c $'bash -c \$\'\\c\\\\x3b\\x67h pr merge 12\''`,
+    raw`zsh -c $'true\cJ$\'g\\h\' pr merge 12'`,
+    // A NUL ends the string's value in bash.
+    raw`$'gh\0x' pr merge 12`,
+    raw`$'g\x00'h pr merge 12`,
+    // zsh reads an unknown escape, \c included, as the plain character.
+    raw`$'g\h' pr merge 12`,
+    raw`$'g\it' push --tags`,
+    // zsh hands a program each word up to its first NUL.
+    raw`$'g\h\0x' pr merge 12`,
+    // Bare mode and GIT_DIR, which export sets after the shell decodes its argument.
+    raw`claude $'--\x62are' -p "merge pull request 12"`,
+    raw`export GIT$'_'DIR=/tmp/x; git push origin feat/x`,
+  ];
+  for (const command of denied) assert.equal(decision(command), 'deny', command);
+  assert.equal(decision(raw`gh pr merge 12 $'--\x61dmin'`, { role: 'coordinator' }), 'deny');
+
+  const data = mkdtempSync(join(tmpdir(), 'role-guard-'));
+  const session = mkdtempSync(join(tmpdir(), 'role-guard-'));
+  mkdirSync(join(session, '.cedarloom', 'questions'), { recursive: true });
+  const env = { CLAUDE_PLUGIN_DATA: data, CLAUDE_PID: '4242' };
+  const queue = [
+    // A session started with /cl-workflow:away off, spelled with escapes bash or zsh decode.
+    raw`claude -p $'/cl-workflow:away\x20off'`,
+    raw`claude -p $'/cl-workflow:away\040off'`,
+    raw`claude -p $'/cl-workflow:away\u0020off'`,
+    raw`claude -p $'/cl-workflow:away\toff'`,
+    raw`claude -p $'/cl-workflow:away\cIoff'`,
+    raw`claude -p $'/cl-workflow:away\C-ioff'`,
+    raw`claude -p $'/cl-workflow:away\Cioff'`,
+    raw`claude -p $'/cl-workflow:away\C\x69off'`,
+    raw`claude -p $'/cl-workflow:awa\y off\0x'`,
+    raw`claude -p /cl-workflow:away$'\x20'off`,
+    raw`claude -p $'/cl-workflow:\x71uestions'`,
+    raw`$'\x63laude' -p /questions`,
+    raw`$'c\laude' -p /questions`,
+    // A path into the queue.
+    raw`echo x >> .cedarloom/$'\x71'uestions/project-1.md`,
+    raw`cd $'.cedarloom\x2fquestions' && echo x > project-1.md`,
+  ];
+  for (const command of queue) assert.equal(decision(command, { cwd: session, env }), 'deny', command);
+  assert.equal(decision(queue[0], { cwd: session, env, role: 'coordinator' }), 'deny');
+
+  const allowed = [
+    raw`gh pr view $'\x31\x32'`,
+    raw`git commit -m $'fix: x\n\nThe body.'`,
+    raw`printf $'%s\n' "it's fine"`,
+    raw`gh pr comment 12 --body $'it\'s fine'`,
+    raw`claude -p $'/cl-workflow:away 2h'`,
+    raw`grep -n $'\x2fquestions' notes.md`,
+  ];
+  for (const command of allowed) assert.equal(decision(command, { cwd: session, env }), 'none', command);
 });
 
 test('role guard: every path field of the edit tools is read, resolved from the session folder', () => {

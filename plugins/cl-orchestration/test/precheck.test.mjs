@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { argsOf, check, distinct, pickable, report, unread } from '../skills/coordinate/precheck.mjs';
+import { argsOf, check, distinct, pickable, priorities, report, unread } from '../skills/coordinate/precheck.mjs';
 
 const POLICY = { startLabel: 'agent-ready', trustedAuthors: ['helper[bot]'] };
 const issue = (number, extra = {}) => ({ number, author_association: 'OWNER', user: { login: 'owner' }, labels: [{ name: 'agent-ready' }], ...extra });
@@ -54,27 +54,27 @@ function home() {
 }
 const RUN = '20261124T101500Z-a1b2c3-1.md';
 
-test('precheck: a planner or worker result the pick sweep has not read is work', () => {
+test('precheck: a builder result of round 0 the pick sweep has not read is work', () => {
   const h = home();
-  h.prompt(`project-12-planner-1-${RUN}`, `bot-planner.md\n\nResult file: ${join(h.results, `project-12-planner-1-${RUN}`)}\n`);
-  h.result(`project-12-planner-1-${RUN}`, 'The plan.\n');
-  assert.deepEqual(unread(h.prompts), [`project-12-planner-1-${RUN}: the planner result is unread`]);
+  h.prompt(`project-12-builder-0-${RUN}`, `bot-builder.md\n\nResult file: ${join(h.results, `project-12-builder-0-${RUN}`)}\n`);
+  h.result(`project-12-builder-0-${RUN}`, 'The plan.\n');
+  assert.deepEqual(unread(h.prompts), [`project-12-builder-0-${RUN}: the builder result is unread`]);
   // The spec before the result line may quote such a line: the last one names the result file.
-  h.prompt(`my-project-14-worker-2-${RUN}`, `bot-worker.md\nResult file: ${join(h.results, 'example.md')}\nResult file: ${join(h.results, 'w.md')}`);
+  h.prompt(`my-project-14-builder-0-${RUN}`, `bot-builder.md\nResult file: ${join(h.results, 'example.md')}\nResult file: ${join(h.results, 'w.md')}`);
   h.result('w.md', 'DONE\n');
-  assert.deepEqual(unread(h.prompts), [`my-project-14-worker-2-${RUN}: the worker result is unread`, `project-12-planner-1-${RUN}: the planner result is unread`]);
+  assert.deepEqual(unread(h.prompts), [`my-project-14-builder-0-${RUN}: the builder result is unread`, `project-12-builder-0-${RUN}: the builder result is unread`]);
 });
 
-test('precheck: a read result, a run without its result yet and a reviewer or fixer result are no work', () => {
+test('precheck: a read result, a run without its result yet and a reviewer or later builder round result are no work', () => {
   const h = home();
   // Read: the pick sweep deleted the prompt file, and the result file stays.
-  h.result(`project-12-worker-1-${RUN}`, 'DONE\n');
-  h.prompt(`project-14-worker-1-${RUN}`, `Result file: ${join(h.results, 'pending.md')}\n`);
-  // A reviewer's or fixer's result is read through its state file.
+  h.result(`project-12-builder-0-${RUN}`, 'DONE\n');
+  h.prompt(`project-14-builder-0-${RUN}`, `Result file: ${join(h.results, 'pending.md')}\n`);
+  // A reviewer's result and a builder's fix round are read through the state file.
   h.prompt(`project-15-reviewer-1-${RUN}`, `Result file: ${h.result('r.md', 'Head: c0ffee\n')}\n`);
-  h.prompt(`project-15-fixer-1-${RUN}`, `Result file: ${h.result('f.md', 'DONE\n')}\n`);
+  h.prompt(`project-15-builder-1-${RUN}`, `Result file: ${h.result('f.md', 'DONE\n')}\n`);
   // An empty result file is a write not done.
-  h.prompt(`project-16-worker-1-${RUN}`, `Result file: ${h.result('empty.md', '')}\n`);
+  h.prompt(`project-16-builder-0-${RUN}`, `Result file: ${h.result('empty.md', '')}\n`);
   h.prompt('.DS_Store', '');
   assert.deepEqual(unread(h.prompts), []);
 });
@@ -83,41 +83,43 @@ test('precheck: a prompts folder, prompt or result file that cannot be checked c
   const h = home();
   assert.deepEqual(unread(join(h.prompts, 'none')), ['the folder does not exist']);
   h.prompt('notes.md', 'x');
-  h.prompt(`project-1-worker-1-${RUN}`, 'bot-worker.md\n');
-  h.prompt(`project-2-planner-1-${RUN}`, 'Result file: results/plan.md\n');
-  h.prompt(`project-4-worker-1-${RUN}`, `Result file: ${h.results}\n`);
+  h.prompt(`project-1-builder-0-${RUN}`, 'bot-builder.md\n');
+  h.prompt(`project-2-builder-0-${RUN}`, 'Result file: results/plan.md\n');
+  h.prompt(`project-3-worker-1-${RUN}`, `Result file: ${h.result('w.md', 'DONE\n')}\n`);
+  h.prompt(`project-4-builder-0-${RUN}`, `Result file: ${h.results}\n`);
   assert.deepEqual(unread(h.prompts), [
     'notes.md is no role bot prompt file',
-    `project-1-worker-1-${RUN} names no absolute result file`,
-    `project-2-planner-1-${RUN} names no absolute result file`,
-    `project-4-worker-1-${RUN}: its result file is no file`,
+    `project-1-builder-0-${RUN} names no absolute result file`,
+    `project-2-builder-0-${RUN} names no absolute result file`,
+    `project-3-worker-1-${RUN} is no role bot prompt file`,
+    `project-4-builder-0-${RUN}: its result file is no file`,
   ]);
 });
 
 test('precheck: a file it cannot check counts only while it or its result file changed within the last hour, and an unread result at any age', () => {
   const h = home();
   const now = Date.now(), old = new Date(now - 61 * 60_000), recent = new Date(now - 59 * 60_000);
-  const plan = h.prompt(`project-5-planner-1-${RUN}`, `Result file: ${h.result('plan.md', 'The plan.\n')}\n`);
-  const noFile = h.prompt(`project-4-worker-1-${RUN}`, `Result file: ${h.results}\n`);
+  const plan = h.prompt(`project-5-builder-0-${RUN}`, `Result file: ${h.result('plan.md', 'The plan.\n')}\n`);
+  const noFile = h.prompt(`project-4-builder-0-${RUN}`, `Result file: ${h.results}\n`);
   for (const file of [h.prompt('notes.md', 'x'), plan, join(h.results, 'plan.md'), noFile]) utimesSync(file, old, old);
   utimesSync(h.prompt('todo.md', 'x'), recent, recent);
   utimesSync(h.results, recent, recent);
-  const listed = [`project-5-planner-1-${RUN}: the planner result is unread`, 'todo.md is no role bot prompt file'];
-  assert.deepEqual(unread(h.prompts, now), [`project-4-worker-1-${RUN}: its result file is no file`, ...listed]);
+  const listed = [`project-5-builder-0-${RUN}: the builder result is unread`, 'todo.md is no role bot prompt file'];
+  assert.deepEqual(unread(h.prompts, now), [`project-4-builder-0-${RUN}: its result file is no file`, ...listed]);
   utimesSync(h.results, old, old);
   assert.deepEqual(unread(h.prompts, now), listed);
 });
 
 test('precheck: an unread result exits 0 with no issue to pick and is named on stderr', () => {
-  assert.deepEqual(report(['/a'], () => ({ tracker: 'owner/project', numbers: [] }), ['/home/prompts: p.md: the worker result is unread']), { out: [], err: ['/home/prompts: p.md: the worker result is unread'], code: 0 });
+  assert.deepEqual(report(['/a'], () => ({ tracker: 'owner/project', numbers: [] }), ['/home/prompts: p.md: the builder result is unread']), { out: [], err: ['/home/prompts: p.md: the builder result is unread'], code: 0 });
   const h = home();
-  h.prompt(`project-12-planner-1-${RUN}`, `Result file: ${h.result('plan.md', 'The plan.\n')}\n`);
+  h.prompt(`project-12-builder-0-${RUN}`, `Result file: ${h.result('plan.md', 'The plan.\n')}\n`);
   // A project without a policy picks nothing: the exit is the result's.
   const script = fileURLToPath(new URL('../skills/coordinate/precheck.mjs', import.meta.url));
   const run = spawnSync(process.execPath, [script, '--prompts', h.prompts, join(h.prompts, 'missing')], { encoding: 'utf8' });
   assert.equal(run.status, 0, run.stderr);
   assert.equal(run.stdout, '');
-  assert.ok(run.stderr.split('\n').includes(`${h.prompts}: project-12-planner-1-${RUN}: the planner result is unread`), run.stderr);
+  assert.ok(run.stderr.split('\n').includes(`${h.prompts}: project-12-builder-0-${RUN}: the builder result is unread`), run.stderr);
 });
 
 test('precheck: an issue that several projects list starts in none of them', () => {
@@ -149,6 +151,26 @@ test('precheck: the command line prints no issue that several projects list, nam
   assert.deepEqual(report(['/a'], () => ({ tracker: 'owner/project', numbers: [], warnings: [{ rule: 'refused', path: 'issues.repository', message: 'is refused' }] })), { out: [], err: ['/a: refused at issues.repository: is refused'], code: 1 });
 });
 
+test('precheck: prints the issues by Priority, Urgent to Low and then none, oldest first within a level, each with its level', () => {
+  const priority = { 3: 'Low', 8: 'Urgent', 9: 'high', 12: 'Medium', 14: 'High', 15: 'Someday' };
+  assert.deepEqual(report(['/a'], () => ({ tracker: 'owner/project', numbers: [15, 14, 12, 9, 8, 5, 3], priority })).out, ['/a: #8 (urgent) #9 (high) #14 (high) #12 (medium) #3 (low) #5 #15']);
+});
+
+test('precheck: reads the Priority field through GraphQL, and an issue without it or an API without issue fields has none', () => {
+  const value = (field, name) => ({ name, field: { name: field } });
+  const data = { i7: { number: 7, issueFieldValues: { nodes: [value('Effort', 'High'), value('Priority', 'Urgent')] } }, i8: { number: 8, issueFieldValues: { nodes: [value('Effort', 'Low'), {}] } }, i9: { number: 9, issueFieldValues: { nodes: [] } } };
+  const asked = [];
+  const exec = (cmd, args) => { asked.push(args); return JSON.stringify({ data: { repository: data } }); };
+  assert.deepEqual(priorities('owner/project', [7, 8, 9], exec), { 7: 'Urgent' });
+  assert.deepEqual(asked[0].slice(0, 2), ['api', 'graphql']);
+  assert.deepEqual(asked[0].slice(-4), ['-f', 'owner=owner', '-f', 'name=project']);
+  assert.deepEqual(priorities('owner/project', [], () => { throw new Error('not asked'); }), {});
+  // execFileSync's message quotes the command, which names the issue fields; stderr holds gh's error alone.
+  const fails = (stderr) => (cmd, args) => { throw Object.assign(new Error(`Command failed: ${cmd} ${args.join(' ')}\n${stderr}`), { stderr }); };
+  assert.deepEqual(priorities('owner/project', [7], fails("gh: Field 'issueFieldValues' doesn't exist on type 'Issue'")), {});
+  assert.throws(() => priorities('owner/project', [7], fails('gh: HTTP 502')), /HTTP 502/);
+});
+
 const calls = [];
 const stub = (policy, origin = 'git@github.com:owner/project.git') => (dir, cmd, withSettings) => {
   calls.push([cmd, ...withSettings].join(' '));
@@ -159,6 +181,7 @@ const stub = (policy, origin = 'git@github.com:owner/project.git') => (dir, cmd,
   if (args[0] === 'remote') return `${origin}\n`;
   if (args[0] === 'ls-tree') return policy ? 'docs/agents/orchestration.json\n' : '';
   if (args[0] === 'show') return JSON.stringify(policy);
+  if (args[0] === 'api' && args[1] === 'graphql') return JSON.stringify({ data: { repository: {} } });
   if (args[0] === 'api') return JSON.stringify([7, 8, 9, 10].map((n) => [issue(n)]));
   // 7: a closed pull request and an open one from a fork, which anyone can open; 8: an open one of the project; 9: a merged one from a fork; 10: a merged one.
   return JSON.stringify([
@@ -198,7 +221,7 @@ test('precheck: a member or collaborator counts only with write access to the re
   const roles = { reader: 'read', writer: 'write', maintainer: 'write', admin: 'admin', mona_acme: 'write' };
   const asked = [];
   const run = (fails) => (dir, cmd, args) => {
-    if (args[0] !== 'api') return stub(POLICY)(dir, cmd, args);
+    if (args[0] !== 'api' || args[1] === 'graphql') return stub(POLICY)(dir, cmd, args);
     if (args[1] === '--paginate') return JSON.stringify([issues]);
     asked.push(args.join(' '));
     if (fails) throw new Error('HTTP 502');
