@@ -10,7 +10,7 @@ A worker of an automatic project ([modes.md](modes.md#modes)) cannot commit, pus
 - Trusted authors: the `gh api` check is the coordinator's, done for the Thread block.
 - Chat name: left out.
 - Acknowledge: "You have no message, report or question command, whatever Orca's start message names: run no Orca command." in place of the line. Its report is its final answer, read through Orca ([modes.md](modes.md#automatic-bounds)).
-- Branch: without "fetch it" and the merge of origin/<default branch>: the worker reaches no GitHub host, so the coordinator runs `git -C <project path> fetch origin` right before the start, and a merge is the coordinator's ([Commit and push](commit-and-push.md)).
+- Branch: without "fetch it" and the merge of origin/<default branch>: the worker fetches and merges nothing (its spec), so the coordinator runs `git -C <project path> fetch origin` right before the start, and a merge is the coordinator's ([Commit and push](commit-and-push.md)).
 - You may: "create the branch named above, stage changes to the owned paths with `git add`, resolve the conflicts of a merge the coordinator started, and run checks" in place of the rest of the line: a merge is a commit too.
 - You may not: also "commit, merge, push or run `gh`, also where the worker rules say to (a stop request: stage and report)"; "start with a flag that bypasses or skips permission prompts" stays.
 - Flow, Quick depth: "stage" in place of "commit". Every depth: "once the work is staged, report: the coordinator commits it, pushes the branch and opens the draft pull request, with your commit message as its body" in place of the push, pull request and checks steps.
