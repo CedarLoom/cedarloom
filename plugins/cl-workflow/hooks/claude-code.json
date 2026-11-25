@@ -8,7 +8,7 @@
     ],
     "UserPromptExpansion": [
       {
-        "matcher": "^cl-workflow:(away|ask|questions)$",
+        "matcher": "^cl-workflow:away$",
         "hooks": [{ "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/ask/ask.mjs"] }]
       }
     ],

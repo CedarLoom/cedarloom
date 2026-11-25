@@ -76,11 +76,11 @@ function pending({ clone, state, now, run, queue, counts }) {
 
   const writes = writers(repo, (cmd, args) => run(clone, cmd, args));
   const acted = new Set(stored('answered.json') ?? []);
-  // An answer through the questions skill takes cl:needs-human off at once, so the open issues updated in the answer window are read too.
+  // An answer through the question queue takes cl:needs-human off at once, so the open issues updated in the answer window are read too.
   const since = new Date(now.getTime() - ANSWER_DAYS * 24 * 60 * MINUTE).toISOString().slice(0, 10);
   const listed = (...filter) => gh('issue', 'list', '-R', repo, ...filter, '--state', 'open', '--limit', '1000', '--json', 'number,labels,comments,author,body,url');
   const asker = asks(policy, writes);
-  // Only triage rights set the label: without it, an issue counts as a question only when a trusted author wrote it and the answer has the questions skill's full form.
+  // Only triage rights set the label: without it, an issue counts as a question only when a trusted author wrote it and the answer has the question queue's full form.
   const full = (issue, at) => issue.comments.some((c) => c.createdAt === at && c.body?.startsWith('Owner answer ('));
   const labeled = listed('--label', 'cl:needs-human');
   for (const issue of [...labeled, ...listed('--search', `updated:>=${since}`)]) {
