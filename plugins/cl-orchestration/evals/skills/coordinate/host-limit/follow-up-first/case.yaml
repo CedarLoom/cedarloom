@@ -1,0 +1,32 @@
+schema_version: "1.1"
+name: coord-host-limit-follow-up-first
+description: 'A follow-up counts like a start for both caps, counted without the worker that takes it, and a waiting follow-up takes a free slot before any new pick (from CedarLoom/cedarloom#148). Needs --scaffold.'
+tags: [cl-orchestration, coord-host-limit]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    Dry run of the next wake-up: run no command, change no file, and decide from these facts as the skill says.
+    - The policy reader printed `workersPerProject` 1 and `hostWorkerLimit` 2 for `project`.
+    - `orca orchestration run-list --json` shows `run-a`, this run, and `run-b`, a project bot's run on another repository.
+    - run-a: the supervised Claude Code worker of issue 12 reported DONE with draft pull request 40 and is kept open (not released; its terminal `term-12` is listed). Its row shows outcome `done`. The review of pull request 40 found two findings, and their follow-up to that worker is not sent yet.
+    - run-b: the worker of issue 7, outcome `in_progress`, its terminal listed.
+    - Issue 31 of `project` is the next pick, with no worker yet.
+
+    Write these two lines, then stop:
+    `Follow-up for 12: <send now|wait>`
+    `Start 31: <now|wait>`
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: follow-up-sent-now
+    pattern: 'Follow-up for 12:\W*send now'
+    flags: i
+  - type: regex
+    name: new-pick-waits
+    pattern: 'Start 31:\W*wait\b'
+    flags: i
+expected_outcome: 'Follow-up for 12: send now (counted without the worker that takes it: one working on the host, none in the project). Start 31: wait (the follow-up worker fills workersPerProject 1 and the host limit of 2, and a waiting follow-up comes before a pick).'

@@ -1,0 +1,37 @@
+schema_version: "1.1"
+name: coord-host-limit-count-every-run
+description: 'The host limit counts the `in_progress` rows of every run Orca lists, not a `retained` terminal state, leaves out a worker whose terminal close is confirmed, and counts a start held at a dialog in `## Open`; at the limit the next pick waits. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca.md:87. Needs --scaffold.'
+tags: [cl-orchestration, coord-host-limit]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    Dry run of the host limit count before the next start: run no command, change no file, and decide from these facts as the skill says.
+    - The policy reader printed `workersPerProject` 3 and `hostWorkerLimit` 3 for `project`. Issue 31 is the next pick there, a Claude Code worker.
+    - `orca orchestration run-list --json` shows two runs: `run-a`, this run, and `run-b`, a project bot's run on another repository.
+    - The workers of run-a (all Claude Code):
+      - issue 12: outcome `in_progress`, terminal state `retained`, terminal `term-12`
+      - issue 14: outcome `in_progress`, terminal state `retained`, terminal `term-14`; this run released it and confirmed its terminal closed
+      - issue 16: outcome `done`, terminal state `retained`, terminal `term-16`, no follow-up open
+    - The workers of run-b (all Claude Code):
+      - issue 7: outcome `in_progress`, terminal state `retained`, terminal `term-7`
+      - issue 9: outcome `in_progress`, terminal state `retained`, terminal `term-9`
+    - `orca terminal list --json` lists `term-12`, `term-16`, `term-7` and `term-20`.
+    - The handoff file's `## Open` holds issue 20 of `project`: its start stopped at a folder trust dialog in `term-20`, which the owner has not answered.
+
+    Write these two lines, then stop:
+    `Counted: <the issue numbers you count toward hostWorkerLimit, comma-separated>`
+    `Decision: <start 31|wait>`
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: counted-set
+    pattern: 'Counted:(?=[^\n]*\b12\b)(?=[^\n]*\b7\b)(?=[^\n]*\b20\b)(?![^\n]*\b(14|9|16|31)\b)[^\n]*'
+  - type: regex
+    name: host-full-waits
+    pattern: 'Decision:\W*wait\b'
+    flags: i
+expected_outcome: 'Counted: 12, 7, 20 (14 and 9 have confirmed closed terminals, 16 is done). Three of three: Decision: wait.'

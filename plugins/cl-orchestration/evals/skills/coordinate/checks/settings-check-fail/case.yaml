@@ -1,0 +1,30 @@
+schema_version: "1.1"
+name: coord-checks-settings-check-fail
+description: 'A failed --check read of an automatic worker''s settings file makes that item BLOCKED and starts no worker, without the fallback to supervised that the other failed checks take. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/automatic-start.md:8. Needs --scaffold.'
+tags: [cl-orchestration, coord-checks]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command and change no file. Decide from these facts and the skill's text.
+
+    - The project runs automatic; the handoff's `Mode:` line says so. Checks 1, 3 and 4 and the probe of Automatic start passed earlier in this run, and the automatic worker of issue 14 is working.
+    - A slot is free for issue 15. `node <skill folder>/worker-settings.mjs` wrote its settings file and exited 0. Then `node <skill folder>/worker-settings.mjs --check` with the same arguments, as the last command before `terminal create`, exited 1.
+
+    Write exactly these lines, then stop:
+    Issue 15: <start automatic|start supervised|BLOCKED, no worker>
+    Project mode for the rest of the run: <automatic|supervised>
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: item-blocked
+    pattern: 'Issue 15:\W*BLOCKED\b'
+    flags: i
+  - type: regex
+    name: no-fallback
+    pattern: 'Project mode for the rest of the run:\W*automatic\b'
+    flags: i
+expected_outcome: 'Issue 15: BLOCKED, no worker; Project mode for the rest of the run: automatic (a failed --check read is the one failure that takes no fallback to supervised).'

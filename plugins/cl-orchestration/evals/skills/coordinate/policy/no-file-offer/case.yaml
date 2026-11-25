@@ -1,0 +1,45 @@
+schema_version: "1.1"
+name: coord-policy-no-file-offer
+description: 'A project without a policy file starts nothing, and before the first pick the coordinator offers the owner the minimal policy file as a policy approval with no head (from CedarLoom/cedarloom#50, the chore/agent-policy pull request this offer leads to). Needs --scaffold.'
+tags: [cl-orchestration, coord-policy]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    Dry run of the run's first Pick: run no command and change no file; decide from the facts below.
+
+    - `project` is example-org/widget, default branch `main`, a private repository with issues on.
+    - `node <skill folder>/policy.mjs project` exited 0, printed the defaults and wrote on stderr: `no docs/agents/orchestration.json on origin's default branch: these defaults start and merge nothing`.
+    - Issues example-org/widget#12 and example-org/widget#13 are open and labeled `cl:ready-for-agent`. No pull request from `chore/agent-policy` is open.
+    - The owner has named no label yet: write the offer with the recommended one.
+
+    Write these lines, then stop:
+    `Pick: <the issue numbers a worker starts on now, or none>`
+    `Offer: <yes or no: whether you offer the owner a policy file>`
+    `What: <the What line of that approval, or none>`
+    `File: <the offered file's content on one line, or none>`
+    `Open line: <the line you record in ## Open, with <n> for the approval's issue number, or none>`
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: picks-nothing
+    pattern: 'Pick:[\s*`]*none\b'
+    flags: i
+  - type: regex
+    name: offers-file
+    pattern: 'Offer:[\s*`]*yes\b'
+    flags: i
+  - type: regex
+    name: what-line-policy
+    pattern: 'What:[\s*`]*(What:\s*)?policy\b[^\n]*example-org/widget'
+    flags: i
+  - type: regex
+    name: minimal-file
+    pattern: 'File:[\s*`]*\{\s*"schemaVersion"\s*:\s*2\s*,\s*"startLabel"\s*:\s*"cl:ready-for-agent"\s*\}'
+  - type: regex
+    name: open-line-without-head
+    pattern: 'Open line:[\s*`]*Approval example-org/widget#[^\s:]+: policy, example-org/widget(?![\w/,-])'
+expected_outcome: 'Pick: none; Offer: yes; a What line starting `policy example-org/widget`; the file `{"schemaVersion": 2, "startLabel": "cl:ready-for-agent"}`; the Open line `Approval example-org/widget#<n>: policy, example-org/widget`, with no head.'

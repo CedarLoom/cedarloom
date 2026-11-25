@@ -1,0 +1,42 @@
+schema_version: "1.1"
+name: coord-review-sensitive-level
+description: 'A pull request that changes CI is sensitive even with a low risk class and an empty `sensitive` list, so its review runs at `review.sensitiveDepth` with a security pass the reviewer makes itself, never through `/security-review`. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/review.md:44. Needs --scaffold.'
+tags: [cl-orchestration, coord-review]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run of the review step for one pull request: run no command and start no subagent; decide from these facts and the skill's files.
+
+    - Pull request 14 of example-org/widget, default branch `main`, head `3c9e5a1f0b7d2e4c6a8b0d1f3e5c7a9b1d3f5e70`, from the worker of issue 14 on branch `fix/14-date-format`. Mergeable, every check green. You run in Claude Code with the plugin.
+    - Its diff (`refs/remotes/origin/main...3c9e5a1f0b7d2e4c6a8b0d1f3e5c7a9b1d3f5e70`) changes two files: `src/format.js` (the date format of a log line) and `.github/workflows/test.yml` (adds a Node.js 24 job to the test matrix).
+    - The verdict of the head: `sensitive` and `risky` are empty, `risk` is `low`; you decided the risk class `low`.
+    - The policy reader prints `review.depth` `medium` and `review.sensitiveDepth` `high`.
+
+    Write these lines, then stop:
+    `Class: <routine or sensitive>`
+    `Level: <the review level>`
+    `Security pass: <yes or no>`
+    `Security command: <the slash command the reviewer runs for the security pass, or none>`
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: ci-change-is-sensitive
+    pattern: 'Class:[\s*`]*sensitive\b'
+    flags: i
+  - type: regex
+    name: sensitive-depth-level
+    pattern: 'Level:[\s*`]*high\b'
+    flags: i
+  - type: regex
+    name: security-pass-runs
+    pattern: 'Security pass:[\s*`]*yes\b'
+    flags: i
+  - type: regex
+    name: no-security-review-command
+    pattern: 'Security command:[\s*`]*none\b'
+    flags: i
+expected_outcome: 'Class: sensitive (it changes CI); Level: high (review.sensitiveDepth); Security pass: yes; Security command: none, since `/security-review` takes no target and reviews the working directory branch, so the reviewer makes the security pass itself over the diff.'

@@ -1,0 +1,45 @@
+schema_version: "1.1"
+name: coord-digest-owed-at-close
+description: 'A run that closes with a decision taken on the owner''s behalf that the last digest (in .cedarloom/digests/, so not digests/) does not list owes a digest, written before the handoff file is deleted, listing only that decision. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/SKILL.md:94. Needs --scaffold.'
+tags: [cl-orchestration, coord-digest]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command, start nothing and write no file. Decide from the facts below and the files in this working directory.
+
+    The run r-1125 of this session on project (example-org/widget) is closing now: no worker is active, no pull request waits and the last Reconciliation is done. Its handoff file is `.cedarloom/runs/handoff.md` (its Session line is a stand-in for this session in this dry run). `date +%F` prints 2026-11-25. The owner did not ask for a digest. The digests in this working directory are under `.cedarloom/digests/` and `digests/`.
+
+    Write these lines, then stop:
+    Last digest: <path>
+    Digest owed: <yes or no>
+    Path: <the digest file you write, or none>
+    On the owner's behalf: <the decisions the digest lists as taken on the owner's behalf, or none>
+    When: <before or after deleting the handoff file>
+  max_turns: 12
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: last-digest
+    pattern: 'Last digest:\W*\.cedarloom/digests/2026-11-24\.md'
+  - type: regex
+    name: owed
+    pattern: 'Digest owed:\W*yes\b'
+    flags: i
+  - type: regex
+    name: path
+    pattern: 'Path:\W*\.cedarloom/digests/2026-11-25\.md'
+  - type: regex
+    name: lists-the-missing-decision
+    pattern: 'behalf:[^\n]*\b31\b'
+  - type: regex
+    name: leaves-out-listed-and-owner-decisions
+    pattern: 'behalf:[^\n]*(AGENTS\.md|npm test|#?50\b)'
+    match: not_contains
+  - type: regex
+    name: before-handoff-delete
+    pattern: 'When:\W*before\b'
+    flags: i
+expected_outcome: 'Last digest: .cedarloom/digests/2026-11-24.md (digests/ counts only when .cedarloom/digests/ holds none). Digest owed: yes. Path: .cedarloom/digests/2026-11-25.md. On the owner''s behalf: issue 31 picked before issue 33 only; the npm test reading is in the last digest and the #50 merge is the owner''s. When: before deleting the handoff file.'

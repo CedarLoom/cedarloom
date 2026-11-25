@@ -1,0 +1,41 @@
+schema_version: "1.1"
+name: coord-watch-timer-wake-checks
+description: 'A timer wake-up with no mail runs the wake-up checks with their exact commands, worker-list of the run with --full and the merged pull request list of the branch, and stops no worker whose state is ready while its branch is younger than stallMinutes. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca-watch.md:21. Needs --scaffold.'
+tags: [cl-orchestration, coord-watch]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    Run run-7 of this project is open in this session, in supervised mode. Orca's executable is `orca`; the start condition held at the run's start. Its one worker is dispatch `d-12` (task `t-12`, terminal `term-12`), a supervised Claude Code worker on issue 12, branch `fix/12-login-timeout`, worktree `worktrees/12-login-timeout` in this working directory. It acknowledged its task 15 minutes ago and has no pull request yet. No escalation is unhandled, and the run's session cron is in place.
+
+    This turn is the timer's wake-up, with no mail. Run this wake-up's checks once, as the skill says, writing no file. Then write these lines and stop:
+    Worker 12: <keep waiting | read its last output | stop it>
+    Merged: <the numbers of merged pull requests of this run, or none>
+  max_turns: 25
+  allowed_tools: [Bash]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch, CronCreate, CronDelete]
+graders:
+  - type: regex
+    name: worker-list-full
+    pattern: '"args":\["orchestration","worker-list",(?=[^\]]*"--run","run-7")(?=[^\]]*"--full")'
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: merged-pr-list
+    pattern: '"args":\["pr","list","-R","example-org/widget","--head","fix/12-login-timeout","--state","merged","--json","number,title,mergedAt"\]'
+    target: { source: file, path: .fake/gh-calls.jsonl }
+  - type: regex
+    name: no-stop-start-or-send
+    pattern: '"args":\["orchestration","(worker-stop|worker-start|worker-release|send)"'
+    match: not_contains
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: keeps-waiting
+    pattern: 'Worker 12:\W*keep waiting'
+    flags: i
+  - type: regex
+    name: nothing-merged
+    pattern: 'Merged:\W*none'
+    flags: i
+expected_outcome: 'The coordinator runs `orca orchestration worker-list --run run-7 --full` (with --json) and `gh pr list -R example-org/widget --head fix/12-login-timeout --state merged --json number,title,mergedAt`, finds the last commit 5 minutes old, under stallMinutes 20, and writes Worker 12: keep waiting and Merged: none, with no worker-stop, worker-start, worker-release or send.'

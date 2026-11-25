@@ -1,0 +1,52 @@
+schema_version: "1.1"
+name: coord-follow-up-fable-successor
+description: 'A worker on fable that already reported gets no follow-up: it is released and a fresh worker takes the follow-up on its branch, in the worktree that holds the work with its handoff under Shared context, and that start counts like a start. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca-follow-ups.md:20. Needs --scaffold.'
+tags: [cl-orchestration, coord-follow-up]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command and change no file. Decide from these facts and the skill's text.
+
+    - The run is supervised. The worker of issue 12 is a supervised Claude Code worker whose spec's `Agent:` line names `fable`. Dispatch `d-12`, terminal `term-12`, worktree `/srv/orca/worktrees/widget/12-login-timeout` on branch `fix/12-login-timeout`.
+    - It reported DONE with pull request example-org/widget#31, and its handoff is already copied into the run folder.
+    - The review of #31 found two findings that need a fix on that branch. The worktree and the branch are still there, and no other worker owns them.
+
+    Write exactly these lines, then stop:
+    Send to worker 12: <yes|no>
+    Release worker 12: <yes|no>
+    Fix by: <worker 12|a fresh worker>
+    Worktree: <the same worktree|a new worktree>
+    Shared context: <what goes under it, or none>
+    Counts like a start for hostWorkerLimit: <yes|no>
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: no-send-to-fable-worker
+    pattern: 'Send to worker 12:\W*no\b'
+    flags: i
+  - type: regex
+    name: fable-worker-released
+    pattern: 'Release worker 12:\W*yes\b'
+    flags: i
+  - type: regex
+    name: fresh-worker-in-same-worktree
+    pattern: 'Fix by:\W*a fresh worker[\s\S]*Worktree:\W*the same worktree'
+    flags: i
+  - type: regex
+    name: handoff-under-shared-context
+    pattern: 'Shared context:[^\n]*handoff'
+    flags: i
+  - type: regex
+    name: counts-like-a-start
+    pattern: 'Counts like a start for hostWorkerLimit:\W*yes\b'
+    flags: i
+  - type: tool_used
+    name: no-file-written
+    tool: Write
+    min: 0
+    max: 0
+expected_outcome: 'Send to worker 12: no; Release worker 12: yes; Fix by: a fresh worker; Worktree: the same worktree; Shared context: the worker''s handoff; Counts like a start for hostWorkerLimit: yes.'

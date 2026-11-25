@@ -1,0 +1,36 @@
+schema_version: "1.1"
+name: coord-review-code-review-scratch
+description: 'A reviewer reads the pull request only through git in the scratch clone, hands `/code-review` the range with the clone in words, and finds the planted inverted expiry check in src/session.js; the case shows whether `/code-review` reviews a scratch clone diff through git. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/review.md:107. Needs --scaffold.'
+tags: [cl-orchestration, coord-review]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This run checks one review step only. Act yourself as the fresh reviewer of pull request 14 of example-org/widget that review.md starts (start no reviewer subagent of your own). Your brief is `.cedarloom/runs/r1/review-brief-14.md`, and the scratch clone it names is already cloned and fetched. Run `/code-review` on that diff the way "The commands" in review.md says, at the level of the brief. Start no worker and run no orca or gh command.
+
+    Then write one line per Blocking or Important finding, `Finding: <Blocking or Important> <file>:<line> <what is wrong>`, or `Finding: none`, and one line `Code review: <kept, when /code-review reviewed that diff through git; or dropped, and what it read instead>`, then stop.
+  max_turns: 25
+  allowed_tools: [Bash, Skill]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: planted-bug-found-with-file
+    pattern: 'Finding:[^\n]*src/session\.js[^\n]*(expir|invert|revers|backward|wrong|active)'
+    flags: i
+  - type: regex
+    name: diff-read-through-git
+    target: trace
+    pattern: 'git[^\n]{0,60}?-C (\\"|'')?[^\s''"\\]*widget-14-1(\\"|'')?[^\n]{0,80}?\b(diff|log)\b'
+  - type: tool_used
+    name: code-review-invoked
+    tool: Skill
+    input_match: 'code-review'
+  - type: tool_used
+    name: no-checkout-or-cd-in-clone
+    tool: Bash
+    input_match: '\b(checkout|switch|restore|worktree)\b|\bcd\b[^\n]*widget-14-1'
+    min: 0
+    max: 0
+expected_outcome: 'A Blocking or Important finding at src/session.js (requireActive throws while the session is still active and returns an expired one: the comparison is inverted), read with `git -C <scratch path> diff` of refs/remotes/origin/main...<head>, after `/code-review low refs/remotes/origin/main...<head> in the repository at <scratch path>, read only with git -C <scratch path>`; no checkout and no cd in the clone.'

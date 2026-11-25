@@ -1,0 +1,46 @@
+schema_version: "1.1"
+name: coord-outcomes-blocked-open-pr
+description: 'A BLOCKED worker whose pull request is open keeps its worktree and branch, and its pull request loses the Closes line through `gh pr edit <n> -R <owner/repo> --body-file <file>`, since that line would close the issue at any merge. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/outcomes.md:9. Needs --scaffold.'
+tags: [cl-orchestration, coord-outcomes]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command, start nothing and write no file. Decide from the facts below and the files named.
+
+    A run is open on project (example-org/widget, supervised). The worker of issue 12, a Codex worker that pushes its own commits, settled with the report `.cedarloom/runs/r-1125/report-12.md`. The rerun of the issue's thread file is `.cedarloom/runs/r-1125/thread-12.md`, and the body of its open draft pull request #57, as `gh pr view` printed it, is `.cedarloom/runs/r-1125/pr-57-body.md`.
+
+    Write these lines, then stop:
+    Outcome: <one of the outcomes of outcomes.md>
+    Closes line: <remove or keep>
+    Command: <the exact gh command that changes pull request #57, with <file> for a file path, or none>
+    Worktree and branch: <keep or remove>
+    Report: <what the report lists for this outcome>
+  max_turns: 12
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: blocked
+    pattern: 'Outcome:\W*Blocked\b'
+    flags: i
+  - type: regex
+    name: closes-line-removed
+    pattern: 'Closes line:\W*remove'
+    flags: i
+  - type: regex
+    name: exact-pr-edit
+    pattern: 'Command:[^\n]*gh pr edit 57 -R example-org/widget --body-file \S+'
+  - type: regex
+    name: worktree-and-branch-kept
+    pattern: 'Worktree and branch:\W*keep\b'
+    flags: i
+  - type: regex
+    name: no-close-ready-or-merge
+    pattern: 'gh pr (close|ready|merge) 57|gh issue close 12'
+    match: not_contains
+  - type: regex
+    name: report-names-issue-and-pr
+    pattern: 'Report:[^\n]*(#?12\b[^\n]*#57|#57[^\n]*#?12\b)'
+expected_outcome: 'Outcome: Blocked (the worker reported BLOCKED and its comment is in the rerun thread file). Closes line: remove, with gh pr edit 57 -R example-org/widget --body-file <file> (the body without `Closes #12`, written to a file in the run folder). Worktree and branch: keep, they may hold the only copy of the work. Report: issue 12 and pull request #57. The worker is released and the next issue of the project starts.'

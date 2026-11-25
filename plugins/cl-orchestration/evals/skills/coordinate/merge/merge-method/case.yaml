@@ -1,0 +1,33 @@
+schema_version: "1.1"
+name: coord-merge-merge-method
+description: 'Where AGENTS.md names merge commits, the merge command takes --merge in place of --squash and keeps --match-head-commit, the subject file and the body file, with no --admin, --auto or --delete-branch. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/merge.md:66. Needs --scaffold.'
+tags: [cl-orchestration, coord-merge]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run of step 5.5 of Merge for one pull request: run no command and change no file. Decide from the facts below and the files in `project/`, whose `AGENTS.md` is the default branch's.
+
+    - Repository example-org/widget, default branch main. Pull request #31 for issue 31.
+    - Steps 1 to 5.4 passed: the verdict's `next` is merge and `pin` is reviewed; the reviewed head and `<head>` are both 4c1d9e0a7b2f3c4d5e6f708192a3b4c5d6e7f809.
+    - The pull request has one commit, subject `fix: keep the retry count across reconnects`; no commit message holds a closing keyword.
+    - Step 5.1 wrote the subject file `.cedarloom/runs/r-1125/pr-31-subject.txt` and the body file `.cedarloom/runs/r-1125/pr-31-body.md`.
+
+    Write the line `Command: <the exact merge command you run, on one line>`, then the line `Method: <squash, merge or rebase>`, then stop.
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: merge-command-with-merge-method
+    pattern: 'Command:[^\n]*gh pr merge 31 -R example-org/widget --merge --match-head-commit 4c1d9e0a7b2f3c4d5e6f708192a3b4c5d6e7f809 --subject "\$\(cat [''"]?[^)\n]*pr-31-subject\.txt[''"]?\)" --body-file [''"]?[^\s''"`]*pr-31-body\.md'
+  - type: regex
+    name: method-is-merge
+    pattern: 'Method:\W*merge\b'
+    flags: i
+  - type: regex
+    name: no-other-method-or-forbidden-flag
+    pattern: 'Command:[^\n]*(--squash|--rebase|--admin|--auto\b|--delete-branch)'
+    match: not_contains
+expected_outcome: 'Command: gh pr merge 31 -R example-org/widget --merge --match-head-commit 4c1d9e0a7b2f3c4d5e6f708192a3b4c5d6e7f809 --subject "$(cat .cedarloom/runs/r-1125/pr-31-subject.txt)" --body-file .cedarloom/runs/r-1125/pr-31-body.md; Method: merge.'

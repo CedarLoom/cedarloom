@@ -1,0 +1,42 @@
+schema_version: "1.1"
+name: coord-start-worktree-create
+description: 'The run starts only after the start condition holds (the orchestration guide, then `orca status --json`), creates the Orca run once, and gives a Claude Code worker its own worktree with the exact `worktree create` argv. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca.md:20, with the start condition at plugins/cl-orchestration/skills/coordinate/orca.md:9. Needs --scaffold.'
+tags: [cl-orchestration, coord-start]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This run checks the start of the run only. The pick, the spec and the checks before a start are done, so run no precheck, policy reader, thread script, git fetch or gh command that writes. The facts:
+    - Project `project` is example-org/widget, default branch `main`, mode supervised, one worker slot free on the project and on the host.
+    - Issue 12, "Login times out after 5 minutes", is picked for one Claude Code worker. Its slug is `login-timeout`, its branch `fix/12-login-timeout`.
+    - This session is Claude Code, not inside an Orca chat, and `orca` on the PATH is the Orca executable.
+
+    Run the start condition of Start the run, then the run's `run-create`, then create the worktree for issue 12. Stop right after the worktree exists: run no `env which claude`, no worker-settings script, no `terminal create` and no `worker-start`. Then write `Worktree: <the worktree path orca printed>`, then stop.
+  max_turns: 25
+  allowed_tools: [Bash]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: guide-and-status-before-run-create
+    pattern: '"args":\["skills","get","orchestration"\][\s\S]*"args":\["status","--json"\][\s\S]*"args":\["orchestration","run-create","--objective","issue work: [^"]+","--json"\]'
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: run-created-once
+    pattern: '"run-create"[\s\S]*"run-create"'
+    match: not_contains
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: worktree-create-argv
+    pattern: '"args":\["worktree","create","--name","12-login-timeout","--repo","path:[^"]*project","--base-branch","main","--no-parent","--setup","run","--json"\]'
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: no-terminal-or-worker-start
+    pattern: '"args":\["terminal","create"|"args":\["orchestration","worker-start"'
+    match: not_contains
+    target: { source: file, path: .fake/orca-calls.jsonl }
+  - type: regex
+    name: worktree-path-reported
+    pattern: 'Worktree:[^\n]*widget-worktrees/12-login-timeout'
+expected_outcome: 'The calls log shows `orca skills get orchestration`, then `orca status --json` (app 1.4.262 passes), then one `orca orchestration run-create --objective "issue work: <project>" --json`, then `orca worktree create --name 12-login-timeout --repo path:<project path> --base-branch main --no-parent --setup run --json`, and no `terminal create` or `worker-start`; the answer ends with the printed worktree path.'

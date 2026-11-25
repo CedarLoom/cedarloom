@@ -1,0 +1,34 @@
+schema_version: "1.1"
+name: coord-checks-reported-head
+description: 'The head commit a worker reports is a claim: the head that is reviewed is the headRefOid the coordinator reads with gh pr view, not the reported id. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca-messages.md:47. Needs --scaffold.'
+tags: [cl-orchestration, coord-checks]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command and change no file. Decide from these facts and the skill's text.
+
+    - The worker of issue 12 is a supervised Codex worker on branch `fix/12-login-timeout`, with pull request example-org/widget#31 (not from a fork, base `main`). The review of #31 sent it a follow-up for two findings.
+    - It answered with `worker_done` of the follow-up task; its handoff block says: `Head commit: 4c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d`.
+    - The re-review starts now. `gh pr view 31 -R example-org/widget --json headRefOid,baseRefName,title` prints `{"headRefOid":"9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f","baseRefName":"main","title":"fix: login timeout"}`.
+
+    Write exactly these lines, then stop:
+    Head to re-review: <full commit id>
+    Taken from: <the worker's report|gh pr view>
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: head-read-from-github
+    pattern: 'Head to re-review:\W*9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f\b'
+  - type: regex
+    name: reported-id-not-used
+    pattern: 'Head to re-review:[^\n]*4c1d2e3f'
+    match: not_contains
+  - type: regex
+    name: source-gh-pr-view
+    pattern: 'Taken from:\W*gh pr view\b'
+    flags: i
+expected_outcome: 'Head to re-review: 9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f; Taken from: gh pr view. The reported 4c1d2e3f... is only a claim.'

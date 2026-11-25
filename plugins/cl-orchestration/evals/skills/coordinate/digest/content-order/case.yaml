@@ -1,0 +1,37 @@
+schema_version: "1.1"
+name: coord-digest-content-order
+description: 'The digest opens with the date, then gives decisions for the owner, blocked items, risks, merged pull requests, decisions taken on the owner''s behalf, running workers and the model behind each alias in that order, links each item, writes logins without @ and leaves out items unchanged since its start. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/digest.md:11. Needs --scaffold.'
+tags: [cl-orchestration, coord-digest]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command, start nothing and write no file. Decide from the files named.
+
+    The owner asks for today's digest of the run r-1125 on project (example-org/widget). `date +%F` prints 2026-11-25. The handoff file is `.cedarloom/runs/handoff.md` (its Session line is a stand-in for this session in this dry run), and the gh and Orca reads of steps 1 and 2 are saved in `.cedarloom/runs/r-1125/digest-reads.md`.
+
+    Write the text the digest file would hold, between a line `--- digest ---` and a line `--- end ---`, then stop.
+  max_turns: 12
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: date-first
+    pattern: '--- digest ---\s*\n\W*2026-11-25'
+  - type: regex
+    name: parts-in-order
+    pattern: '--- digest ---[\s\S]*#6[04]\b[\s\S]*#31\b[\s\S]*flaky[\s\S]*#57\b[\s\S]*lint[\s\S]*\b33\b[\s\S]*example-model-large-2[\s\S]*--- end ---'
+    flags: i
+  - type: regex
+    name: links-items
+    pattern: 'https://github\.com/example-org/widget/pull/57\b'
+  - type: regex
+    name: leaves-out-unchanged-items
+    pattern: '--- digest ---[\s\S]*(#55\b|#29\b|pull/55\b|issues/29\b)[\s\S]*--- end ---'
+    match: not_contains
+  - type: regex
+    name: no-at-logins
+    pattern: '@widget-maint'
+    match: not_contains
+expected_outcome: 'A digest whose first line is 2026-11-25, then: the owner''s decision on approval issue #64 (merge #60); issue #31 blocked; the flaky test risk; #57 merged; the `npm run lint` reading taken on the owner''s behalf; the running worker of issue 33; opus = example-model-large-2 and sonnet = example-model-medium-4. Each item linked; widget-maint without @; #55 (merged before the start) and #29 (unchanged since 2026-11-20) left out.'

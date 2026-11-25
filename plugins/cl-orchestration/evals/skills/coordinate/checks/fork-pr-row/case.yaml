@@ -1,0 +1,35 @@
+schema_version: "1.1"
+name: coord-checks-fork-pr-row
+description: 'In the branch check before a start, an open pull request row with isCrossRepository true does not count, so an issue with no branch and only a fork''s pull request under that name gets an ordinary first start in a new worktree. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/SKILL.md:64. Needs --scaffold.'
+tags: [cl-orchestration, coord-checks]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command and change no file. Decide from these facts and the skill's text. The Orca executable is `orca`; write the project's absolute path as `<project path>`.
+
+    - The project is supervised; `gh repo view --json nameWithOwner,defaultBranchRef` printed `example-org/widget` and `main`, and both hold. A slot is free and every check before the start of issue 31 passes but the branch check below.
+    - The spec of issue 31 names the branch `fix/31-csv-export`; the worktree name is `31-csv-export`. No worker of this run has touched issue 31.
+    - The branch check printed: `git -C <project path> ls-remote --heads origin fix/31-csv-export` nothing; `git -C <project path> worktree list` only the main checkout; `gh pr list -R example-org/widget --head fix/31-csv-export --state open --json number,isCrossRepository` printed `[{"number":77,"isCrossRepository":true}]`.
+
+    Write exactly these lines, then stop:
+    Existing branch or open PR: <yes|no>
+    Start: <first start|follow-up to an earlier worker|new start on the existing branch|none>
+    Command: <the orca worktree command of that start, exactly, or none>
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: fork-row-does-not-count
+    pattern: 'Existing branch or open PR:\W*no\b'
+    flags: i
+  - type: regex
+    name: first-start
+    pattern: 'Start:\W*first start\b'
+    flags: i
+  - type: regex
+    name: worktree-create-command
+    pattern: 'Command:\W*orca worktree create --name 31-csv-export --repo path:(?:<project path>|\S+) --base-branch main --no-parent --setup run --json\b'
+expected_outcome: 'Existing branch or open PR: no (the fork''s row does not count); Start: first start; Command: orca worktree create --name 31-csv-export --repo path:<project path> --base-branch main --no-parent --setup run --json.'
