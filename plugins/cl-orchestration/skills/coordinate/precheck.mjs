@@ -1,5 +1,6 @@
 // Usage: node precheck.mjs [--prompts <folder>] <project paths...>. Sample precheck for a scheduled coordinator run: exit 0 when a project has an issue to pick or a builder's build result in <folder> is unread, else 1. It starts and merges nothing.
 // node precheck.mjs --catch-up <clone> [--state <folder>]: the project bot's catch-up precheck (catch-up.mjs).
+// node precheck.mjs --host-limit <n> --working <m> <prompts folders...>: the host limit before a start (bot-project.md, Start). It prints each unfinished role bot run in the folders, of every project bot on the host, and exits 0 when one more start fits within <n> beside <m> working Orca workers, 1 when not, 2 when it cannot count.
 // Pickable: open, carries startLabel and every issues.labels entry, not labeled cl:needs-human (an owner question), cl:in-progress (a worker holds it) or cl:deferred (the owner parked it), named by no question that waits for the owner (approval.mjs waiting), written by a trusted author (the repository owner, a trustedAuthors login, or a member or collaborator with write access), and no pull request for it: none merged or open in the repository with a head branch <type>/<number>-<slug> (an open one from a fork does not count, since anyone can open it).
 // An issue that several of the given projects list starts in none of them: it is printed once on stderr, as "several projects: <owner/repo>#<number> (<paths>)".
 // Unread: the prompt file of a builder run in round 0 (a build or plan from the spec, before its pull request) in the project bot's prompts folder whose result file holds text; the pick sweep deletes the prompt file once it read the result (bot-project.md, Start). Each is printed on stderr as "<folder>: <reason>".
@@ -149,6 +150,26 @@ export function unread(folder, now = Date.now()) {
   return found;
 }
 
+// The unfinished role bot runs of the project bots whose prompts folders are given, as "<folder>/<name>": each prompt file whose result file holds no text. A prompt file whose result line is missing counts too, so a start waits until the pick sweep reports it; a file or folder that cannot be read throws.
+export function unfinished(folders) {
+  const found = [];
+  for (const folder of folders) for (const name of readdirSync(folder).filter((n) => PROMPT.test(n)).sort()) {
+    const file = [...readFileSync(join(folder, name), 'utf8').matchAll(RESULT_LINE)].at(-1)?.[1];
+    let done = false;
+    if (file && isAbsolute(file)) try { const stat = statSync(file); done = stat.isFile() && stat.size > 0; } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    if (!done) found.push(join(folder, name));
+  }
+  return found;
+}
+
+// { limit, working, folders } of the --host-limit command line; a count that is no whole number fails, so a typo never lifts the limit.
+export function hostArgs(argv) {
+  const { values, positionals } = parseArgs({ args: argv, options: { 'host-limit': { type: 'string' }, working: { type: 'string' } }, allowPositionals: true });
+  const [limit, working] = [values['host-limit'], values.working].map((v) => (/^\d+$/.test(v ?? '') ? Number(v) : NaN));
+  if (Number.isNaN(limit) || Number.isNaN(working)) throw new Error('usage: node precheck.mjs --host-limit <n> --working <m> <prompts folders...>');
+  return { limit, working, folders: positionals };
+}
+
 // What the command line prints and its exit code: { out, err, code }. pick(dir) gives a project's { tracker, numbers, warnings } or throws why nothing starts there; results are the lines on unread results, each of which starts the run.
 export function report(dirs, pick, results = []) {
   const found = [], err = [];
@@ -184,6 +205,15 @@ if (isMain(import.meta.url) && process.argv.slice(2).includes('--catch-up')) {
     console.log(json({ start: true, condition: 'failed', reason: e.message.split('\n')[0], probe: false }));
     process.exit(0);
   });
+} else if (isMain(import.meta.url) && process.argv.slice(2).some((a) => a.startsWith('--host-limit'))) {
+  let runs, limit, working;
+  try {
+    let folders;
+    ({ limit, working, folders } = hostArgs(process.argv.slice(2)));
+    runs = unfinished(folders);
+  } catch (e) { console.error(escaped(e.message.split('\n')[0])); process.exit(2); }
+  for (const run of runs) console.log(escaped(run));
+  process.exit(working + runs.length < limit ? 0 : 1);
 } else if (isMain(import.meta.url)) {
   let dirs, prompts;
   try { ({ dirs, prompts } = argsOf(process.argv.slice(2))); } catch (e) { console.error(e.message); process.exit(1); }
