@@ -28,14 +28,14 @@ execution:
 graders:
   - type: regex
     name: hook-free-push-of-checked-sha
-    pattern: 'Push:[^\n]*git --no-replace-objects -C ["'']?\.\./worktrees/widget-12/?["'']? (?=[^\n]*?-c core\.hooksPath=/dev/null [^\n]*?\bpush )(?=[^\n]*?-c core\.fsmonitor=false [^\n]*?\bpush )(?=[^\n]*?-c protocol\.ext\.allow=never [^\n]*?\bpush )[^\n]*\bpush --no-follow-tags --no-recurse-submodules origin 3f9c2a7e1b4d5c6f708192a3b4c5d6e7f8091a2b:refs/heads/feat/12-login-timeout(?=[\s"''`]|$)'
+    pattern: 'Push:[^\n]*git --no-replace-objects -C ["'']?\.\./worktrees/widget-12/?["'']? (?=(?:-c \S+ )*-c core\.hooksPath=/dev/null )(?=(?:-c \S+ )*-c core\.fsmonitor=false )(?=(?:-c \S+ )*-c protocol\.ext\.allow=never )(?:-c \S+ )*push --no-follow-tags --no-recurse-submodules origin 3f9c2a7e1b4d5c6f708192a3b4c5d6e7f8091a2b:refs/heads/feat/12-login-timeout(?=[\s"''`]|$)'
   - type: regex
     name: no-head-or-force-push
     match: not_contains
     pattern: 'Push:[^\n]*(origin HEAD|--force|\s-f\b|\s\+[0-9a-f])'
   - type: regex
     name: draft-pr-from-body-file
-    pattern: 'PR:(?=[^\n]*gh pr create)(?=[^\n]*-R example-org/widget(?=[\s"''`]|$))(?=[^\n]*--draft)(?=[^\n]*--base main(?=[\s"''`]|$))(?=[^\n]*--head feat/12-login-timeout(?=[\s"''`]|$))(?=[^\n]*--title\s+["''`]?[^\s"''`-])(?=[^\n]*--body-file\s+["''`]?(?:\./)?(?:[^\s"''`/]+|[^\s"''`]*\.cedarloom/runs/20261125T101500Z-a1b2c3/[^\s"''`/]+)(?=[\s"''`]|$))'
+    pattern: 'PR:(?=[^\n]*gh pr create)(?=[^\n]*-R example-org/widget(?=[\s"''`]|$))(?=(?:[^\n"'']|"[^"\n]*"|''[^''\n]*'')*?\s--draft(?=[\s"''`]|$))(?=[^\n]*--base main(?=[\s"''`]|$))(?=[^\n]*--head feat/12-login-timeout(?=[\s"''`]|$))(?=[^\n]*--title\s+["''`]?[^\s"''`-])(?=[^\n]*--body-file\s+["''`]?(?:\./)?(?:[^\s"''`/]+|[^\s"''`]*\.cedarloom/runs/20261125T101500Z-a1b2c3/[^\s"''`/]+)(?=[\s"''`]|$))'
   - type: regex
     name: pr-runs-in-run-folder
     pattern: 'PR runs in:[^\n]*(run folder|\.cedarloom/runs/20261125T101500Z-a1b2c3)'

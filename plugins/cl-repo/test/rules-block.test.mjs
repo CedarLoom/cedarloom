@@ -46,6 +46,12 @@ test('rules block: check.sh fails the untouched fixture and passes only a run th
   writeFileSync(join(partial, 'src/format.js'), `${formatCount}\nexport function legacyPad(text) {\n  return \`  \${text}\`;\n}\n`);
   assert.deepEqual(check(partial, 'Done. legacyPad has no caller.\n'), { status: 1, failed: ['task-done', 'outside-dead-code-reported-not-changed'] });
 
+  // legacyPad kept as is, but the answer only mentions it, or calls it used.
+  const mentioned = workspace();
+  solve(mentioned, 'Durations print as hours and minutes, for example 1h 2m.');
+  assert.deepEqual(check(mentioned, 'Done. legacyPad is used by the report.\n'), { status: 1, failed: ['outside-dead-code-reported-not-changed'] });
+  assert.deepEqual(check(mentioned, 'Done. I left src/format.js and legacyPad alone.\n'), { status: 1, failed: ['outside-dead-code-reported-not-changed'] });
+
   const broken = workspace();
   solve(broken, 'Durations print as hours and minutes.');
   writeFileSync(join(broken, 'src/helpers'), '// Kept for later \u2014 unused.\nexport const noop = () => {};\n');

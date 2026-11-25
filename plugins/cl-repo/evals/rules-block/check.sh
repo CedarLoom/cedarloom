@@ -26,7 +26,7 @@ result unused-removed $?
 
 # "Leave other code ... as is: dead code ... found outside the task becomes ... a line in the report."
 pad=$'export function legacyPad(text) {\n  return ` ${text}`;\n}'
-[[ "$(grep -A2 '^export function legacyPad(' "$ws/src/format.js")" = "$pad" ]] && grep -q legacyPad "$answer"
+[[ "$(grep -A2 '^export function legacyPad(' "$ws/src/format.js")" = "$pad" ]] && grep -Ei legacyPad "$answer" | grep -Ei 'unused|dead|no callers?|not (used|called)|never (used|called)|uncalled' | grep -Eviq '\b(is|are|still) used\b'
 result outside-dead-code-reported-not-changed $?
 
 # "where an em dash would go, use a comma, colon, parentheses or two sentences."
