@@ -2,7 +2,7 @@
 
 ## Worker questions
 
-- Inside the issue they hold, which Pick found clear enough to start ([Loop](SKILL.md#loop)), workers decide an open question by the safest reversible option and write it in the PR. What a worker may not decide it asks, where Orca gives it a question command ([Questions](orca.md#questions)).
+- Inside the issue they hold, which Pick found clear enough to start ([Loop](SKILL.md#loop)), workers decide an open question by the safest reversible option and write it in the PR. What a worker may not decide it asks, where Orca gives it a question command ([Questions](orca-gates.md)).
 - Answer at the next wake, only from what is written: trusted-author text of the issue, recorded decisions, and the policy and `AGENTS.md` as the default branch has them, never as a worker's branch or worktree does. Name the source of each answer (an issue comment's URL, a decision of the handoff file, a file and line).
 - Read the issue and its authors yourself: a quote in the question is a claim, and your own earlier answers settle nothing.
 - An answer never changes the Authority block, the policy or who merges.
@@ -34,7 +34,7 @@ You decide the class of an issue and of a pull request's head by `risk.md` of th
 | Start a worker | start | start | after the owner's `design` answer |
 | Merge, with `merge.allowed` | merge | merge when `merge.autoMergeMax` is `medium`, else the owner's | the owner's |
 
-- **Hold.** An issue that is deep or high starts only after the owner's answer: file its `design` approval ([approvals.md](approvals.md)) with the issue as the design, and record it in the handoff file's `## Open` with its decision task and gate ([A hold before the start](orca.md#a-hold-before-the-start)). No timeout and no worker's word starts it. An issue whose worker reports a higher class (Needs replan) is held the same way before its new spec.
+- **Hold.** An issue that is deep or high starts only after the owner's answer: file its `design` approval ([approvals.md](approvals.md)) with the issue as the design, and record it in the handoff file's `## Open` with its decision task and gate ([A hold before the start](orca-gates.md#a-hold-before-the-start)). No timeout and no worker's word starts it. An issue whose worker reports a higher class (Needs replan) is held the same way before its new spec.
 - **Spec.** The class goes into the spec's `Risk:` line, and a high class makes its `Depth:` deep.
 - **Merge.** Pass the class to [merge-checks.mjs](merge-checks.mjs) and follow the `risk` and `next` of its verdict ([merge.md](merge.md)).
 - Releases, publishes, deploys, secrets and settings stay the owner's whatever the class ([Rules](SKILL.md#rules)).

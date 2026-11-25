@@ -17,7 +17,7 @@ Read `<head>`. Mark the draft ready, `gh pr ready <n> -R <owner/repo>`, when all
 - the review of record of the reviewed head is posted ([Review of record](review.md#review-of-record))
 - the body passes
 
-A required check that is red on `<head>` after the worker's report goes to the owning worker as a follow-up, once per pull request. Anything else that keeps the pull request a draft with no step of [review.md](review.md) or this file to end it (that check red again, a review thread that no trusted author opened) leaves it a draft for the owner: release its worker ([Clean up](orca.md#clean-up)) and name the pull request and the reason in the report.
+A required check that is red on `<head>` after the worker's report goes to the owning worker as a follow-up, once per pull request. Anything else that keeps the pull request a draft with no step of [review.md](review.md) or this file to end it (that check red again, a review thread that no trusted author opened) leaves it a draft for the owner: release its worker ([Clean up](orca-clean-up.md)) and name the pull request and the reason in the report.
 
 The body passes when GitHub will close exactly the issues the pull request completes. `gh pr view <n> -R <owner/repo> --json closingIssuesReferences --jq '.closingIssuesReferences[] | "\(.repository.owner.login)/\(.repository.name)#\(.number)"'` prints them, one per line, compared below ignoring letter case. Only an exit code of 0 gives the list: a read that fails decides nothing, so read again at a later wake-up. It lists the issues the pull request may close ([PullRequest](https://docs.github.com/en/graphql/reference/pulls)), by a closing keyword in its body or by a link made in its sidebar, which needs no keyword, and GitHub closes them when the pull request merges, whatever `closeIssue` says ([linking a pull request to an issue](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)).
 
@@ -25,7 +25,7 @@ The body passes when GitHub will close exactly the issues the pull request compl
 - Otherwise the command exits 0 and prints nothing: `closeIssue` false, an issue whose pull request lost its `Closes` line ([outcomes.md](outcomes.md)) until such a worker reports DONE, and a pull request of an approved pull request list, whose issue closes only once the whole list is merged ([outcomes.md](outcomes.md)).
 - Any other line, an issue of another repository or of the same batch included, fails the body.
 
-A body that fails goes back to the owning worker as a follow-up; a list that its fix leaves different (a sidebar link, which no body edit removes) is the owner's to clear: the pull request stays a draft, so release its worker ([Clean up](orca.md#clean-up)) and name the pull request and the reason in the report.
+A body that fails goes back to the owning worker as a follow-up; a list that its fix leaves different (a sidebar link, which no body edit removes) is the owner's to clear: the pull request stays a draft, so release its worker ([Clean up](orca-clean-up.md)) and name the pull request and the reason in the report.
 
 That list does not cover the title or a commit message, so both keep the keyword test ([Merge](#merge), steps 4 and 5). A closing keyword is `close`, `fix` or `resolve`, or one of their forms (`closes`, `closed`, `fixes`, `fixed`, `resolves`, `resolved`), in any case, with or without a colon, before an issue reference: a commit that holds one closes that issue when it reaches the default branch.
 
