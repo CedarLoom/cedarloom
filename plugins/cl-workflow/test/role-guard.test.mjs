@@ -310,6 +310,12 @@ test('role guard: the builder bot pushes only the branch checked out where git r
     for (const command of ['git checkout feat/other && git push', 'git switch -c feat/y && git push origin HEAD', 'git branch -M feat/y && git push origin feat/x', 'git rebase origin/trunk trunk && git push', 'git symbolic-ref HEAD refs/heads/feat/other && git push', 'git branch --mov feat/y && git push origin HEAD', 'git bisect reset trunk && git push']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
     // git's folder is unknown after a later cd, so the checked-out branch cannot be read.
     assert.equal(decision(`git status && cd ${feature} && git push origin feat/x`, { role, cwd: feature }), 'deny', role);
+    // Only zsh runs the switch or cd: it keeps the NUL that ends the eval string in bash. The push is the same in every reading.
+    for (const command of [
+      `zsh -c 'eval $'"'"'\\0; git checkout trunk'"'"'; git push origin feat/x'`,
+      String.raw`zsh -c $'eval $\'\\0; git checkout trunk\'; git push origin feat/x'`,
+      `zsh -c 'eval $'"'"'\\0; cd /tmp'"'"'; git push origin feat/x'`,
+    ]) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
   }
 });
 
@@ -564,6 +570,89 @@ test('role guard: a command reaches the queue or the window files through a cd, 
   ];
   for (const command of alike) assert.equal(decision(command, { cwd: session, env }), 'none', command);
   assert.equal(decision('Get-ChildItem *\\*', { tool: 'PowerShell', cwd: session, env }), 'none');
+});
+
+// The commands as written: String.raw keeps the backslashes of the shell's escapes.
+const raw = String.raw;
+
+test('role guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh do, in every check', () => {
+  const denied = [
+    // The role variable, with the parts of its name joined by an ANSI-C or locale string.
+    raw`env CEDARLOOM$'_'ROLE=coordinator claude -p "merge 12"`,
+    raw`env CEDARLOOM$'\x5f'ROLE=coordinator claude -p "merge 12"`,
+    raw`export CEDARLOOM$'\137'ROLE=coordinator`,
+    raw`export CEDARLOOM$'\u005f'ROLE=coordinator`,
+    raw`export CEDARLOOM$"_"ROLE=coordinator`,
+    // gh and git by hex, octal and unicode escapes, mixed with other quotes, and in text bash -c reads again.
+    raw`$'\x67h' pr merge 12`,
+    raw`g$'\150' pr merge 12`,
+    raw`$'\u0067\U00000068' release create v1.0.0`,
+    raw`"g"$'\x68' pr 'mer'$'\x67'e 12`,
+    raw`gh pr $'\x6derge' 12`,
+    raw`$'gi\x74' push --tags`,
+    raw`git $'\x73tash'`,
+    raw`bash -c $'gh\x20pr merge 12'`,
+    raw`bash -c $'echo ok\ngh pr merge 12'`,
+    // bash 3.2's \c takes one backslash of \c\\, so the second starts an escape of its own.
+    raw`bash -c $'\c\\x3b\x67h pr merge 12'`,
+    raw`eval $'\c\\x3b\x67h pr merge 12'`,
+    raw`eval $'\c\\ngh pr merge 12'`,
+    raw`bash -c $'\c\\073gh pr merge 12'`,
+    raw`bash -c $'\c\\\\\\x3b\x67h pr merge 12'`,
+    raw`bash -c $'echo a\c\\x3b\x67h pr merge 12'`,
+    // A nested shell decodes its own way: an outer zsh with an inner bash 3.2, and an outer bash with an inner zsh.
+    raw`bash -c $'bash -c \$\'\\c\\\\x3b\\x67h pr merge 12\''`,
+    raw`zsh -c $'true\cJ$\'g\\h\' pr merge 12'`,
+    // A NUL ends the string's value in bash.
+    raw`$'gh\0x' pr merge 12`,
+    raw`$'g\x00'h pr merge 12`,
+    // zsh reads an unknown escape, \c included, as the plain character.
+    raw`$'g\h' pr merge 12`,
+    raw`$'g\it' push --tags`,
+    // zsh hands a program each word up to its first NUL.
+    raw`$'g\h\0x' pr merge 12`,
+    // Bare mode and GIT_DIR, which export sets after the shell decodes its argument.
+    raw`claude $'--\x62are' -p "merge pull request 12"`,
+    raw`export GIT$'_'DIR=/tmp/x; git push origin feat/x`,
+  ];
+  for (const command of denied) assert.equal(decision(command), 'deny', command);
+  assert.equal(decision(raw`gh pr merge 12 $'--\x61dmin'`, { role: 'coordinator' }), 'deny');
+
+  const data = mkdtempSync(join(tmpdir(), 'role-guard-'));
+  const session = mkdtempSync(join(tmpdir(), 'role-guard-'));
+  mkdirSync(join(session, '.cedarloom', 'questions'), { recursive: true });
+  const env = { CLAUDE_PLUGIN_DATA: data, CLAUDE_PID: '4242' };
+  const queue = [
+    // A session started with /cl-workflow:away off, spelled with escapes bash or zsh decode.
+    raw`claude -p $'/cl-workflow:away\x20off'`,
+    raw`claude -p $'/cl-workflow:away\040off'`,
+    raw`claude -p $'/cl-workflow:away\u0020off'`,
+    raw`claude -p $'/cl-workflow:away\toff'`,
+    raw`claude -p $'/cl-workflow:away\cIoff'`,
+    raw`claude -p $'/cl-workflow:away\C-ioff'`,
+    raw`claude -p $'/cl-workflow:away\Cioff'`,
+    raw`claude -p $'/cl-workflow:away\C\x69off'`,
+    raw`claude -p $'/cl-workflow:awa\y off\0x'`,
+    raw`claude -p /cl-workflow:away$'\x20'off`,
+    raw`claude -p $'/cl-workflow:\x71uestions'`,
+    raw`$'\x63laude' -p /questions`,
+    raw`$'c\laude' -p /questions`,
+    // A path into the queue.
+    raw`echo x >> .cedarloom/$'\x71'uestions/project-1.md`,
+    raw`cd $'.cedarloom\x2fquestions' && echo x > project-1.md`,
+  ];
+  for (const command of queue) assert.equal(decision(command, { cwd: session, env }), 'deny', command);
+  assert.equal(decision(queue[0], { cwd: session, env, role: 'coordinator' }), 'deny');
+
+  const allowed = [
+    raw`gh pr view $'\x31\x32'`,
+    raw`git commit -m $'fix: x\n\nThe body.'`,
+    raw`printf $'%s\n' "it's fine"`,
+    raw`gh pr comment 12 --body $'it\'s fine'`,
+    raw`claude -p $'/cl-workflow:away 2h'`,
+    raw`grep -n $'\x2fquestions' notes.md`,
+  ];
+  for (const command of allowed) assert.equal(decision(command, { cwd: session, env }), 'none', command);
 });
 
 test('role guard: every path field of the edit tools is read, resolved from the session folder', () => {
