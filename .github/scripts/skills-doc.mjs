@@ -28,7 +28,8 @@ export function skillEntry(text, plugin) {
   const user = fm['disable-model-invocation'] === 'true';
   // `codex: false` marks a skill that runs only in Claude Code.
   const codex = fm.codex === 'false' ? '' : ` (Codex \`$${plugin}:${name}\`)`;
-  const start = user ? `you: \`/${plugin}:${name}\`${codex}` : `the agent, or you with \`/${plugin}:${name}\``;
+  // `user-invocable: false` hides the skill from the / menu: only the agent starts it.
+  const start = user ? `you: \`/${plugin}:${name}\`${codex}` : fm['user-invocable'] === 'false' ? 'the agent' : `the agent, or you with \`/${plugin}:${name}\``;
   return { name, plugin, purpose, start, when, writes };
 }
 

@@ -1,0 +1,60 @@
+.hero {
+  padding: 4rem 0 3rem;
+  text-align: center;
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+}
+
+.title {
+  margin: 0 auto 1.5rem;
+}
+
+.wordmark {
+  display: block;
+  width: min(100%, 26rem);
+  height: auto;
+  margin: 0 auto;
+}
+
+.lead {
+  max-width: 42rem;
+  margin: 0 auto 2rem;
+  font-size: 1.2rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.section {
+  padding: 3rem 0 0;
+}
+
+.section:last-child {
+  padding-bottom: 4rem;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1.5rem;
+}
+
+.card {
+  padding: 1.5rem;
+  border: 1px solid var(--ifm-toc-border-color);
+  border-top: 4px solid var(--ifm-color-primary);
+  border-radius: var(--ifm-card-border-radius);
+}
+
+.commands {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps li {
+  margin-bottom: 0.5rem;
+}
