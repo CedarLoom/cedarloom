@@ -1,10 +1,11 @@
 // Usage: node precheck.mjs [--prompts <folder>] <project paths...>. Sample precheck for a scheduled coordinator run: exit 0 when a project has an issue to pick or a builder's build result in <folder> is unread, else 1. It starts and merges nothing.
 // node precheck.mjs --catch-up <clone> [--state <folder>]: the project bot's catch-up precheck (catch-up.mjs).
+// node precheck.mjs --host-limit <n> --working <m> [--reserve <prompt file> --result <result file> --lock <folder>] <prompts folders...>: the host limit before a start (bot-project.md, Start). It prints each unfinished role bot run in the folders, of every project bot on the host, and exits 0 when one more start fits within <n> beside <m> working Orca workers, 1 when not, 2 when it cannot count. With --reserve it counts and, when the start fits, creates the prompt file, both while it holds the lock folder, which every project bot on the host names alike.
 // Pickable: open, carries startLabel and every issues.labels entry, not labeled cl:needs-human (an owner question), cl:in-progress (a worker holds it) or cl:deferred (the owner parked it), named by no question that waits for the owner (approval.mjs waiting), written by a trusted author (the repository owner, a trustedAuthors login, or a member or collaborator with write access), and no pull request for it: none merged or open in the repository with a head branch <type>/<number>-<slug> (an open one from a fork does not count, since anyone can open it).
 // An issue that several of the given projects list starts in none of them: it is printed once on stderr, as "several projects: <owner/repo>#<number> (<paths>)".
 // Unread: the prompt file of a builder run in round 0 (a build or plan from the spec, before its pull request) in the project bot's prompts folder whose result file holds text; the pick sweep deletes the prompt file once it read the result (bot-project.md, Start). Each is printed on stderr as "<folder>: <reason>".
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { mkdirSync, readdirSync, readFileSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { readQueue, waiting } from './approval.mjs';
 import { errorLine, escaped, isMain, json, read, sh } from './policy.mjs';
@@ -177,6 +178,56 @@ export function unread(folder, now = Date.now()) {
   return found;
 }
 
+// The unfinished role bot runs of the project bots whose prompts folders are given, as "<folder>/<name>": each prompt file whose result file holds no text. A prompt file whose result line is missing counts too, so a start waits until the pick sweep reports it; a file or folder that cannot be read throws.
+export function unfinished(folders) {
+  const found = [];
+  for (const folder of folders) for (const name of readdirSync(folder).filter((n) => PROMPT.test(n)).sort()) {
+    const file = [...readFileSync(join(folder, name), 'utf8').matchAll(RESULT_LINE)].at(-1)?.[1];
+    let done = false;
+    if (file && isAbsolute(file)) try { const stat = statSync(file); done = stat.isFile() && stat.size > 0; } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    if (!done) found.push(join(folder, name));
+  }
+  return found;
+}
+
+// { limit, working, folders, reserve, result, lock } of the --host-limit command line; a count that is no whole number fails, so a typo never lifts the limit.
+export function hostArgs(argv) {
+  const options = { 'host-limit': { type: 'string' }, working: { type: 'string' }, reserve: { type: 'string' }, result: { type: 'string' }, lock: { type: 'string' } };
+  const { values, positionals } = parseArgs({ args: argv, options, allowPositionals: true });
+  const [limit, working] = [values['host-limit'], values.working].map((v) => (/^\d+$/.test(v ?? '') ? Number(v) : NaN));
+  const { reserve, result, lock } = values;
+  const given = [reserve, result, lock].filter((v) => v !== undefined).length;
+  if (Number.isNaN(limit) || Number.isNaN(working) || (given && given < 3)) throw new Error('usage: node precheck.mjs --host-limit <n> --working <m> [--reserve <prompt file> --result <result file> --lock <folder>] <prompts folders...>');
+  if (given && (!PROMPT.test(basename(reserve)) || !positionals.some((f) => resolve(f) === resolve(dirname(reserve))) || !isAbsolute(result) || !isAbsolute(lock))) throw new Error('--reserve names no role bot prompt file in a given folder, or --result or --lock no absolute path');
+  return { limit, working, folders: positionals, reserve, result, lock };
+}
+
+// The host-wide lock of the count and the reservation: mkdir is atomic, so one start at a time counts and creates its prompt file. A lock older than LOCK_STALE_MS was left by a run that died holding it.
+const LOCK_STALE_MS = 30_000, LOCK_WAIT_MS = 10_000;
+function locked(lock, now, fn) {
+  const until = now() + LOCK_WAIT_MS;
+  for (;;) {
+    try { mkdirSync(lock); break; } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+      try { if (now() - statSync(lock).mtimeMs > LOCK_STALE_MS) rmdirSync(lock); } catch (e2) { if (e2.code !== 'ENOENT') throw e2; }
+      if (now() > until) throw new Error(`the host limit lock ${lock} is held`);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    }
+  }
+  try { return fn(); } finally { rmdirSync(lock); }
+}
+
+// { runs, fits }: with reserve, the count and the placeholder prompt file (its result line only) are one step under the lock, so starts at the same time never pass the limit; the project bot then writes the prompt into that file, which counts as unfinished meanwhile.
+export function reserveStart({ limit, working, folders, reserve, lock, result }, now = Date.now) {
+  const count = () => { const runs = unfinished(folders); return { runs, fits: working + runs.length < limit }; };
+  if (reserve === undefined) return count();
+  return locked(lock, now, () => {
+    const got = count();
+    if (got.fits) writeFileSync(reserve, `Result file: ${result}\n`, { flag: 'wx' });
+    return got;
+  });
+}
+
 // What the command line prints and its exit code: { out, err, code }. pick(dir) gives a project's { tracker, numbers, priority, warnings } or throws why nothing starts there; results are the lines on unread results, each of which starts the run.
 export function report(dirs, pick, results = []) {
   const found = [], err = [];
@@ -213,6 +264,11 @@ if (isMain(import.meta.url) && process.argv.slice(2).includes('--catch-up')) {
     console.log(json({ start: true, condition: 'failed', reason: e.message.split('\n')[0], probe: false }));
     process.exit(0);
   });
+} else if (isMain(import.meta.url) && process.argv.slice(2).some((a) => a.startsWith('--host-limit'))) {
+  let runs, fits;
+  try { ({ runs, fits } = reserveStart(hostArgs(process.argv.slice(2)))); } catch (e) { console.error(escaped(e.message.split('\n')[0])); process.exit(2); }
+  for (const run of runs) console.log(escaped(run));
+  process.exit(fits ? 0 : 1);
 } else if (isMain(import.meta.url)) {
   let dirs, prompts;
   try { ({ dirs, prompts } = argsOf(process.argv.slice(2))); } catch (e) { console.error(e.message); process.exit(1); }

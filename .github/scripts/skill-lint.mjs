@@ -124,7 +124,7 @@ const BUDGETS = [
 
 // Files that were over their hard cap when the budgets began, capped at that size: they may shrink, never grow.
 const AT_SIZE = {
-  'plugins/cl-orchestration/skills/coordinate/bot-project.md': 2207,
+  'plugins/cl-orchestration/skills/coordinate/bot-project.md': 2204,
   'plugins/cl-orchestration/skills/coordinate/modes.md': 5215,
   'plugins/cl-orchestration/skills/coordinate/spec-template.md': 4114,
   'plugins/cl-repo/rules/project.md': 914,
