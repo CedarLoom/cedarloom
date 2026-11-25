@@ -41,7 +41,7 @@ Before a start of an automatic worker, check 2 of [Automatic start](modes.md#aut
 
 Take steps 1 to 5.2 of [Merge](review-and-merge.md#merge) in the PR's newest clone, writing the subject and body files as `<state>/pr-<n>-subject.txt` and `pr-<n>-body.md`, a trial's base as `trialBase`. Record the accepted head and the verdict's `next` (`merge` or `trial`) in `handled`, that clone's absolute path as the last entry of `clones`, and the risk class the review used (`low`, `medium` or `high`) as `riskClass`, then run `node <skill folder>/merge.mjs <state>/pr-<n>.json --run <run id>` once (`--method` only for a method `AGENTS.md` names). Its answer:
 
-- `merged`: delete the PR's event rules and clones, and its branch as [Clean up](SKILL.md#clean-up) says; where the policy's `closeIssue` is true, check its issue closed ([Outcomes](SKILL.md#outcomes)).
+- `merged`: delete the PR's event rules and clones, and its branch as [Clean up](run-files.md#clean-up) says; where the policy's `closeIssue` is true, check its issue closed ([Outcomes](outcomes.md)).
 - `wait`: end; a later event or sweep retries.
 - `redMain`: end; the catch-up run reports the red tip.
 - `restart`: steps 1 to 5.2 once more in this run; a second `restart` ends it.
@@ -59,4 +59,4 @@ The weekly automation, where a maintainer bot or its fallback exists:
 
 ## Reconciliation
 
-The daily automation takes the [Reconciliation](SKILL.md#reconciliation) with `node <skill folder>/reconcile.mjs --project <clone> --repo <owner/repo> --default-branch <default branch> --log <state>/merge-log.md`. Also report each event rule of a closed pull request (`ORCA automations list --json`), each UTC day without a catch-up run (no `counts-<day>.json` with `catchUp` above 0), and each prompt file older than `stallMinutes`. It changes nothing.
+The daily automation takes the [Reconciliation](run-files.md#reconciliation) with `node <skill folder>/reconcile.mjs --project <clone> --repo <owner/repo> --default-branch <default branch> --log <state>/merge-log.md`. Also report each event rule of a closed pull request (`ORCA automations list --json`), each UTC day without a catch-up run (no `counts-<day>.json` with `catchUp` above 0), and each prompt file older than `stallMinutes`. It changes nothing.
