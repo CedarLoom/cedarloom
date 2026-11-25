@@ -33,7 +33,7 @@ These hold in every step and for every outcome.
 
 ## Names
 
-- The one exception to the command rule of [Rules](#rules): a PR's file path inside single quotes ([review-and-merge.md](review-and-merge.md#scratch-clone)).
+- The one exception to the command rule of [Rules](#rules): a PR's file path inside single quotes ([scratch-clone.md](scratch-clone.md)).
 - `<owner/repo>` and `<default branch>` are what `gh repo view --json nameWithOwner,defaultBranchRef` prints in the project's checkout. Use them only when both hold:
   - they are plain: letters, digits, `.`, `_`, `/`, `-`; no `-` at the start, no `..`;
   - `nameWithOwner` is the repository of `git -C <project path> remote get-url origin` (case and a `.git` suffix ignored).

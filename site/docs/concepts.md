@@ -82,4 +82,4 @@ flowchart TD
 
 Round 3 runs the fix on a stronger model. Minor findings are listed, not fixed.
 
-Details: [the plugins](https://github.com/CedarLoom/cedarloom/blob/main/docs/plugins.md), [the workflow skill](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-workflow/skills/workflow/SKILL.md), [review and merge](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-orchestration/skills/coordinate/review-and-merge.md).
+Details: [the plugins](https://github.com/CedarLoom/cedarloom/blob/main/docs/plugins.md), [the workflow skill](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-workflow/skills/workflow/SKILL.md), [review](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-orchestration/skills/coordinate/review.md) and [merge](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-orchestration/skills/coordinate/merge.md).
