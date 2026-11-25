@@ -37,5 +37,5 @@ graders:
   - type: tool_used
     name: read-the-policy-file
     tool: Read
-    input_match: 'docs/agents/orchestration\.json'
+    input_match: 'project/cedarloom\.json'
 expected_outcome: 'Before: `node <skill folder>/policy.mjs project`; Close #12: no; Delete branch: no; the current policy file sets neither `closeIssue` nor `deleteMergedBranch`, so both default to no, whatever the run-start policy and the worker''s report said.'

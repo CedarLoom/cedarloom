@@ -38,7 +38,7 @@ graders:
     flags: i
   - type: regex
     name: minimal-file
-    pattern: 'File:[\s*`]*\{(?=[^\n}]*"\$schema"\s*:\s*"https://cedarloom\.github\.io/cedarloom/schema/cedarloom\.json")(?=[^\n}]*"schemaVersion"\s*:\s*3\b)(?=[^\n}]*"startLabel"\s*:\s*"cl:ready-for-agent")(?:\s*"[^"\n]+"\s*:\s*(?:"[^"\n]*"|\d+)\s*,?){3}\s*\}'
+    pattern: 'File:[\s*`]*\{(?=[^\n}]*"\$schema"\s*:\s*"https://cedarloom\.github\.io/cedarloom/schema/cedarloom\.json")(?=[^\n}]*"schemaVersion"\s*:\s*3\b)(?=[^\n}]*"startLabel"\s*:\s*"cl:ready-for-agent")(?:\s*"[^"\n]+"\s*:\s*(?:"[^"\n]*"|\d+)\s*,){2}\s*"[^"\n]+"\s*:\s*(?:"[^"\n]*"|\d+)\s*\}'
   - type: regex
     name: open-line-without-head
     pattern: 'Open line:[\s*`]*Approval example-org/widget#[^\s:]+: policy, example-org/widget(?![\w/,-])'
