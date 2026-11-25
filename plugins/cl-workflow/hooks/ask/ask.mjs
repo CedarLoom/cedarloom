@@ -90,12 +90,10 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
   const end = awayEnd(file, now);
   const why = unattendedEntrypoint();
   say(event, { additionalContext: `${end !== null ? away(end, now) : why ? alone(why) : HERE}${note}` });
-} else if (event === 'UserPromptExpansion' && ['cl-workflow:away', 'cl-workflow:ask', 'cl-workflow:questions'].includes(input.command_name)) {
+} else if (event === 'UserPromptExpansion' && input.command_name === 'cl-workflow:away') {
   const args = String(input.command_args ?? '');
-  const end = input.command_name === 'cl-workflow:away' ? awayUntil(args, now) : undefined;
-  if (input.command_name !== 'cl-workflow:away') {
-    say(event, { additionalContext: `/${input.command_name} is replaced by /cl-workflow:away and changed nothing: use ${FORMS}.` });
-  } else if (end === undefined) {
+  const end = awayUntil(args, now);
+  if (end === undefined) {
     say(event, { additionalContext: `/cl-workflow:away read no span in "${args}", so nothing changed: use ${FORMS}.` });
   } else if (!file) {
     throw new Error('the plugin has no data folder (CLAUDE_PLUGIN_DATA), so /cl-workflow:away cannot keep its state');

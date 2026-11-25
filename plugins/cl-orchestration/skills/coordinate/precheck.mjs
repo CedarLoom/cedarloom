@@ -206,6 +206,8 @@ export function hostArgs(argv) {
 const LOCK_STALE_MS = 30_000, LOCK_WAIT_MS = 10_000;
 function locked(lock, now, fn) {
   const until = now() + LOCK_WAIT_MS;
+  // The bot home that names the lock may not exist, as where builds run on fresh workers.
+  mkdirSync(dirname(lock), { recursive: true });
   for (;;) {
     try { mkdirSync(lock); break; } catch (e) {
       if (e.code !== 'EEXIST') throw e;

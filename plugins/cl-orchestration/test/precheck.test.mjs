@@ -162,6 +162,17 @@ test('precheck: starts of two repositories at the same time for one free slot: e
   }
 });
 
+test('precheck: a start reserves its slot when the folder that holds the lock does not exist yet', () => {
+  const script = fileURLToPath(new URL('../skills/coordinate/precheck.mjs', import.meta.url));
+  const h = home();
+  // The builder bot that holds the lock may not exist on a host that starts fresh workers for builds.
+  const lock = join(h.prompts, '..', 'no-builder-home', 'state', 'host-limit.lock');
+  const reserve = join(h.prompts, `project-12-reviewer-1-${RUN}`);
+  const run = spawnSync(process.execPath, [script, '--host-limit', '1', '--working', '0', '--reserve', reserve, '--result', join(h.results, 'r.md'), '--lock', lock, h.prompts], { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(readdirSync(h.prompts), [`project-12-reviewer-1-${RUN}`]);
+});
+
 test('precheck: an issue that several projects list starts in none of them', () => {
   const lists = [
     { dir: '/a', tracker: 'owner/tracker', numbers: [12, 14] },

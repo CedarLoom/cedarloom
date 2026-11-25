@@ -82,18 +82,6 @@ test('ask hook: an unreadable span changes nothing and names the forms in one li
   assert.equal(readFileSync(file(data), 'utf8'), before);
 });
 
-test('ask hook: the replaced commands name the away form and change nothing', () => {
-  for (const name of ['cl-workflow:ask', 'cl-workflow:questions']) {
-    const data = scratch();
-    run(data, typed('2h'));
-    const before = readFileSync(file(data), 'utf8');
-    const line = run(data, { ...off, command_name: name, prompt: `/${name} off` }).additionalContext;
-    assert.equal(line, `/${name} is replaced by /cl-workflow:away and changed nothing: use /cl-workflow:away alone (until off), 30 or 30m (minutes), 2h, until 07:30 (local time), or off.`);
-    assert.equal(readFileSync(file(data), 'utf8'), before, name);
-    assert.equal(existsSync(join(data, 'ask', 'log')), false, name);
-  }
-});
-
 test('ask hook: the mode option away starts a new process or a resumed conversation away; here starts it here', () => {
   for (const source of ['startup', 'resume']) {
     const data = scratch();
