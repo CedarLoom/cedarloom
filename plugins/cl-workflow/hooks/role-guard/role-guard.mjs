@@ -476,22 +476,32 @@ function gh(args, source, role, command) {
   return reads === null || reads?.includes(verb) ? null : `gh ${sub} ${verb ?? ''}`.trim();
 }
 
-// The short options of git commit that take a value, in the rest of their word or the next one: no option letter follows them.
+// The short options of git commit that take a value: no option letter follows them in their word. -S and -u take theirs only
+// in the same word; the others take the next word where their own ends with them, even a word such as -- or -n.
 const COMMIT_VALUE_SHORT = /[mFcCtSu]/;
+const COMMIT_NEXT_VALUE_SHORT = 'mFcCt';
+// The long options of git commit whose value may be the next word; git also takes a prefix of each.
+const COMMIT_VALUE_LONG = ['author', 'date', 'message', 'file', 'reuse-message', 'reedit-message', 'fixup', 'squash', 'template', 'cleanup', 'trailer', 'pathspec-from-file'];
 
 // git commit --no-verify skips the pre-commit and commit-msg hooks. git takes it as -n, also grouped with other short options
 // before one that takes a value (-an, -nm x), and as any prefix of the long option (gitcli, "Abbreviating long options"),
-// anywhere before --.
+// anywhere before a -- that is no option's value.
 function skipsHooks(args) {
   let i = 0;
   for (; i < args.length && args[i].startsWith('-'); i++) if (GIT_VALUE_OPTS.has(args[i]) || args[i] === '-c' || args[i] === '--config-env') i++;
   if (args[i] !== 'commit') return false;
-  for (const w of args.slice(i + 1)) {
+  for (let j = i + 1; j < args.length; j++) {
+    const w = args[j];
     if (w === '--') return false;
     if (w.startsWith('--')) {
       const name = w.slice(2).split('=')[0];
       if (name && 'no-verify'.startsWith(name)) return true;
-    } else if (w.startsWith('-') && w.slice(1).split(COMMIT_VALUE_SHORT)[0].includes('n')) return true;
+      if (name && !w.includes('=') && COMMIT_VALUE_LONG.some((option) => option.startsWith(name))) j++;
+    } else if (w.startsWith('-')) {
+      const flags = w.slice(1).split(COMMIT_VALUE_SHORT)[0];
+      if (flags.includes('n')) return true;
+      if (w.length === flags.length + 2 && COMMIT_NEXT_VALUE_SHORT.includes(w.at(-1))) j++;
+    }
   }
   return false;
 }

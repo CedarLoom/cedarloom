@@ -305,6 +305,10 @@ test('role guard: refuses a commit that skips the commit hooks in every role, th
     'git commit --no-verif -m x',
     'git commit --no-veri -m x',
     'git commit -m x file.txt --no-verify',
+    'git commit -m -- -n',
+    'git commit -am -- -n',
+    'git commit --mess -- -n',
+    'git commit -C HEAD -n',
     'git -C . commit -n -m x',
     'git -c user.name=t commit -n -m x',
     'bash -c "git commit -n -m x"',
@@ -316,7 +320,7 @@ test('role guard: refuses a commit that skips the commit hooks in every role, th
 });
 
 test('role guard: passes a commit that runs the commit hooks', () => {
-  const commits = ['git commit -m x', 'git commit -am x', 'git commit -mnote', 'git commit -m x -- -n', 'git commit --verify -m x', 'git push -n origin feat/x'];
+  const commits = ['git commit -m x', 'git commit -am x', 'git commit -mnote', 'git commit -m x -- -n', 'git commit -m -n', 'git commit --message -n', 'git commit --verify -m x', 'git push -n origin feat/x'];
   for (const role of [undefined, 'coordinator']) {
     for (const command of commits) assert.equal(decision(command, { role, cwd: feature }), 'none', `${role}: ${command}`);
   }
