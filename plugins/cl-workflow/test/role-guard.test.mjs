@@ -294,16 +294,16 @@ test('role guard: refuses a merge with --admin in every role, the coordinator in
   }
 });
 
-const ROLE_BOTS = ['planner-bot', 'reviewer-bot', 'fixer-bot', 'worker-bot', 'maintainer-bot'];
+const ROLE_BOTS = ['builder-bot', 'reviewer-bot', 'maintain-bot'];
 
-test('role guard: the project, planner, reviewer and maintainer bots never push', () => {
-  for (const role of ['project-bot', 'planner-bot', 'reviewer-bot', 'maintainer-bot']) {
+test('role guard: the project, reviewer and maintain bots never push', () => {
+  for (const role of ['project-bot', 'reviewer-bot', 'maintain-bot']) {
     for (const command of ['git push origin feat/x', 'git push']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
   }
 });
 
-test('role guard: a fixer or worker bot pushes only the branch checked out where git runs', () => {
-  for (const role of ['fixer-bot', 'worker-bot']) {
+test('role guard: the builder bot pushes only the branch checked out where git runs', () => {
+  for (const role of ['builder-bot']) {
     for (const command of ['git push origin feat/x', 'git push -u origin HEAD', `git -C ${feature} push origin feat/x`, 'git push origin feat/x && git checkout main']) assert.equal(decision(command, { role, cwd: feature }), 'none', `${role}: ${command}`);
     for (const command of ['git push origin feat/other', 'git push origin HEAD:feat/other', 'git push origin feat/x feat/other', 'git push origin feat/other:feat/x']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
     // The guard reads the branch before the command runs, so a push after a switch in the same command is refused.
@@ -313,9 +313,9 @@ test('role guard: a fixer or worker bot pushes only the branch checked out where
   }
 });
 
-test('role guard: a fixer or worker bot never force-pushes or deletes its branch', () => {
-  const forced = ['git push -f origin feat/x', 'git push -uf origin feat/x', 'git push --force origin feat/x', 'git push --force-with-lease origin feat/x', 'git push --forc origin feat/x', 'git push origin +feat/x', 'git push origin +HEAD:feat/x', 'git push -d origin feat/x', 'git push --delete origin feat/x', 'git push origin :feat/x'];
-  for (const role of ['fixer-bot', 'worker-bot']) for (const command of forced) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
+test('role guard: the builder bot never force-pushes or deletes its branch', () => {
+  const forced = ['git push -f origin feat/x', 'git push -uf origin feat/x', 'git push --force origin feat/x', 'git push --force-with-lease origin feat/x', 'git push --forc origin feat/x', 'git push origin +feat/x', 'git push origin +HEAD:feat/x', 'git push -d origin feat/x', 'git push --delete origin feat/x', 'git push origin :feat/x', 'git push origin `echo main`', 'git push origin `echo +feat/x`', 'git push origin `echo HEAD:main`', 'echo main | xargs git push origin'];
+  for (const role of ['builder-bot']) for (const command of forced) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
 });
 
 test('role guard: a role bot runs only gh commands that read', () => {
@@ -409,7 +409,8 @@ test('role guard: in PowerShell a bot is refused a merge or a write after any as
 });
 
 test('role guard: a set role it does not know, empty or without the -bot suffix included, runs no command and writes no file', () => {
-  for (const role of ['fixer_bot', 'Fixer-Bot', 'fixer-bot ', '', 'planner', 'maintainer', 'Coordinator']) {
+  // A bot role the guard does not list (planner-bot and the others below) runs nothing either.
+  for (const role of ['builder_bot', 'Builder-Bot', 'builder-bot ', '', 'builder', 'maintain', 'Coordinator', 'planner-bot', 'worker-bot', 'fixer-bot', 'maintainer-bot']) {
     assert.equal(decision('gh pr view 12', { role }), 'deny', JSON.stringify(role));
     assert.equal(decision(undefined, { role, tool: 'Write', toolInput: { file_path: 'notes.md', content: 'x' } }), 'deny', JSON.stringify(role));
   }
@@ -419,7 +420,7 @@ test('role guard: a set role it does not know, empty or without the -bot suffix 
   assert.equal(decision(undefined, { tool: 'Write', toolInput: { file_path: 'notes.md', content: 'x' } }), 'none');
 });
 
-test('role guard: the maintainer bot writes with a file tool only below results/ of its home, through links too', () => {
+test('role guard: the maintain bot writes with a file tool only below results/ and MEMORY.md of its home, through links too', () => {
   const home = mkdtempSync(join(tmpdir(), 'role-guard-home-'));
   const elsewhere = mkdtempSync(join(tmpdir(), 'role-guard-elsewhere-'));
   try {
@@ -427,22 +428,28 @@ test('role guard: the maintainer bot writes with a file tool only below results/
     mkdirSync(join(home, 'clones'));
     symlinkSync(elsewhere, join(home, 'results', 'out'));
     symlinkSync(join(elsewhere, 'missing.md'), join(home, 'results', 'dangling.md'));
-    const write = (file_path, { role = 'maintainer-bot', env = { CLAUDE_PROJECT_DIR: home }, cwd = home } = {}) =>
+    const write = (file_path, { role = 'maintain-bot', env = { CLAUDE_PROJECT_DIR: home }, cwd = home } = {}) =>
       decision(undefined, { role, cwd, env, tool: 'Write', toolInput: { file_path, content: 'x' } });
     assert.equal(write(join(home, 'results', 'r.md')), 'none');
     assert.equal(write('results/r.md'), 'none');
-    for (const path of [join(home, 'clones', 'r.md'), 'results/../x.md', join(home, 'results'), join(home, 'results', 'out', 'r.md'), join(home, 'results', 'dangling.md'), join(home, 'results', 'new', 'r.md'), join(elsewhere, 'r.md')]) {
+    assert.equal(write(join(home, 'MEMORY.md')), 'none');
+    assert.equal(write('clones/../MEMORY.md'), 'none');
+    for (const path of [join(home, 'SOUL.md'), join(home, 'memory.md'), join(home, 'clones', 'MEMORY.md'), join(home, 'clones', 'r.md'), 'results/../x.md', join(home, 'results'), join(home, 'results', 'out', 'r.md'), join(home, 'results', 'dangling.md'), join(home, 'results', 'new', 'r.md'), join(elsewhere, 'r.md')]) {
       assert.equal(write(path), 'deny', path);
     }
     assert.equal(write(join(home, 'results', 'r.md'), { env: {} }), 'deny');
+    assert.equal(write(join(home, 'MEMORY.md'), { env: {} }), 'deny');
+    // A MEMORY.md that links out of the home is no memory of this bot.
+    symlinkSync(join(elsewhere, 'MEMORY.md'), join(home, 'MEMORY.md'));
+    assert.equal(write(join(home, 'MEMORY.md')), 'deny');
     // The refusal sends the knowledge base write to the shell instead of telling the run to leave the step out.
     const clone = { hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: join(home, 'clones', 'maintain', '.cedarloom', 'knowledge', 'k.md'), content: 'x' }, tool_use_id: 'toolu_01', cwd: home };
-    const reason = JSON.parse(run(JSON.stringify(clone), 'maintainer-bot', undefined, { CLAUDE_PROJECT_DIR: home }).stdout).hookSpecificOutput.permissionDecisionReason;
+    const reason = JSON.parse(run(JSON.stringify(clone), 'maintain-bot', undefined, { CLAUDE_PROJECT_DIR: home }).stdout).hookSpecificOutput.permissionDecisionReason;
     assert.match(reason, /write the knowledge base and the clone from the shell\.$/);
     assert.doesNotMatch(reason, /Leave the step out/);
-    assert.equal(decision(undefined, { role: 'maintainer-bot', cwd: home, env: { CLAUDE_PROJECT_DIR: home }, tool: 'NotebookEdit', toolInput: { notebook_path: join(home, 'clones', 'n.ipynb'), new_source: 'x' } }), 'deny');
+    assert.equal(decision(undefined, { role: 'maintain-bot', cwd: home, env: { CLAUDE_PROJECT_DIR: home }, tool: 'NotebookEdit', toolInput: { notebook_path: join(home, 'clones', 'n.ipynb'), new_source: 'x' } }), 'deny');
     // The other roles keep their file tools wherever the settings let them.
-    for (const role of ['worker-bot', 'project-bot', 'coordinator']) assert.equal(write(join(home, 'clones', 'r.md'), { role }), 'none', role);
+    for (const role of ['builder-bot', 'reviewer-bot', 'project-bot', 'coordinator']) assert.equal(write(join(home, 'clones', 'r.md'), { role }), 'none', role);
     assert.equal(decision(undefined, { cwd: home, env: { CLAUDE_PROJECT_DIR: home }, tool: 'Write', toolInput: { file_path: join(home, 'clones', 'r.md'), content: 'x' } }), 'none');
   } finally {
     rmSync(home, { recursive: true, force: true });

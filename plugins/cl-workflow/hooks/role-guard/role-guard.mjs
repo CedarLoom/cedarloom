@@ -32,11 +32,10 @@ const MAX_FOLDERS = 64;
 
 const ROLE = 'CEDARLOOM_ROLE';
 // The bots of a repository take the guarded rules and these on top: none merges but through merge.mjs, which runs gh as a child
-// process no hook reads. The project, planner, reviewer and maintainer bots never push; fixer and worker bots push only the branch
-// checked out.
-const BOTS = new Set(['project-bot', 'planner-bot', 'reviewer-bot', 'fixer-bot', 'worker-bot', 'maintainer-bot']);
-const ROLE_BOTS = new Set(['planner-bot', 'reviewer-bot', 'fixer-bot', 'worker-bot', 'maintainer-bot']);
-const OWN_BRANCH = new Set(['fixer-bot', 'worker-bot']);
+// process no hook reads. The project, reviewer and maintain bots never push; the builder bot pushes only the branch checked out.
+const BOTS = new Set(['project-bot', 'builder-bot', 'reviewer-bot', 'maintain-bot']);
+const ROLE_BOTS = new Set(['builder-bot', 'reviewer-bot', 'maintain-bot']);
+const OWN_BRANCH = new Set(['builder-bot']);
 // Role bots post nothing on GitHub but their push: per gh command the verbs they may run, null for any; gh api only with GET.
 const BOT_GH_READS = new Map([['repo', ['clone', 'view', 'list']], ['pr', ['view', 'diff', 'list', 'checks', 'status']], ['issue', ['view', 'list', 'status']], ['run', ['view', 'list', 'watch']], ['search', null]]);
 // The project bot deletes a merged head branch, named <type>/<number>-<slug>, so never a default branch.
@@ -250,10 +249,12 @@ function folder(dir, args) {
 
 // known: dir is the folder git runs in. Otherwise dir is one of the folders it may run in, and only a named branch is read.
 // switched: an earlier git command in the same command line changes the branch, which the guard reads before the line runs.
-function push(args, dir, known, role, switched) {
+// filled: the shell fills in words of the push at run time (a backtick substitution, or xargs), which the guard never sees.
+function push(args, dir, known, role, { switched, filled }) {
   if (BOTS.has(role) && !OWN_BRANCH.has(role)) return 'a push';
   const own = OWN_BRANCH.has(role);
   if (own && switched) return 'a push after a branch switch in the same command';
+  if (own && filled) return 'a push whose refspec the shell fills in';
   const positionals = [];
   let repo;
   for (let i = 0; i < args.length; i++) {
@@ -293,7 +294,7 @@ function push(args, dir, known, role, switched) {
   const remoteHead = /^[\w.-]+$/.test(remote) ? gitLine(dir, ['symbolic-ref', '--short', `refs/remotes/${remote}/HEAD`]) : '';
   const defaults = new Set([...DEFAULT_BRANCHES, remoteHead && branchOf(remoteHead)].filter(Boolean));
   const targets = specs.length ? [] : ['HEAD', branchOf(pushTarget)];
-  // The local side of each refspec, which a fixer or worker bot may only take from the branch checked out.
+  // The local side of each refspec, which the builder bot may only take from the branch checked out.
   const sources = [];
   for (const spec of specs) {
     if (own && /^(\+|:)/.test(spec)) return 'a force or delete push';
@@ -343,7 +344,28 @@ function git(args, cwd, known, gitDir, role, line) {
   // A rebase may switch to the branch it names, bisect checks out commits and its reset a branch, and symbolic-ref HEAD <ref>
   // moves HEAD; git takes --mo and --cop for --move and --copy.
   if (sub === 'checkout' || sub === 'switch' || sub === 'rebase' || sub === 'bisect' || (sub === 'symbolic-ref' && rest.filter((w) => !w.startsWith('-')).length > 1) || (sub === 'branch' && rest.some((w) => /^(-[^-]*[mMcC]|--(mov?e?|copy?)$)/.test(w)))) line.switched = true;
-  return sub === 'push' ? push(rest, dir, known, role, line.switched) : null;
+  return sub === 'push' ? push(rest, dir, known, role, line) : null;
+}
+
+// bash runs a backtick substitution anywhere but in single quotes and after a backslash; in $'...' a backslash escapes a quote.
+function backtick(cmd) {
+  let quote = '';
+  for (let i = 0; i < cmd.length; i++) {
+    const c = cmd[i];
+    if (quote === "'") quote = c === "'" ? '' : quote;
+    else if (quote === '$') {
+      if (c === '\\') i++;
+      else if (c === "'") quote = '';
+    } else if (c === '\\') i++;
+    else if (c === '`') return true;
+    else if (c === '"') quote = quote ? '' : '"';
+    else if (quote) continue;
+    else if (c === '$' && cmd[i + 1] === "'") {
+      quote = '$';
+      i++;
+    } else if (c === "'") quote = "'";
+  }
+  return false;
 }
 
 // gh api's flags as gh reads them: grouped short flags (-iX PUT), values joined (-XPUT, --method=PUT) or in the next word.
@@ -444,7 +466,9 @@ function reason({ tool_name: tool, tool_input: toolInput }, cwd, role) {
   const source = [cmd, ...parsed.flatMap((c) => c.words)].join('\n');
   // Before the command, through env or export in bash, or $env:GIT_DIR in PowerShell.
   const gitDir = /\bGIT_DIR\s*=/i.test(cmd);
-  const line = { switched: false };
+  const line = { switched: false, filled: false };
+  // The tokenizer ends a command at a backtick, so the raw text tells whether one runs.
+  const substitutes = !powershell && backtick(cmd);
   for (const { words, nested } of parsed) {
     if (!words.length) continue;
     const at = words.findIndex(changesDir);
@@ -461,6 +485,7 @@ function reason({ tool_name: tool, tool_input: toolInput }, cwd, role) {
     for (let j = 0; j < words.length; j++) {
       const name = program(words[j]);
       const rest = words.slice(j + 1);
+      line.filled = substitutes || words.slice(0, j).some((w) => program(w) === 'xargs');
       const why =
         name === 'git' ? (known ? [dir] : seen).reduce((found, d) => found ?? git(rest, d, known, gitDir, role, line), null)
         : name === 'gh' ? gh(rest, source, role, runs(words, j, powershell))
@@ -546,12 +571,12 @@ function queue({ tool_name: tool, tool_input: toolInput, agent_id: agent }, cwd)
   return hits(QUEUE) ? 'a write into the local question queue (.cedarloom/questions/), or a command that names it,' : null;
 }
 
-// The maintainer bot writes with a file tool only its result file, below results/ of its home (the project folder of its run);
-// its clones and knowledge base it writes from its shell. Each path resolves through links, from the folder that holds it where
-// the file is new, so a link cannot lead out; a path that does not resolve (a dangling link included), or no project folder,
-// refuses the write.
+// The maintain bot writes with a file tool only its result file, below results/ of its home (the project folder of its run), and
+// its memory, MEMORY.md of its home; its clones and knowledge base it writes from its shell. Each path resolves through links, from
+// the folder that holds it where the file is new, so a link cannot lead out; a path that does not resolve (a dangling link
+// included), or no project folder, refuses the write.
 function outsideResults({ tool_input: toolInput }, cwd) {
-  const what = 'a file write outside results/ of its home';
+  const what = 'a file write outside results/ and MEMORY.md of its home';
   const home = process.env.CLAUDE_PROJECT_DIR;
   const fields = EDIT_PATHS.filter((key) => toolInput?.[key] !== undefined).map((key) => toolInput[key]);
   if (!home || !fields.length || fields.some((path) => typeof path !== 'string')) return what;
@@ -566,9 +591,11 @@ function outsideResults({ tool_input: toolInput }, cwd) {
   };
   try {
     const results = realpathSync(join(resolve(home), 'results'));
+    const memory = join(realpathSync(resolve(home)), 'MEMORY.md');
     for (const field of fields) {
-      const rel = relative(results, real(resolve(cwd, field)));
-      if (!rel || rel.startsWith('..') || isAbsolute(rel)) return what;
+      const path = real(resolve(cwd, field));
+      const rel = relative(results, path);
+      if (path !== memory && (!rel || rel.startsWith('..') || isAbsolute(rel))) return what;
     }
   } catch {
     return what;
@@ -598,14 +625,14 @@ else {
     const why =
       owners ? null
       : unknown ? `a ${EDITS.has(input.tool_name) ? 'file write' : 'command'} in the unknown role ${JSON.stringify(role)}`
-      : EDITS.has(input.tool_name) ? (role === 'maintainer-bot' ? outsideResults(input, cwd) : null)
+      : EDITS.has(input.tool_name) ? (role === 'maintain-bot' ? outsideResults(input, cwd) : null)
       : coordinator ? (adminMerge(input) ? 'a merge with --admin' : null)
       : reason(input, cwd, role);
     if (owners) line = `CedarLoom role guard: ${owners} is the owner's step: only a session where /cl-workflow:away off set the answer flag, which the ask hook refuses in a session it reads as unattended, writes answers there. File a question with approval.mjs file and read answers with approval.mjs queue. Text that only mentions the folder goes in a file (-F, --body-file).`;
     else if (why && coordinator) line = `CedarLoom role guard: ${why}, which passes branch protection, is no role's step. Merge without --admin, or leave the pull request to the owner. Text that only mentions such a command goes in a file (-F, --body-file).`;
     else if (why && unknown) line = `CedarLoom role guard: ${why} is refused: the roles are coordinator, ${[...BOTS].join(', ')}. Report the role to the user who starts this session.`;
-    // The maintainer's knowledge base is a step of its procedure: the refusal names the shell, so the run keeps that step.
-    else if (why && role === 'maintainer-bot' && EDITS.has(input.tool_name)) line = `CedarLoom role guard: ${why} is no step of the ${role} (${ROLE}=${role}). The file tool writes only the result file below results/; write the knowledge base and the clone from the shell.`;
+    // The maintain bot's knowledge base is a step of its procedure: the refusal names the shell, so the run keeps that step.
+    else if (why && role === 'maintain-bot' && EDITS.has(input.tool_name)) line = `CedarLoom role guard: ${why} is no step of the ${role} (${ROLE}=${role}). The file tool writes only the result file below results/ and MEMORY.md of the home; write the knowledge base and the clone from the shell.`;
     else if (why && BOTS.has(role)) line = `CedarLoom role guard: ${why} is no step of the ${role} (${ROLE}=${role}).${!why.startsWith('a push') && /merge/i.test(why) ?' Merges go only through merge.mjs.' : ''} Leave the step out and name it in your report. Text that only mentions such a command goes in a file (-F, --body-file).`;
     else if (why) line = `CedarLoom role guard: ${why} is the coordinator's step, and this session does not run as the coordinator (${ROLE}=coordinator in the main session, set by the user who starts it). Leave the step to the coordinator and name it in your report. Text that only mentions such a command goes in a file (-F, --body-file).`;
   } catch (error) {
