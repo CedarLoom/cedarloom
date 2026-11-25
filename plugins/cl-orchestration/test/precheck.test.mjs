@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { argsOf, check, distinct, pickable, priorities, report, unfinished, unread } from '../skills/coordinate/precheck.mjs';
+import { argsOf, check, distinct, lockToken, pickable, priorities, report, tryLock, unfinished, unlock, unread } from '../skills/coordinate/precheck.mjs';
 
 const POLICY = { startLabel: 'agent-ready', trustedAuthors: ['helper[bot]'] };
 const issue = (number, extra = {}) => ({ number, author_association: 'OWNER', user: { login: 'owner' }, labels: [{ name: 'agent-ready' }], ...extra });
@@ -162,15 +162,56 @@ test('precheck: starts of two repositories at the same time for one free slot: e
   }
 });
 
-test('precheck: a start reserves its slot when the folder that holds the lock does not exist yet', () => {
+const STALE = new Date('2026-01-01T00:00:00Z');
+
+test('precheck: a host limit lock a dead run left is freed by one start, and a lock taken since stays its holder\'s', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cl-lock-')), lock = join(dir, 'host-limit.lock');
+  const dead = lockToken(lock);
+  assert.equal(tryLock(lock, dead, Date.now), true);
+  utimesSync(join(lock, dead), STALE, STALE);
+  const first = lockToken(lock), second = lockToken(lock);
+  // The first try removes the dead run's stale token; the next try of another start takes the lock.
+  assert.equal(tryLock(lock, first, Date.now), false);
+  assert.equal(tryLock(lock, second, Date.now), true);
+  // The start that saw the stale lock tries again: it waits, and the new holder keeps its lock.
+  assert.equal(tryLock(lock, first, Date.now), false);
+  assert.deepEqual(readdirSync(lock), [second]);
+  unlock(lock, second);
+  assert.equal(tryLock(lock, first, Date.now), true);
+  unlock(lock, first);
+  assert.deepEqual(readdirSync(dir), []);
+});
+
+test('precheck: a start whose host limit lock was freed as stale releases it without an error and leaves the next holder\'s lock', () => {
+  const lock = join(mkdtempSync(join(tmpdir(), 'cl-lock-')), 'host-limit.lock');
+  const slow = lockToken(lock);
+  assert.equal(tryLock(lock, slow, Date.now), true);
+  utimesSync(join(lock, slow), STALE, STALE);
+  const next = lockToken(lock);
+  assert.equal(tryLock(lock, next, Date.now), false);
+  assert.equal(tryLock(lock, next, Date.now), true);
+  unlock(lock, slow);
+  assert.deepEqual(readdirSync(lock), [next]);
+});
+
+test('precheck: a start that waited for the host limit lock holds it for the stale age from its take', () => {
+  const lock = join(mkdtempSync(join(tmpdir(), 'cl-lock-')), 'host-limit.lock');
+  const after = (ms) => () => Date.now() + ms;
+  const waited = lockToken(lock), next = lockToken(lock);
+  // Taken 10 s after its token was made; 35 s after that token was made, the lock is 25 s old.
+  assert.equal(tryLock(lock, waited, after(10_000)), true);
+  assert.equal(tryLock(lock, next, after(35_000)), false);
+  assert.deepEqual(readdirSync(lock), [waited]);
+});
+
+test('precheck: the host limit lock needs no bot home: its folder is made on first use and left empty', () => {
+  const alpha = home(), folder = join(mkdtempSync(join(tmpdir(), 'cl-host-')), 'host-limit');
   const script = fileURLToPath(new URL('../skills/coordinate/precheck.mjs', import.meta.url));
-  const h = home();
-  // The builder bot that holds the lock may not exist on a host that starts fresh workers for builds.
-  const lock = join(h.prompts, '..', 'no-builder-home', 'state', 'host-limit.lock');
-  const reserve = join(h.prompts, `project-12-reviewer-1-${RUN}`);
-  const run = spawnSync(process.execPath, [script, '--host-limit', '1', '--working', '0', '--reserve', reserve, '--result', join(h.results, 'r.md'), '--lock', lock, h.prompts], { encoding: 'utf8' });
+  const run = spawnSync(process.execPath, [script, '--host-limit', '1', '--working', '0', '--reserve', join(alpha.prompts, `alpha-3-builder-0-${RUN}`),
+    '--result', join(alpha.results, 'alpha-3.md'), '--lock', join(folder, 'host-limit.lock'), alpha.prompts], { encoding: 'utf8' });
   assert.equal(run.status, 0, run.stderr);
-  assert.deepEqual(readdirSync(h.prompts), [`project-12-reviewer-1-${RUN}`]);
+  assert.deepEqual(readdirSync(alpha.prompts), [`alpha-3-builder-0-${RUN}`]);
+  assert.deepEqual(readdirSync(folder), []);
 });
 
 test('precheck: an issue that several projects list starts in none of them', () => {
