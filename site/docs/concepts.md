@@ -57,7 +57,7 @@ The task ends with a report that names each check's command and result, and the 
 
 The role guard, a hook of `cl-workflow`, refuses merges, releases, tag pushes and pushes to the default branch in every subagent and every session but the coordinator's. It is a hook, not a boundary: branch rulesets and a token without those rights stay binding.
 
-A repository run by bots maps the same roles to a project bot and role bots (builder, reviewer, maintain). A bot uses an Orca bot template only for an Orca-specific duty the template covers; the rest stays in CedarLoom skills, which also run outside Orca. Each bot is refused what its procedure does not need.
+A repository run by bots maps the same roles to a project bot and role bots (builder, reviewer, maintain). A bot uses an Orca bot template only for an Orca-specific duty the template covers; the rest stays in CedarLoom skills, which also run outside Orca. The exceptions, added only when the user asks, are a `cl-security` bot from the `security-check` template and the `pr-review` template in a repository without project or role bots. Each bot is refused what its procedure does not need.
 
 ## Questions and away mode
 
