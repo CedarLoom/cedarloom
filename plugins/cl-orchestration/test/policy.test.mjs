@@ -22,7 +22,6 @@ const DEFAULTS = {
   keepRunning: false,
   permissionPrompts: 'block',
   mode: 'supervised',
-  sandbox: { allowedDomains: [] },
   riskyPaths: [],
   review: { depth: 'high', sensitiveDepth: 'high', sensitivePaths: [] },
   issues: { labels: [] },
@@ -86,13 +85,11 @@ test('policy: a file that names another repository is refused and keeps the proj
   assert.deepEqual(rules(effective({ issues: { repository: 'owner/tracker', extra: 'value' } }, '0.1.0').errors), [['unknown-key', 'issues.extra']]);
 });
 
-test('policy: mode is supervised unless the file sets automatic, which takes its hosts from sandbox.allowedDomains', () => {
-  assert.equal(effective({ sandbox: { allowedDomains: ['registry.npmjs.org'] } }, '0.1.0').policy.mode, 'supervised');
-  const automatic = effective({ mode: 'automatic', sandbox: { '//': 'what the tests fetch', allowedDomains: ['registry.npmjs.org', '*.pythonhosted.org'] } }, '0.1.0');
+test('policy: mode is supervised unless the file sets automatic', () => {
+  assert.equal(effective({}, '0.1.0').policy.mode, 'supervised');
+  const automatic = effective({ mode: 'automatic' }, '0.1.0');
   assert.deepEqual(automatic.errors, []);
   assert.equal(automatic.policy.mode, 'automatic');
-  assert.deepEqual(automatic.policy.sandbox, { allowedDomains: ['registry.npmjs.org', '*.pythonhosted.org'] });
-  assert.equal(effective({ mode: 'automatic' }, '0.1.0').policy, null);
 });
 
 test('policy: a schemaVersion other than 2 gives no policy', () => {
@@ -155,12 +152,8 @@ const REFUSED = [
   [{ issuesPerWorker: 17 }, 'range', 'issuesPerWorker'],
   ...['', '--dangerously-skip-permissions', 'opus; id', 'opus fast', `o${'p'.repeat(128)}`].map((model) => [{ models: { worker: { model } } }, 'pattern', 'models.worker.model']),
   [{ later: true }, 'unknown-key', 'later'],
+  [{ mode: 'automatic', sandbox: { allowedDomains: ['registry.npmjs.org'] } }, 'refused', 'sandbox'],
   ...['auto', 'Automatic', 'bypassPermissions', ''].map((mode) => [{ mode }, 'enum', 'mode']),
-  ...[{}, { sandbox: {} }, { sandbox: { '//': 'none yet' } }].map((rest) => [{ mode: 'automatic', ...rest }, 'required', 'sandbox.allowedDomains']),
-  [{ mode: 'automatic', sandbox: { allowedDomains: [] } }, 'length', 'sandbox.allowedDomains'],
-  // An entry that would open every host, a local service or more than one host name.
-  ...['*', '*.com', 'localhost', 'Example.com', 'example.com:443', 'https://example.com', 'example.com/x', ' example.com', '-x.example.com', '169.254.169.254', '10.0.0.1'].map((host) => [{ sandbox: { allowedDomains: [host] } }, 'pattern', 'sandbox.allowedDomains[0]']),
-  [{ sandbox: { network: { allowedDomains: ['example.com'] } } }, 'unknown-key', 'sandbox.network'],
   [{ models: { phases: { plan: { modle: 'opus' } } } }, 'unknown-key', 'models.phases.plan.modle'],
   [{ models: { sensitive: { implement: { model: 'opus' } } } }, 'unknown-key', 'models.sensitive.implement'],
   [{ models: { sensitive: { independent: { model: 'claude-fable-5-2' } } } }, 'enum', 'models.sensitive.independent.model'],

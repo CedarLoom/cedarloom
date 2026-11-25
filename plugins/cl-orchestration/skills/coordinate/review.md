@@ -36,7 +36,7 @@ A project bot takes these steps with these changes ([bot-project.md](bot-project
 
 ## Sensitive or routine
 
-Read the pull request's diff (`git -C <scratch path> diff refs/remotes/origin/<default branch>...<head>`). The change is sensitive when one of these holds:
+Read the pull request's diff (`git -C <scratch path> diff --no-ext-diff --no-textconv refs/remotes/origin/<default branch>...<head>`). The change is sensitive when one of these holds:
 
 - the verdict's `sensitive` lists a file: one under a `review.sensitivePaths` or `riskyPaths` entry, or an owner-only one ([Owner-only](merge.md#owner-only))
 - its risk class is high ([decisions.md](decisions.md#risk-class))
@@ -115,7 +115,7 @@ The reviewer's working directory is not the clone, so neither built-in command f
 - Send a round's Blocking and Important findings in one follow-up to the owning worker, in your own words, each with file and line and the id of the review thread it covers, and the threads file of `<head>` ([Threads](#threads)), by [Follow-ups](orca-follow-ups.md). List Minor findings in the report: no round fixes them. The worker answers once its fix is pushed, or with its evidence where nothing changed: read `<head>` then, and never type the commit id of a message into a command.
 - Every fix, and every finding the worker answers with evidence instead of a change, gets a scoped re-review by a fresh `cl-workflow:recheck` subagent (another agent: a general subagent briefed with its steps), started and briefed like the reviewer, on the scratch clone at the new head.
   - It runs on the model of the review it checks, at `high`. After a review on `fable` it runs on `opus`, or on `fable` when the fix changes security or safety logic.
-  - The re-review reads the lines changed since the reviewed head (`git -C <scratch path> diff <reviewed head> <head>`) and the earlier findings.
+  - The re-review reads the lines changed since the reviewed head (`git -C <scratch path> diff --no-ext-diff --no-textconv <reviewed head> <head>`) and the earlier findings.
   - Only where `git -C <scratch path> rev-list --parents -n 1 <head>` prints the head with exactly two parents, the first the reviewed head, and the second is on the default branch (`git -C <scratch path> merge-base --is-ancestor <second parent> refs/remotes/origin/<default branch>` exits 0), it reads `git -C <scratch path> show --remerge-diff <head>` instead: the worker's resolution alone, without the default branch's changes.
   - Every other head gets the plain diff: for a merge of more than two parents git prints no remerge diff, only a warning.
   - Any push to the branch after a review is such a fix, whoever made it, except a head whose verdict's `pin` is `clean-merges` ([Merge](merge.md#merge), step 2).

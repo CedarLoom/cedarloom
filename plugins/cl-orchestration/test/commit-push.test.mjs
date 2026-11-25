@@ -91,7 +91,7 @@ test('commit-push: a worktree with a config.worktree that holds settings is refu
   const s = setup();
   writeFileSync(join(s.admin, 'config.worktree'), '[core]\n\thooksPath = hooks\n');
   refused(s.run('commit', ...s.flags, '--file', 'src/a.txt'), /^commondir: the worktree's config\.worktree is not empty$/);
-  // An empty one passes: the Linux sandbox binds one while another worker's command runs.
+  // An empty one passes: it holds no settings.
   writeFileSync(join(s.admin, 'config.worktree'), '');
   assert.equal(s.run('commit', ...s.flags, '--file', 'src/a.txt').status, 0);
 });

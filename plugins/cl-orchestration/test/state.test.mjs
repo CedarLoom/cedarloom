@@ -63,7 +63,7 @@ test('state: a lock is stale when its process is gone', async () => {
   }
 });
 
-// ps and /proc both give start times in CI; the macOS sandbox refuses ps, and then only the age ends the lock.
+// ps and /proc both give start times in CI; where neither is readable, only the age ends the lock.
 test('state: a lock is stale when its process id now names a process with another start time', { skip: typeof processStart(process.pid) !== 'string' && 'no process start time readable here' }, () => {
   const reused = folder();
   holderAt(reused, { pid: process.pid, start: 'Thu Jan  1 00:00:00 1970', pr: 1, head: 'a'.repeat(40), takenAt: NOW.toISOString() });
