@@ -1,0 +1,24 @@
+schema_version: "1.1"
+name: agent-recheck-unchanged-line-follow-up
+description: 'A defect the recheck agent sees on a line the fix did not change is a follow-up, not a new finding. Needs --scaffold.'
+tags: [cl-workflow, agent-recheck]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:recheck` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Re-review the fix range HEAD~1..HEAD of this repository (read it with git here). Earlier findings:
+    - F1 (Important): src/limit.js `parseRuns` accepts any text; "abc" gives NaN and "-3" gives -3. Reject values that are not positive integers.
+  max_turns: 12
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-recheck
+    tool: Agent
+    input_match: cl-workflow:recheck
+    min: 1
+  - type: llm
+    name: follow-up-not-finding
+    criteria: 'F1 is marked fixed. The report lists no new Blocking, Important or Minor finding on src/limit.js line 2 (it is unchanged by the fix); if it mentions that `clampRuns` ignores a max of 0, it lists it as a follow-up.'
+expected_outcome: 'F1 fixed, no new finding, the max-0 defect at most a follow-up.'

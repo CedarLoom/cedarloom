@@ -1,0 +1,22 @@
+schema_version: "1.1"
+name: skill-research-sourced-answer
+description: '/cl-workflow:research answers with a source URL per claim or the mark unverified, and a confidence (from OpenReloading/Ballistics#1290).'
+tags: [cl-workflow, skill-research]
+execution:
+  prompt: |
+    /cl-workflow:research Which columns and units does a LabRadar LX chronograph CSV export carry per shot?
+  max_turns: 25
+  allowed_tools: [WebFetch, WebSearch]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode]
+graders:
+  - type: regex
+    name: research-depth-line
+    target: trace
+    pattern: 'Depth: (quick|standard|deep) \([^)\n]*research'
+  - type: regex
+    name: cites-a-url
+    pattern: 'https?://'
+  - type: llm
+    name: sourced-claims
+    criteria: 'Each factual claim about the export carries a source URL or the mark "unverified", the answer states a confidence (high, medium or low), and it says what was not checked.'
+expected_outcome: 'A depth line naming research, then an answer with a URL or "unverified" per claim and a confidence.'

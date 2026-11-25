@@ -1,0 +1,18 @@
+schema_version: "1.1"
+name: skill-research-two-items-split
+description: 'Research with two independent items gives each item its own run (from OpenReloading/Ballistics#1293 and #1294).'
+tags: [cl-workflow, skill-research]
+execution:
+  prompt: |
+    /cl-workflow:research Compare the ShotMarker session export and the Athlon Rangecraft chronograph export (file type, columns, units) for one importer that reads both.
+
+    This run checks the setup only: write the Depth line and how you split the work (the items and who runs each), then stop. Search nothing and start no agent.
+  max_turns: 6
+graders:
+  - type: regex
+    name: depth-line
+    pattern: 'Depth: (standard|deep)'
+  - type: llm
+    name: one-item-per-export
+    criteria: 'The response splits the work into one item for the ShotMarker export and one for the Athlon Rangecraft export, each run by its own subagent (cl-workflow:research), with one merged report after.'
+expected_outcome: '`Depth: standard` or deeper, two items, one research subagent per item.'

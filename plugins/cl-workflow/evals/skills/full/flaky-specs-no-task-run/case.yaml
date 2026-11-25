@@ -1,0 +1,23 @@
+schema_version: "1.1"
+name: skill-full-flaky-specs-no-task-run
+description: '/cl-workflow:full on a test fix writes its lines first and keeps to a setup-only instruction (from OpenReloading/Ballistics#1296).'
+tags: [cl-workflow, skill-full]
+execution:
+  prompt: |
+    /cl-workflow:full Fix two flaky end-to-end workbench specs at their cause instead of adding retries.
+
+    This run checks the setup only: write the Depth and Risk lines and the args you would pass to the first stage of cl-workflow:full-run, then stop. Start no workflow or agent, edit no file and run no command.
+  max_turns: 8
+graders:
+  - type: regex
+    name: depth-deep
+    pattern: 'Depth: deep'
+  - type: tool_used
+    name: starts-no-workflow
+    tool: Workflow
+    max: 0
+  - type: tool_used
+    name: starts-no-agent
+    tool: Agent
+    max: 0
+expected_outcome: '`Depth: deep (...)` and `Risk:` lines with args, and no Workflow or Agent call.'

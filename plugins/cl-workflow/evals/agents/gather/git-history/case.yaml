@@ -1,0 +1,29 @@
+schema_version: "1.1"
+name: agent-gather-git-history
+description: 'The gather agent answers a history question with read-only git commands and cites them (like the run-limit lookups behind CedarLoom/cedarloom#125). Needs --scaffold.'
+tags: [cl-workflow, agent-gather]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:gather` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: In this repository, which commit last changed config/limits.json, and what was `maxRuns` before that commit? Cite the command you ran for each fact.
+  max_turns: 8
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-gather
+    tool: Agent
+    input_match: cl-workflow:gather
+    min: 1
+  - type: regex
+    name: names-the-commit
+    pattern: 'raise the run limit to 6'
+  - type: regex
+    name: old-value
+    pattern: 'maxRuns\D{0,40}4|4\D{0,40}before'
+  - type: regex
+    name: cites-git
+    pattern: 'git (log|show|diff)'
+expected_outcome: 'The commit "feat: raise the run limit to 6", the old value 4, each with its git command.'

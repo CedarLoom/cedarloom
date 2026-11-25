@@ -1,0 +1,27 @@
+schema_version: "1.1"
+name: skill-workflow-bug-at-least-standard
+description: 'A bug is at least standard depth, even when the fix may be small (from OpenReloading/Ballistics#1301).'
+tags: [cl-workflow, skill-workflow]
+execution:
+  prompt: |
+    Fix the bug in the web app where the leave guard takes the app's own Back button for the user's and asks to discard changes on in-app navigation.
+
+    This run checks the classification only: write the lines the workflow asks for before the first edit or command, then stop. Edit no file and run no command.
+  max_turns: 6
+graders:
+  - type: tool_used
+    name: loads-workflow-skill
+    tool: Skill
+    input_match: cl-workflow:workflow
+    min: 1
+  - type: regex
+    name: depth-standard-or-deep
+    pattern: 'Depth: (standard|deep)'
+  - type: regex
+    name: not-quick
+    pattern: 'Depth: quick'
+    match: not_contains
+  - type: regex
+    name: risk-line
+    pattern: 'Risk: (low|medium|high)'
+expected_outcome: 'A `Depth: standard (bug ...)` or deeper line and a `Risk:` line; never quick.'

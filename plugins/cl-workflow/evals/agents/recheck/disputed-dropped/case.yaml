@@ -1,0 +1,26 @@
+schema_version: "1.1"
+name: agent-recheck-disputed-dropped
+description: 'The recheck agent drops an earlier finding when the evidence against it holds at the cited line, and says why (a disputed finding answered with evidence, as review threads in CedarLoom/cedarloom are). Needs --scaffold.'
+tags: [cl-workflow, agent-recheck]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:recheck` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Re-review the fix range HEAD~1..HEAD of this repository (read it with git here). Earlier findings:
+    - F1 (Important): src/limit.js `parseRuns` accepts any text; "abc" gives NaN and "-3" gives -3. Reject values that are not positive integers.
+    - F2 (Blocking): src/limit.js:2 is off by one: `clampRuns(5, 5)` returns 6.
+    Evidence disputing F2 from the implementer: line 2 compares `requested > max`, so `clampRuns(5, 5)` returns `requested`, which is 5.
+  max_turns: 12
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-recheck
+    tool: Agent
+    input_match: cl-workflow:recheck
+    min: 1
+  - type: llm
+    name: drops-f2-with-reason
+    criteria: 'F1 is marked fixed. F2 is marked dropped, with the reason that line 2 returns 5 for clampRuns(5, 5) (read at src/limit.js:2 or shown by a command).'
+expected_outcome: 'F1 fixed, F2 dropped with the line-2 evidence.'

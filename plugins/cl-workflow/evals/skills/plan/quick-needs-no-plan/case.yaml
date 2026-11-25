@@ -1,0 +1,19 @@
+schema_version: "1.1"
+name: skill-plan-quick-needs-no-plan
+description: 'A quick task needs no plan, so /cl-workflow:plan writes its depth line and stops (from CedarLoom/cedarloom#119).'
+tags: [cl-workflow, skill-plan]
+execution:
+  prompt: |
+    /cl-workflow:plan Raise the token budget total in .github/token-budget.json from 120,000 to 123,000.
+  max_turns: 8
+  allowed_tools: [Write]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode]
+graders:
+  - type: regex
+    name: depth-quick
+    pattern: 'Depth: quick'
+  - type: tool_used
+    name: writes-no-plan
+    tool: Write
+    max: 0
+expected_outcome: 'A `Depth: quick (...)` line and no plan file.'

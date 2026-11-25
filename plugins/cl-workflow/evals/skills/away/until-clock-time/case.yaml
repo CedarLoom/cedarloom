@@ -1,0 +1,19 @@
+schema_version: "1.1"
+name: skill-away-until-clock-time
+description: '/cl-workflow:away until HH:MM sets the end at that local time and answers with the hook''s line alone (from CedarLoom/cedarloom#93).'
+tags: [cl-workflow, skill-away]
+execution:
+  prompt: /cl-workflow:away until 18:00
+  max_turns: 3
+graders:
+  - type: regex
+    name: names-the-time
+    pattern: '18:00'
+  - type: llm
+    name: one-line
+    criteria: 'The reply is one line that says the session works alone until 18:00. It asks nothing and adds no other text.'
+  - type: tool_used
+    name: asks-nothing
+    tool: AskUserQuestion
+    max: 0
+expected_outcome: 'One line naming 18:00, nothing else.'

@@ -1,0 +1,26 @@
+schema_version: "1.1"
+name: agent-review-dead-code-left
+description: 'The review agent counts code a change leaves unused as dead code it should remove (from CedarLoom/cedarloom#89). Needs --scaffold.'
+tags: [cl-workflow, agent-review]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:review` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Review the branch feat/units against main (`git diff main...HEAD` here). Task: show shot velocities in the unit the user picks (fps or m/s). Depth: standard. Review alone, start no subagents.
+  max_turns: 15
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-review
+    tool: Agent
+    input_match: cl-workflow:review
+    min: 1
+  - type: regex
+    name: names-the-function
+    pattern: 'formatVelocity\b(?!In)'
+  - type: llm
+    name: dead-code-finding
+    criteria: 'A finding says formatVelocity in src/format.js has no caller left after the change and should be removed (or formatVelocityIn should reuse it), with file and line.'
+expected_outcome: 'A finding at src/format.js that formatVelocity is now unused.'

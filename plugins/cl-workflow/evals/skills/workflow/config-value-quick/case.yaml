@@ -1,0 +1,27 @@
+schema_version: "1.1"
+name: skill-workflow-config-value-quick
+description: 'A one-value config change triggers the workflow skill, which picks quick depth and low risk (from CedarLoom/cedarloom#119).'
+tags: [cl-workflow, skill-workflow]
+execution:
+  prompt: |
+    In this repository, raise the token budget total in .github/token-budget.json from 120,000 to 123,000.
+
+    This run checks the classification only: write the lines the workflow asks for before the first edit or command, then stop. Edit no file and run no command.
+  max_turns: 6
+graders:
+  - type: tool_used
+    name: loads-workflow-skill
+    tool: Skill
+    input_match: cl-workflow:workflow
+    min: 1
+  - type: regex
+    name: depth-quick
+    pattern: 'Depth: quick'
+  - type: regex
+    name: risk-low
+    pattern: 'Risk: low'
+  - type: tool_used
+    name: edits-nothing
+    tool: Edit
+    max: 0
+expected_outcome: 'The session loads cl-workflow:workflow and ends with a `Depth: quick (...)` line and a `Risk: low (...)` line.'

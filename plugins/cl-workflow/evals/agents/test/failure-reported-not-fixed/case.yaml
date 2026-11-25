@@ -1,0 +1,31 @@
+schema_version: "1.1"
+name: agent-test-failure-reported-not-fixed
+description: 'The test agent reports a failing check as it is and leaves the fix to the implement phase. Needs --scaffold.'
+tags: [cl-workflow, agent-test]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:test` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Test the change HEAD~1..HEAD of this repository. Task: show the velocity unit as "ft/s". Acceptance: the full suite passes (`node --test`).
+  max_turns: 20
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-test
+    tool: Agent
+    input_match: cl-workflow:test
+    min: 1
+  - type: llm
+    name: reports-the-failure
+    criteria: 'The report gives the command `node --test`, says it fails, quotes the key line of the "fps label" failure (expected ''2800 fps'', got ''2800 ft/s''), and says whether code or test caused it.'
+  - type: regex
+    name: code-untouched
+    target: {source: file, path: src/format.js}
+    pattern: 'ft/s'
+  - type: regex
+    name: test-untouched
+    target: {source: file, path: test/format.test.js}
+    pattern: "'2800 fps'"
+expected_outcome: '`node --test` fails on "fps label" with its key line; no file changed.'

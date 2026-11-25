@@ -1,0 +1,29 @@
+schema_version: "1.1"
+name: agent-verify-review-findings
+description: 'The verify agent confirms a real finding and disputes a wrong one with file-and-line evidence, changing no file (the step before fixes on a risky change, as in CedarLoom/cedarloom#125). Needs --scaffold.'
+tags: [cl-workflow, agent-verify]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:verify` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Check these review findings on the last commit of this repository (read the working tree) before anyone fixes them.
+    - Finding 1 (Important): src/limit.js:7 `parseRuns` accepts any text; "abc" gives NaN and "-3" gives -3, and both reach `clampRuns` unchecked. Validate where the value enters.
+    - Finding 2 (Blocking): src/limit.js:2 is off by one: `clampRuns(5, 5)` returns 6.
+  max_turns: 10
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-verify
+    tool: Agent
+    input_match: cl-workflow:verify
+    min: 1
+  - type: llm
+    name: verdicts
+    criteria: 'Finding 1 is marked confirmed. Finding 2 is marked disputed, with evidence such as the `requested > max` comparison at src/limit.js:2 or a command showing clampRuns(5, 5) returns 5. No finding is dropped and no new finding is added.'
+  - type: regex
+    name: no-edit
+    target: {source: file, path: src/limit.js}
+    pattern: 'return Number\.parseInt\(text, 10\);'
+expected_outcome: 'Finding 1 confirmed, finding 2 disputed with evidence, src/limit.js unchanged.'

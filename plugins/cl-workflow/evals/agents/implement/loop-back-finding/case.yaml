@@ -1,0 +1,34 @@
+schema_version: "1.1"
+name: agent-implement-loop-back-finding
+description: 'On a loop back the implement agent fixes the review finding in its brief and reruns the check it came from. Needs --scaffold.'
+tags: [cl-workflow, agent-implement]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:implement` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Loop back on the last commit of this repository. Depth: standard. Finding to fix:
+    - F1 (Important): src/limit.js `parseRuns` accepts any text; "abc" gives NaN and "-3" gives -3. Throw a RangeError for anything that is not a positive integer, with a test that fails before the fix.
+  max_turns: 25
+  allowed_tools: [Bash, Edit, Write]
+graders:
+  - type: tool_used
+    name: starts-implement
+    tool: Agent
+    input_match: cl-workflow:implement
+    min: 1
+  - type: regex
+    name: throws-range-error
+    target: {source: file, path: src/limit.js}
+    pattern: 'RangeError'
+  - type: regex
+    name: test-for-bad-input
+    target: {source: file, path: test/limit.test.js}
+    pattern: 'throws|rejects'
+  - type: tool_used
+    name: reruns-tests
+    tool: Bash
+    input_match: node --test
+    min: 1
+expected_outcome: 'parseRuns throws a RangeError for bad input, a test covers it, `node --test` passes and the report lists the commit.'
