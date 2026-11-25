@@ -50,7 +50,7 @@ export function checkWorktree(project, worktree) {
     // The folder git opens, each link followed before a `..` applies: a lexical resolve could read a decoy.
     const { commonDir: common, folder } = linkedWorktree(worktree, project, (path) => plainFile(step, path) ?? refuse(step, `${path} is missing`));
     if (plainFile(step, join(folder, 'commondir'))?.replace(/\n$/, '') !== '../..') refuse(step, "the worktree's commondir does not hold ../..");
-    // An empty file is accepted: the Linux sandbox binds one over each deny path that does not exist while another worker's command runs.
+    // An empty file is accepted: it holds no configuration.
     if (plainFile(step, join(folder, 'config.worktree'))) refuse(step, "the worktree's config.worktree is not empty");
     if (lstatSync(join(common, 'commondir'), { throwIfNoEntry: false })) refuse(step, 'the shared .git holds a commondir');
   });

@@ -1,6 +1,6 @@
 ---
 name: maintain
-description: "Runs a repository-wide maintenance pass: dead code, duplicates, unused options and dependencies, dependency cycles, test audit by mutation, shortcut debt, dependency audit, version pins, docs drift, instruction-file audit, unused skills, repository hygiene."
+description: "Runs a repository-wide maintenance pass: dead code, duplicates, unused options and dependencies, dependency cycles, test audit by mutation, shortcut debt, grouped dependency updates with changelog checks, version pins, docs drift, instruction-file audit, unused skills, repository hygiene."
 disable-model-invocation: true
 disallowed-tools: "Edit Write NotebookEdit"
 when: "On request, on a clean working tree."
@@ -13,7 +13,7 @@ Read only until the findings are approved. Start on a clean tree (`git status --
 
 - A code audit skill, when installed.
 - Shortcut debt: each `shortcut:` comment is still valid, upgraded, or becomes an issue (a debt-ledger skill lists them, when installed).
-- Dependencies: the package manager's audit.
+- Dependencies: advisories, grouped updates and their changelogs: [dependencies.md](dependencies.md).
 - Pins that no update bot covers (`pkg@x.y.z` in docs, scripts, Dockerfiles): compare each with the newest release that is at least 3 days old. List the bumps (package, pinned, newest). Each accepted bump changes every occurrence on a branch. Recorded benchmark or release pins stay.
 - Docs drift: `GLOSSARY.md`, ADRs, `AGENTS.md` and docs against the code (a domain-modeling skill, when installed). Several documents: the docs pass of `cl-workflow:workflow` (the cl-workflow plugin, when installed).
 - Instruction files: the `instructions` audit of this plugin's audit skill: follow [its steps](../audit/SKILL.md) with the target `instructions`. Claude Code: `/skill-doctor` for unused skills and their context cost.

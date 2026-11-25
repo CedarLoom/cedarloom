@@ -32,7 +32,6 @@ Identify languages, frameworks, and infrastructure tools from build files, depen
 A block that already has a line of [Where commands run](project-rules.md#where-commands-run) gives the answer. Without one, ask, recommending the first:
 - `container`: the agent and the project commands run in the dev container.
 - `host-agent`: the agent on the host, project commands in the dev container.
-- `sandbox`: a Docker Sandboxes microVM (`sbx`, untested) runs the agent, its builds and tests.
 - `host`: no container.
 
 For `container` and `host-agent`, follow [devcontainer.md](devcontainer.md). Otherwise skip it.
