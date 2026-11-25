@@ -131,7 +131,7 @@ const AT_SIZE = {
   'plugins/cl-repo/rules/project.md': 915,
   'plugins/cl-workflow/agents/review.md': 715,
   'plugins/cl-workflow/skills/workflow/SKILL.md': 1869,
-  'plugins/cl-workflow/skills/workflow/software.md': 1118,
+  'plugins/cl-workflow/skills/workflow/software.md': 1155,
 };
 
 // The word budget of one instruction file (path relative to the repository, with / separators) and its text.
