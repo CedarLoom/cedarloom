@@ -140,7 +140,7 @@ An automatic worker runs no Orca command ([Sandbox on](modes.md#sandbox-on)): fr
 
 A batch also sends one `--type status` message per issue, when that issue's pull request is up (a Claude Code worker: its change committed) or the issue ended another way, with the issue's handoff block as its body; its `worker_done` comes once, after the last issue.
 
-A supervised worker answers a follow-up with the `worker_done` of the follow-up task, and one it got while still working with one `--type status` message. Either names its head commit, which a Claude Code worker committed for the coordinator to push and a Codex worker pushed ([Commit and push](modes.md#commit-and-push)). An automatic worker's follow-up is a new start, and its report names its staged files ([Commit and push](modes.md#commit-and-push)). That id is a claim: read `<head>` yourself ([review-and-merge.md](review-and-merge.md)).
+A supervised worker answers a follow-up with the `worker_done` of the follow-up task, and one it got while still working with one `--type status` message. Either names its head commit, which a Claude Code worker committed for the coordinator to push and a Codex worker pushed ([Commit and push](modes.md#commit-and-push)). An automatic worker's follow-up is a new start, and its report names its staged files ([Commit and push](modes.md#commit-and-push)). That id is a claim: read `<head>` yourself ([review.md](review.md#names)).
 
 ## Questions
 
@@ -150,7 +150,7 @@ A worker asks with `ORCA orchestration ask --question <text>`, which returns at 
 ORCA orchestration reply --id <message id> --body "$(cat <answer file>)" --json
 ```
 
-The answer's sources are the default branch's: the policy as the reader prints it now, and `AGENTS.md` read in a scratch clone as [review-and-merge.md](review-and-merge.md#scratch-clone) reads it. An issue without a pull request has no clone yet: make one for the answer, with the two commands of that section.
+The answer's sources are the default branch's: the policy as the reader prints it now, and `AGENTS.md` read in a scratch clone as [scratch-clone.md](scratch-clone.md) reads it. An issue without a pull request has no clone yet: make one for the answer, with the two commands of that section.
 
 ## Gates
 
@@ -230,7 +230,7 @@ At each wake-up, including an empty one, run these in this order; a wake-up that
 1. `worker-list --run <run id>` for state, with `--full` because the concise rows carry no `projection`.
 2. `gh pr list -R <owner/repo> --head <branch> --state merged --json number,title,mergedAt` for merged PRs.
 3. The stall check, and the [acknowledgement](#acknowledgement) of each worker that has none yet.
-4. The next step of each pull request that waits for its checks or its default-branch watch ([review-and-merge.md](review-and-merge.md#merge)).
+4. The next step of each pull request that waits for its checks or its default-branch watch ([merge.md](merge.md#merge)).
 
 For a row whose `projection.attention.requiresAction` is true:
 

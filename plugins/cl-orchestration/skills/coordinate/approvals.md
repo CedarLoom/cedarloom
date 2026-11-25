@@ -1,6 +1,6 @@
 # Approvals
 
-How an owner decision reaches the owner outside the session ([decisions.md](decisions.md#owner-decisions)). `<owner/repo>`, `<n>` and `<head>` are the names of the worker's spec and of [review-and-merge.md](review-and-merge.md).
+How an owner decision reaches the owner outside the session ([decisions.md](decisions.md#owner-decisions)). `<owner/repo>`, `<n>` and `<head>` are the names of the worker's spec and of [review.md](review.md#names).
 
 ## The text
 
