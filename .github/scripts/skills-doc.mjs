@@ -62,7 +62,9 @@ if (isMain(import.meta.url)) {
   ];
   for (const [name, source, expected] of files) {
     const file = `${root}/${name}`;
-    const page = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    // A missing copy reads as empty: --check then fails and the write creates it.
+    let page = '';
+    try { page = readFileSync(file, 'utf8'); } catch (e) { if (e.code !== 'ENOENT') throw e; }
     const next = expected(page);
     if (process.argv[2] !== '--check') {
       mkdirSync(dirname(file), { recursive: true });
