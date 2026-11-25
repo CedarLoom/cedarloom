@@ -72,7 +72,7 @@ export const appendLog = (state, line) => appendFileSync(join(state, LOG), `${li
 // An unreadable log counts as one without the line, so a merge command time without it keeps pausing merges.
 export const logged = (state, repo, pr) => (text(join(state, LOG)) ?? '').split('\n').some((line) => line.includes(` ${repo} #${pr} `));
 
-// A process's start time, which tells a reused process id from the holder: null when no process has that id, undefined when it cannot be read (macOS's sandbox refuses to run the setuid ps).
+// A process's start time, which tells a reused process id from the holder: null when no process has that id, undefined when it cannot be read (ps did not run).
 export function processStart(pid) {
   if (process.platform === 'linux') {
     // Field 22 of /proc/<pid>/stat, in clock ticks since boot; the fields start after the command name's closing parenthesis.

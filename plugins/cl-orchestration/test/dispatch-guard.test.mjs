@@ -12,12 +12,11 @@ const decision = (command, tool = 'Bash') => {
   return r.stdout === '' ? 'none' : JSON.parse(r.stdout).hookSpecificOutput.permissionDecision;
 };
 
-test('dispatch guard: an Orca dispatch that hands a session /cl-workflow:away off or /cl-workflow:questions is refused', () => {
+test('dispatch guard: an Orca dispatch that hands a session /cl-workflow:away off is refused', () => {
   const dispatched = [
-    'orca orchestration worker-start --spec "/cl-workflow:questions all" --terminal t1 --json',
-    'orca orchestration send --to dispatch:d1 --subject x --body "/questions 5" --json',
-    '/opt/orca/bin/orca orchestration worker-start --spec /cl-workflow:questions',
-    'cd w && ORCA_HOME=x orca orchestration send --to dispatch:d1 --body \'/cl-workflow:questions\'',
+    'orca orchestration send --to dispatch:d1 --subject x --body "/away off" --json',
+    '/opt/orca/bin/orca orchestration worker-start --spec "/cl-workflow:away off"',
+    'cd w && ORCA_HOME=x orca orchestration send --to dispatch:d1 --body \'/cl-workflow:away off\'',
     'orca orchestration worker-start --spec "/cl-workflow:away off" --terminal t1 --json',
     'orca orchestration send --to dispatch:d1 --body "/away OFF"',
     // Spellings the shell joins into the command.
@@ -28,7 +27,7 @@ test('dispatch guard: an Orca dispatch that hands a session /cl-workflow:away of
     'orca orchestration send --to dispatch:d1 --body "/cl-workflow:away"$" off"',
   ];
   for (const command of dispatched) assert.equal(decision(command), 'deny', command);
-  assert.equal(decision('orca.exe orchestration send --to dispatch:d1 --body "/questions"', 'PowerShell'), 'deny');
+  assert.equal(decision('orca.exe orchestration send --to dispatch:d1 --body "/away off"', 'PowerShell'), 'deny');
 });
 
 // The commands as written: String.raw keeps the backslashes of the shell's escapes.
@@ -47,11 +46,11 @@ test('dispatch guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh d
     // zsh hands a program each word up to its first NUL.
     raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:awa\y off\0x'`,
     raw`orca orchestration send --to dispatch:d1 --body "/cl-workflow:away"$'\x20off'`,
-    raw`orca orchestration worker-start --spec $'/cl-workflow:\x71uestions'`,
-    raw`$'\x6frca' orchestration send --to dispatch:d1 --body /questions`,
+    raw`orca orchestration worker-start --spec $'/cl-workflow:\x61way off'`,
+    raw`$'\x6frca' orchestration send --to dispatch:d1 --body "/away off"`,
     // zsh reads \c as a plain c.
-    raw`$'or\ca' orchestration send --to dispatch:d1 --body /questions`,
-    raw`o""rca orchestration send --to dispatch:d1 --body /questions`,
+    raw`$'or\ca' orchestration send --to dispatch:d1 --body "/away off"`,
+    raw`o""rca orchestration send --to dispatch:d1 --body "/away off"`,
     // bash 3.2's \c takes one backslash of \c\\, so the second starts an escape of its own.
     raw`bash -c $'\c\\x3b\x6frca orchestration send --body "/cl-workflow:away off"'`,
     raw`eval $'\c\\norca orchestration send --body "/cl-workflow:away off"'`,
@@ -62,7 +61,7 @@ test('dispatch guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh d
   for (const command of dispatched) assert.equal(decision(command), 'deny', command);
   const passed = [
     raw`orca orchestration send --to dispatch:d1 --body $'/cl-workflow:away 2h\n'`,
-    raw`orca orchestration send --to dispatch:d1 --body $'run the questions skill\x21'`,
+    raw`orca orchestration send --to dispatch:d1 --body $'run the away skill\x21'`,
   ];
   for (const command of passed) assert.equal(decision(command), 'none', command);
 });
@@ -70,9 +69,9 @@ test('dispatch guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh d
 test('dispatch guard: other Orca commands and commands that only name the queue command pass', () => {
   const passed = [
     'orca orchestration worker-start --spec-file spec.md --terminal t1 --json',
-    'orca orchestration send --to dispatch:d1 --body "run the questions skill later"',
+    'orca orchestration send --to dispatch:d1 --body "run the away skill later"',
     'orca orchestration send --to dispatch:d1 --body "/cl-workflow:away 2h"',
-    'grep -rn /cl-workflow:questions plugins',
+    'grep -rn "/cl-workflow:away off" plugins',
     'cat docs/orca.md',
   ];
   for (const command of passed) assert.equal(decision(command), 'none', command);

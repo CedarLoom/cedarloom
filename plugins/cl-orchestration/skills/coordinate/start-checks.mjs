@@ -1,36 +1,26 @@
 // Usage: node start-checks.mjs --project <path> [--worktree <path>] [--config-dir <path>] [--claude-json <file>] [--managed <folder>], the paths absolute.
-// Checks 3 and 4 of Automatic start (automatic-start.md) for an automatic worker of the project checked out at <project>, starting in <worktree>: the settings files are the managed ones (<managed>/managed-settings.json and managed-settings.d/*.json), the user's (<config dir>/settings.json), and .claude/settings.json and .claude/settings.local.json of the main checkout and of the worktree; the MCP servers those of <managed>/managed-mcp.json, <claude json>, .mcp.json of the main checkout and of the worktree, and the installed plugins'. The network allow list adds the policy's sandbox.allowedDomains, read from origin's default branch.
-// --config-dir defaults to $CLAUDE_CONFIG_DIR, else ~/.claude; --claude-json to .claude.json in a config dir that is set, else ~/.claude.json; --managed to the platform's folder. Without --worktree, an absolute allowRead, allowWrite or additionalDirectories entry counts as outside the worktree.
-// Prints { failed, read, unresolved, allowRules, allowedDomains } as JSON. Exit 0: both checks pass for what the script reads. Exit 1: a check failed (failed names each entry) or a file could not be read (one line on stderr). Exit 2: nothing failed, but each command of read runs outside the sandbox and is not one the script can judge, or unresolved names a source or entry the script could not resolve: the checks pass only when your read of each clears it.
+// Checks 3 and 4 of Automatic start (automatic-start.md) for an automatic worker of the project checked out at <project>, starting in <worktree>: the settings files are the managed ones (<managed>/managed-settings.json and managed-settings.d/*.json), the user's (<config dir>/settings.json), and .claude/settings.json and .claude/settings.local.json of the main checkout and of the worktree; the MCP servers those of <managed>/managed-mcp.json, <claude json>, .mcp.json of the main checkout and of the worktree, and the installed plugins'.
+// --config-dir defaults to $CLAUDE_CONFIG_DIR, else ~/.claude; --claude-json to .claude.json in a config dir that is set, else ~/.claude.json; --managed to the platform's folder. Without --worktree, an absolute additionalDirectories entry counts as outside the worktree.
+// Prints { failed, read, unresolved, allowRules } as JSON. Exit 0: both checks pass for what the script reads. Exit 1: a check failed (failed names each entry) or a file could not be read (one line on stderr). Exit 2: nothing failed, but each command of read runs outside the permission rules and the role guard and is not one the script can judge, or unresolved names a source or entry the script could not resolve: the checks pass only when your read of each clears it.
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
-import { escaped, isMain, json, read } from './policy.mjs';
+import { escaped, isMain, json } from './policy.mjs';
 
 // Tools that load the code or configuration of the folder they run in: a formatter, a linter, a package script, a build.
 const TOOLS = new Set(['npm', 'npx', 'pnpm', 'pnpx', 'yarn', 'bun', 'bunx', 'deno', 'make', 'just', 'task', 'prettier', 'eslint', 'biome', 'oxlint', 'dprint', 'stylelint', 'tsc', 'ruff', 'black', 'isort', 'flake8', 'mypy', 'pylint', 'pytest', 'uv', 'uvx', 'poetry', 'pipenv', 'tox', 'nox', 'pre-commit', 'lefthook', 'husky', 'lint-staged', 'cargo', 'rustfmt', 'gofmt', 'goimports', 'golangci-lint', 'go', 'mvn', 'gradle', 'gradlew', 'dotnet', 'composer', 'bundle', 'rake', 'rubocop', 'swiftformat', 'swiftlint', 'ktlint', 'clang-format', 'shfmt', 'terraform', 'direnv']);
 // Settings keys whose value is a command Claude Code runs, besides hooks.
 const COMMAND_KEYS = ['statusLine', 'subagentStatusLine', 'apiKeyHelper', 'otelHeadersHelper', 'awsAuthRefresh', 'gcpAuthRefresh', 'awsCredentialExport', 'fileSuggestion', 'processWrapper', 'policyHelper'];
 // Settings keys known to run no command, from the published settings schema (SchemaStore, claude-code-settings.json). A key on no list of this file is unresolved, so one that a later Claude Code release adds is never passed unread; left off as not known to run none: managedMcpServers, pluginConfigs, extraKnownMarketplaces, sshConfigs.
-const PLAIN_KEYS = new Set(['$schema', 'advisorModel', 'agent', 'agentPushNotifEnabled', 'allowAllClaudeAiMcps', 'allowManagedHooksOnly', 'allowManagedMcpServersOnly', 'allowManagedPermissionRulesOnly', 'allowedChannelPlugins', 'allowedHttpHookUrls', 'allowedMcpServers', 'alwaysThinkingEnabled', 'askUserQuestionTimeout', 'attribution', 'autoCompactEnabled', 'autoConnectIde', 'autoInstallIdeExtension', 'autoMemoryDirectory', 'autoMemoryEnabled', 'autoMode', 'autoScrollEnabled', 'autoUpdatesChannel', 'availableModels', 'awaySummaryEnabled', 'axScreenReader', 'blockedMarketplaces', 'browserExternalPageTools', 'channelsEnabled', 'claudeMd', 'claudeMdExcludes', 'cleanupPeriodDays', 'companyAnnouncements', 'defaultShell', 'deniedMcpServers', 'diffTool', 'disableAgentView', 'disableAllHooks', 'disableArtifact', 'disableAutoMode', 'disableBrowserExternalNavigation', 'disableBundledSkills', 'disableClaudeAiConnectors', 'disableDeepLinkRegistration', 'disableMobileSimulatorTools', 'disableRemoteControl', 'disableSideloadFlags', 'disableSkillShellExecution', 'disableWorkflows', 'disabledMcpjsonServers', 'editorMode', 'effortLevel', 'emojiCompletionEnabled', 'enableAllProjectMcpServers', 'enableArtifact', 'enabledMcpjsonServers', 'enforceAvailableModels', 'externalEditorContext', 'fallbackModel', 'fastMode', 'fastModePerSessionOptIn', 'feedbackSurveyRate', 'fileCheckpointingEnabled', 'footerLinksRegexes', 'forceLoginGatewayUrl', 'forceLoginMethod', 'forceLoginOrgUUID', 'forceRemoteSettingsRefresh', 'httpHookAllowedEnvVars', 'includeCoAuthoredBy', 'includeGitInstructions', 'inputNeededNotifEnabled', 'language', 'minimumVersion', 'model', 'modelOverrides', 'outputStyle', 'parentSettingsBehavior', 'permissionExplainerEnabled', 'plansDirectory', 'pluginSuggestionMarketplaces', 'pluginTrustMessage', 'prUrlTemplate', 'preferredNotifChannel', 'prefersReducedMotion', 'remoteControlAtStartup', 'requireCoworkFullVmSandbox', 'requiredMaximumVersion', 'requiredMinimumVersion', 'respectGitignore', 'respondToBashCommands', 'showClearContextOnPlanAccept', 'showThinkingSummaries', 'showTurnDuration', 'skillListingBudgetFraction', 'skillListingMaxDescChars', 'skillOverrides', 'skipDangerousModePermissionPrompt', 'skipWebFetchPreflight', 'skippedMarketplaces', 'skippedPlugins', 'spinnerTipsEnabled', 'spinnerTipsOverride', 'spinnerVerbs', 'sshHostAllowlist', 'strictKnownMarketplaces', 'strictPluginOnlyCustomization', 'syntaxHighlightingDisabled', 'teammateDefaultModel', 'teammateMode', 'terminalProgressBarEnabled', 'theme', 'tui', 'useAutoModeDuringPlan', 'verbose', 'viewMode', 'vimInsertModeRemaps', 'voice', 'voiceEnabled', 'wheelScrollAccelerationEnabled', 'workflowKeywordTriggerEnabled', 'workflowSizeGuideline', 'worktree', 'wslInheritsWindowsSettings']);
-// The same for the keys of sandbox, sandbox.network and sandbox.filesystem; check 4 tests those that defeat a bound.
-const SANDBOX_KEYS = {
-  '': ['allowAppleEvents', 'allowUnsandboxedCommands', 'autoAllowBashIfSandboxed', 'bwrapPath', 'credentials', 'enableWeakerNestedSandbox', 'enableWeakerNetworkIsolation', 'enabled', 'enabledPlatforms', 'excludedCommands', 'failIfUnavailable', 'filesystem', 'ignoreViolations', 'network', 'ripgrep', 'socatPath', 'allowNestedUserNamespaces'],
-  network: ['allowAllUnixSockets', 'allowLocalBinding', 'allowMachLookup', 'allowManagedDomainsOnly', 'allowUnixSockets', 'allowedDomains', 'deniedDomains', 'httpProxyPort', 'socksProxyPort', 'strictAllowlist', 'tlsTerminate'],
-  filesystem: ['allowManagedReadPathsOnly', 'allowRead', 'allowWrite', 'denyRead', 'denyWrite', 'disabled'],
-};
-// Sandbox keys of check 4 that defeat a bound whenever they are set to anything but false.
-const SWITCHES = ['allowAppleEvents', 'allowNestedUserNamespaces', 'enableWeakerNestedSandbox', 'enableWeakerNetworkIsolation', 'network.allowLocalBinding', 'filesystem.disabled', 'network.allowAllUnixSockets'];
-// Sandbox keys of check 4 that defeat a bound with any entry or value.
-const ENTRIES = ['excludedCommands', 'network.allowUnixSockets', 'network.allowMachLookup', 'network.httpProxyPort', 'network.socksProxyPort', 'ripgrep', 'bwrapPath', 'socatPath'];
+const PLAIN_KEYS = new Set(['$schema', 'advisorModel', 'agent', 'agentPushNotifEnabled', 'allowAllClaudeAiMcps', 'allowManagedHooksOnly', 'allowManagedMcpServersOnly', 'allowManagedPermissionRulesOnly', 'allowedChannelPlugins', 'allowedHttpHookUrls', 'allowedMcpServers', 'alwaysThinkingEnabled', 'askUserQuestionTimeout', 'attribution', 'autoCompactEnabled', 'autoConnectIde', 'autoInstallIdeExtension', 'autoMemoryDirectory', 'autoMemoryEnabled', 'autoMode', 'autoScrollEnabled', 'autoUpdatesChannel', 'availableModels', 'awaySummaryEnabled', 'axScreenReader', 'blockedMarketplaces', 'browserExternalPageTools', 'channelsEnabled', 'claudeMd', 'claudeMdExcludes', 'cleanupPeriodDays', 'companyAnnouncements', 'defaultShell', 'deniedMcpServers', 'diffTool', 'disableAgentView', 'disableAllHooks', 'disableArtifact', 'disableAutoMode', 'disableBrowserExternalNavigation', 'disableBundledSkills', 'disableClaudeAiConnectors', 'disableDeepLinkRegistration', 'disableMobileSimulatorTools', 'disableRemoteControl', 'disableSideloadFlags', 'disableSkillShellExecution', 'disableWorkflows', 'disabledMcpjsonServers', 'editorMode', 'effortLevel', 'emojiCompletionEnabled', 'enableAllProjectMcpServers', 'enableArtifact', 'enabledMcpjsonServers', 'enforceAvailableModels', 'externalEditorContext', 'fallbackModel', 'fastMode', 'fastModePerSessionOptIn', 'feedbackSurveyRate', 'fileCheckpointingEnabled', 'footerLinksRegexes', 'forceLoginGatewayUrl', 'forceLoginMethod', 'forceLoginOrgUUID', 'forceRemoteSettingsRefresh', 'httpHookAllowedEnvVars', 'includeCoAuthoredBy', 'includeGitInstructions', 'inputNeededNotifEnabled', 'language', 'minimumVersion', 'model', 'modelOverrides', 'outputStyle', 'parentSettingsBehavior', 'permissionExplainerEnabled', 'plansDirectory', 'pluginSuggestionMarketplaces', 'pluginTrustMessage', 'prUrlTemplate', 'preferredNotifChannel', 'prefersReducedMotion', 'remoteControlAtStartup', 'requireCoworkFullVmSandbox', 'requiredMaximumVersion', 'requiredMinimumVersion', 'respectGitignore', 'respondToBashCommands', 'sandbox', 'showClearContextOnPlanAccept', 'showThinkingSummaries', 'showTurnDuration', 'skillListingBudgetFraction', 'skillListingMaxDescChars', 'skillOverrides', 'skipDangerousModePermissionPrompt', 'skipWebFetchPreflight', 'skippedMarketplaces', 'skippedPlugins', 'spinnerTipsEnabled', 'spinnerTipsOverride', 'spinnerVerbs', 'sshHostAllowlist', 'strictKnownMarketplaces', 'strictPluginOnlyCustomization', 'syntaxHighlightingDisabled', 'teammateDefaultModel', 'teammateMode', 'terminalProgressBarEnabled', 'theme', 'tui', 'useAutoModeDuringPlan', 'verbose', 'viewMode', 'vimInsertModeRemaps', 'voice', 'voiceEnabled', 'wheelScrollAccelerationEnabled', 'workflowKeywordTriggerEnabled', 'workflowSizeGuideline', 'worktree', 'wslInheritsWindowsSettings']);
 // The keys of permissions in the same schema.
 const PERMISSION_KEYS = ['allow', 'deny', 'ask', 'defaultMode', 'disableBypassPermissionsMode', 'disableAutoMode', 'additionalDirectories'];
 // Settings keys that must hold an object; another type is a shape the script cannot read.
-const OBJECTS = ['hooks', 'sandbox', 'permissions', 'enabledPlugins', 'env'];
+const OBJECTS = ['hooks', 'permissions', 'enabledPlugins', 'env'];
 // The same for the lists check 4 reads entry by entry as text: an entry that is no string would be tested as text it does not hold.
-const LISTS = ['permissions.allow', 'permissions.additionalDirectories', 'sandbox.filesystem.allowRead', 'sandbox.filesystem.allowWrite'];
-// Frontmatter keys of a skill, agent or command file that define hooks or MCP servers, which run outside the sandbox.
+const LISTS = ['permissions.allow', 'permissions.additionalDirectories'];
+// Frontmatter keys of a skill, agent or command file that define hooks or MCP servers, which run outside the permission rules and the role guard.
 const FRONTMATTER_KEYS = ['hooks', 'mcpServers'];
 // The folders of a .claude folder whose files carry such frontmatter.
 const INSTRUCTIONS = ['skills', 'agents', 'commands'];
@@ -44,7 +34,8 @@ const ENTRY_KEYS = ['name', 'source', 'displayName', 'defaultEnabled', 'descript
 const SOURCE_TYPES = ['github', 'url', 'git-subdir'];
 const SOURCE_KEYS = ['source', 'repo', 'url', 'path', 'ref', 'sha'];
 const fetched = (s) => typeof s === 'string' || (plain(s) && SOURCE_TYPES.includes(s.source) && Object.keys(s).every((k) => SOURCE_KEYS.includes(k)));
-const PLATFORMS = { darwin: 'macos', linux: 'linux', win32: 'windows' };
+// The variable the role guard of cl-workflow reads; an automatic worker runs without it.
+const ROLE = 'CEDARLOOM_ROLE';
 const MANAGED = { darwin: '/Library/Application Support/ClaudeCode', linux: '/etc/claude-code' };
 
 const at = (object, path) => path.split('.').reduce((v, k) => (v && typeof v === 'object' ? v[k] : undefined), object);
@@ -75,7 +66,7 @@ function commands(value, out = []) {
   return out;
 }
 
-// Every hook under value that is no command hook (an http, prompt, agent or mcp_tool hook), as JSON: it acts outside the sandbox as well, and the script judges none.
+// Every hook under value that is no command hook (an http, prompt, agent or mcp_tool hook), as JSON: it acts outside the permission rules and the role guard as well, and the script judges none.
 function otherHooks(value, out = []) {
   if (Array.isArray(value)) for (const v of value) otherHooks(v, out);
   else if (plain(value)) {
@@ -101,15 +92,6 @@ function frontmatter(text) {
   return undefined;
 }
 
-// An entry that reaches github.com, one of its subdomains or githubusercontent.com, with a port or as a wildcard that covers one (`*.com`); a wildcard of another form counts too.
-const GITHUB = (domain) => {
-  const entry = String(domain).toLowerCase().replace(/:\d+$/, '');
-  const wild = entry.startsWith('*.') ? entry.slice(2) : null;
-  if (entry.slice(wild === null ? 0 : 2).includes('*')) return true;
-  return ['github.com', 'githubusercontent.com'].some((d) => entry === d || entry.endsWith(`.${d}`) || (wild !== null && (d === wild || d.endsWith(`.${wild}`))));
-};
-// The entry forms the script reads: a host name or `*.` before one, each with an optional port. Another (an address, a trailing dot, a space, a URL, a non-ASCII letter) may name a GitHub host.
-const HOST = /^(\*\.)?([a-z0-9-]+\.)*[a-z][a-z0-9-]*(:\d+)?$/;
 const folderAt = (path) => { try { return statSync(path).isDirectory(); } catch { return false; } };
 // The names in a folder, none when it does not exist.
 const names = (folder) => { try { return readdirSync(folder); } catch (e) { if (e.code === 'ENOENT' || e.code === 'ENOTDIR') return []; throw new Error(`${folder} could not be listed: ${e.code}`); } };
@@ -134,8 +116,8 @@ function nested(folder) {
     .flatMap((below) => [...INSTRUCTIONS.map((kind) => join(below, '.claude', kind)).filter(folderAt), ...(lstatSync(below).isDirectory() ? nested(below) : [])]);
 }
 
-export function startChecks({ project, worktree, configDir, claudeJson, managedDir, home, platform, domains, env = {} }) {
-  const failed = [], toRead = [], unresolved = [], allowRules = [], allowedDomains = [];
+export function startChecks({ project, worktree, configDir, claudeJson, managedDir, home, env = {} }) {
+  const failed = [], toRead = [], unresolved = [], allowRules = [];
   const fail = (check, source, entry) => failed.push({ check, source, entry: escaped(String(entry)) });
   const cannot = (source, reason) => unresolved.push({ source, reason: escaped(String(reason)) });
   const checkouts = [project, ...(worktree ? [worktree] : [])];
@@ -155,11 +137,6 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
     for (const key of OBJECTS) if (settings[key] !== undefined && !plain(settings[key])) cannot(file, `${key} is no object`);
     for (const key of COMMAND_KEYS) if (settings[key] !== undefined && typeof settings[key] !== 'string' && !plain(settings[key])) cannot(file, `${key} is no string or object`);
     for (const key of Object.keys(settings)) if (!PLAIN_KEYS.has(key) && !OBJECTS.includes(key) && !COMMAND_KEYS.includes(key)) cannot(file, `${key} is no key the script knows to run no command`);
-    const sandbox = object(settings.sandbox);
-    for (const [part, keys] of Object.entries(SANDBOX_KEYS)) {
-      if (part && sandbox[part] !== undefined && !plain(sandbox[part])) cannot(file, `sandbox.${part} is no object`);
-      for (const key of Object.keys(part ? object(sandbox[part]) : sandbox)) if (!keys.includes(key)) cannot(file, `sandbox.${part && `${part}.`}${key} is no key the script knows to run no command`);
-    }
     for (const key of Object.keys(object(settings.permissions))) if (!PERMISSION_KEYS.includes(key)) cannot(file, `permissions.${key} is no key the script knows to run no command`);
     for (const key of LISTS) { const list = at(settings, key); if (list !== undefined && !(Array.isArray(list) && list.every((e) => typeof e === 'string'))) cannot(file, `${key} is no list of strings`); }
     return true;
@@ -167,7 +144,7 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
   // A file the script reads as an object: another type is a shape it cannot read.
   const objectIn = (file) => { const v = readJson(file); if (v !== undefined && !plain(v)) cannot(file, 'holds no JSON object'); return object(v); };
 
-  // Check 3: what runs outside the sandbox.
+  // Check 3: what runs outside the permission rules and the role guard.
   const found = [];
   for (const { file, settings } of files) {
     for (const c of commands(settings.hooks)) found.push({ source: file, command: c });
@@ -273,7 +250,6 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
   }
 
   // Check 4: entries that defeat a bound.
-  const host = PLATFORMS[platform];
   const outside = (scope, entry) => {
     const p = String(entry);
     let path = p.startsWith('~') ? join(home, p.slice(1)) : p.startsWith('//') ? p.slice(1) : p;
@@ -296,36 +272,32 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
     try { below = readdirSync(dirname(r), { withFileTypes: true, recursive: parts.at(-1).includes('**') }); } catch (e) { return e.code !== 'ENOENT' && e.code !== 'ENOTDIR'; }
     return below.filter((d) => d.isSymbolicLink()).map((d) => real(join(d.parentPath, d.name))).some((target) => !target || !inside(w, target));
   };
-  const domain = (file, d, inRule) => {
-    if (GITHUB(d)) fail(4, file, inRule ? `a GitHub host in a WebFetch allow rule: ${inRule}` : `a GitHub host in sandbox.network.allowedDomains: ${d}`);
-    else if (!HOST.test(String(d).toLowerCase())) cannot(file, `no plain host name: ${inRule ?? d}`);
-    else return true;
-    return false;
-  };
   for (const { file, scope, settings } of files) {
-    const sandbox = object(settings.sandbox), permissions = object(settings.permissions);
-    for (const key of SWITCHES) if (at(sandbox, key) !== undefined && at(sandbox, key) !== false) fail(4, file, `sandbox.${key}`);
-    for (const key of ENTRIES) if (entries(at(sandbox, key)).length) fail(4, file, `sandbox.${key}`);
-    if (sandbox.enabledPlatforms !== undefined && !entries(sandbox.enabledPlatforms).includes(host)) fail(4, file, 'sandbox.enabledPlatforms leaves out this platform');
-    for (const key of ['filesystem.allowRead', 'filesystem.allowWrite']) for (const e of entries(at(sandbox, key))) if (outside(scope, e)) fail(4, file, `sandbox.${key} outside the worktree: ${e}`);
+    const permissions = object(settings.permissions);
+    // Each turns off a bound the worker relies on: auto mode, the role guard's hook, or the guard's reading of the role.
+    if (permissions.disableAutoMode !== undefined && permissions.disableAutoMode !== false) fail(4, file, `permissions.disableAutoMode keeps the worker out of auto mode: ${JSON.stringify(permissions.disableAutoMode)}`);
+    if (settings.disableAllHooks !== undefined && settings.disableAllHooks !== false) fail(4, file, 'disableAllHooks turns off the role guard');
+    if (settings.allowManagedHooksOnly !== undefined && settings.allowManagedHooksOnly !== false) fail(4, file, 'allowManagedHooksOnly can turn off the role guard');
+    if (plain(settings.env) && Object.hasOwn(settings.env, ROLE)) fail(4, file, `env sets ${ROLE}, which the worker must not inherit`);
+    if (settings.sandbox !== undefined && !(plain(settings.sandbox) && settings.sandbox.enabled === false)) fail(4, file, 'sandbox: CedarLoom ignores the Claude Code sandbox and does not support it; set sandbox.enabled to false or remove the key');
+    // Auto mode's classifier reads autoMode from these scopes: allow and environment entries widen what it lets pass, and a list without "$defaults" drops its built-in rules.
+    if ((scope === 'managed' || scope === 'user') && settings.autoMode !== undefined) {
+      if (!plain(settings.autoMode)) cannot(file, 'autoMode is no object');
+      else for (const [key, list] of Object.entries(settings.autoMode)) {
+        if (!Array.isArray(list) || !list.includes('$defaults')) cannot(file, `autoMode.${key} is no list with "$defaults", which keeps the classifier's built-in rules: ${JSON.stringify(list)}`);
+        else if ((key === 'allow' || key === 'environment') && list.some((e) => e !== '$defaults')) cannot(file, `autoMode.${key} can widen what auto mode's classifier lets pass: ${JSON.stringify(list)}`);
+      }
+    }
     for (const e of entries(permissions.additionalDirectories)) if (outside(scope, e)) fail(4, file, `permissions.additionalDirectories outside the worktree: ${e}`);
-    for (const d of entries(at(sandbox, 'network.allowedDomains'))) if (domain(file, d)) allowedDomains.push({ source: file, domain: escaped(String(d)) });
     for (const rule of entries(permissions.allow)) {
       const text = String(rule);
-      // A WebFetch rule of another form than WebFetch(domain:<host>) may allow any host.
-      const webFetch = /^\s*WebFetch\b/.test(text), host2 = /^WebFetch\(domain:(.*)\)$/.exec(text)?.[1];
-      // An allow rule of a tool that edits files can add its path to the sandbox's write list.
+      // An allow rule of a tool that edits files can open its path to the file tools.
       const written = /^\s*(?:Edit|MultiEdit|Write|NotebookEdit)\((.*)\)\s*$/s.exec(text)?.[1];
-      if (webFetch && host2 === undefined) cannot(file, `a WebFetch allow rule of another form than WebFetch(domain:<host>): ${text}`);
-      else if (written !== undefined && outside(scope, written)) cannot(file, `an Edit, MultiEdit, Write or NotebookEdit allow rule outside the worktree: ${text}`);
-      else if (!webFetch || domain(file, host2, text)) allowRules.push({ source: file, rule: escaped(text) });
+      if (written !== undefined && outside(scope, written)) cannot(file, `an Edit, MultiEdit, Write or NotebookEdit allow rule outside the worktree: ${text}`);
+      else allowRules.push({ source: file, rule: escaped(text) });
     }
   }
-  for (const d of domains) {
-    if (GITHUB(d)) fail(4, 'policy sandbox.allowedDomains', `a GitHub host: ${d}`);
-    else if (!HOST.test(String(d).toLowerCase())) cannot('policy sandbox.allowedDomains', `no plain host name: ${d}`);
-  }
-  return { failed, read: toRead, unresolved, allowRules, allowedDomains };
+  return { failed, read: toRead, unresolved, allowRules };
 }
 
 const FLAGS = { project: { type: 'string' }, worktree: { type: 'string' }, 'config-dir': { type: 'string' }, 'claude-json': { type: 'string' }, managed: { type: 'string' } };
@@ -343,9 +315,7 @@ export function optionsOf(argv, env = process.env, home = homedir(), platform = 
 if (isMain(import.meta.url)) {
   try {
     const options = optionsOf(process.argv.slice(2));
-    const { policy, errors } = read(options.project);
-    if (!policy) throw new Error(`the policy could not be read: ${errors.map((e) => e.message).join('; ')}`);
-    const result = startChecks({ ...options, domains: policy.sandbox.allowedDomains });
+    const result = startChecks(options);
     console.log(json(result));
     process.exitCode = result.failed.length ? 1 : result.read.length || result.unresolved.length ? 2 : 0;
   } catch (e) {

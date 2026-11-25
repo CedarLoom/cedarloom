@@ -294,6 +294,39 @@ test('role guard: refuses a merge with --admin in every role, the coordinator in
   }
 });
 
+test('role guard: refuses a commit that skips the commit hooks in every role, the coordinator included', () => {
+  const skips = [
+    'git commit --no-verify -m x',
+    'git commit -n -m x',
+    'git commit -m x -n',
+    'git commit -an -m x',
+    'git commit -nm x',
+    'git commit -anmx',
+    'git commit --no-verif -m x',
+    'git commit --no-veri -m x',
+    'git commit -m x file.txt --no-verify',
+    'git commit -m -- -n',
+    'git commit -m --end-of-options -n',
+    'git commit -am -- -n',
+    'git commit --mess -- -n',
+    'git commit -C HEAD -n',
+    'git -C . commit -n -m x',
+    'git -c user.name=t commit -n -m x',
+    'bash -c "git commit -n -m x"',
+  ];
+  for (const role of [undefined, 'coordinator']) {
+    for (const command of skips) assert.equal(decision(command, { role }), 'deny', `${role}: ${command}`);
+  }
+  assert.equal(decision('git commit -n -m x', { tool: 'PowerShell' }), 'deny');
+});
+
+test('role guard: passes a commit that runs the commit hooks', () => {
+  const commits = ['git commit -m x', 'git commit -am x', 'git commit -mnote', 'git commit -m x -- -n', 'git commit -m x --end-of-options -n', 'git commit -m -n', 'git commit --message -n', 'git commit --verify -m x', 'git push -n origin feat/x'];
+  for (const role of [undefined, 'coordinator']) {
+    for (const command of commits) assert.equal(decision(command, { role, cwd: feature }), 'none', `${role}: ${command}`);
+  }
+});
+
 const ROLE_BOTS = ['builder-bot', 'reviewer-bot', 'maintain-bot'];
 
 test('role guard: the project, reviewer and maintain bots never push', () => {
@@ -536,25 +569,23 @@ test('role guard: a command reaches the queue or the window files through a cd, 
   assert.equal(decision('/bin/sh /tmp/answer.sh', { cwd: join(session, '.cedarloom', 'questions'), env }), 'deny');
   assert.equal(decision(undefined, { tool: 'Write', toolInput: { file_path: 'project-1.md', content: 'x' }, cwd: join(session, '.cedarloom', 'questions'), env }), 'deny');
   // A session started with the command would hold the flag, in any role.
-  const versioned = ['npx -y @anthropic-ai/claude-code@latest -p "/cl-workflow:questions"', 'npx @anthropic-ai/claude-code@2.1.300 -p /questions', 'pnpm dlx @anthropic-ai/claude-code@latest -p /questions'];
+  const versioned = ['npx -y @anthropic-ai/claude-code@latest -p "/cl-workflow:away off"', 'npx @anthropic-ai/claude-code@2.1.300 -p "/away off"', 'pnpm dlx @anthropic-ai/claude-code@latest -p "/away off"'];
   for (const role of [undefined, 'coordinator']) {
-    assert.equal(decision('claude -p "/cl-workflow:questions"', { cwd: session, env, role }), 'deny', role);
-    assert.equal(decision("echo '/questions' | claude -p", { cwd: session, env, role }), 'deny', role);
     assert.equal(decision('claude -p "/cl-workflow:away off"', { cwd: session, env, role }), 'deny', role);
     assert.equal(decision("echo '/away  OFF' | claude -p", { cwd: session, env, role }), 'deny', role);
     assert.equal(decision('claude -p "/cl-workflow:away"$\' off\'', { cwd: session, env, role }), 'deny', role);
     assert.equal(decision('claude -p "/cl-workflow:away"$" off"', { cwd: session, env, role }), 'deny', role);
     // npx names the package with a version, and a Windows npm install starts claude through a script file.
     for (const command of versioned) assert.equal(decision(command, { cwd: session, env, role }), 'deny', `${role}: ${command}`);
-    for (const command of ['claude.cmd -p /questions', 'claude.ps1 -p /questions', 'claude.bat -p /questions']) assert.equal(decision(command, { tool: 'PowerShell', cwd: session, env, role }), 'deny', `${role}: ${command}`);
+    for (const command of ['claude.cmd -p "/away off"', 'claude.ps1 -p "/away off"', 'claude.bat -p "/away off"']) assert.equal(decision(command, { tool: 'PowerShell', cwd: session, env, role }), 'deny', `${role}: ${command}`);
   }
   // Names that only look alike pass, as do wildcard pairs, cd chains and prose that reach neither folder.
   const alike = [
     'cd docs && echo x > questions.md',
-    'grep -rn /cl-workflow:questions plugins',
+    'grep -rn "/cl-workflow:away off" plugins',
     'cat .cedarloom/questions-old/a.md',
-    'grep -n "/questions" CLAUDE.md',
-    'grep -rn "/cl-workflow:questions" plugins/cl-workflow/hooks/claude-code.json',
+    'grep -n "/away off" CLAUDE.md',
+    'grep -rn "/cl-workflow:away off" plugins/cl-workflow/hooks/claude-code.json',
     'ls */*',
     'du -sh */*',
     'ls plugins/*/*',
@@ -634,9 +665,9 @@ test('role guard: reads ANSI-C quoting ($\'...\') decoded, as bash and zsh do, i
     raw`claude -p $'/cl-workflow:away\C\x69off'`,
     raw`claude -p $'/cl-workflow:awa\y off\0x'`,
     raw`claude -p /cl-workflow:away$'\x20'off`,
-    raw`claude -p $'/cl-workflow:\x71uestions'`,
-    raw`$'\x63laude' -p /questions`,
-    raw`$'c\laude' -p /questions`,
+    raw`claude -p $'/cl-workflow:\x61way off'`,
+    raw`$'\x63laude' -p "/away off"`,
+    raw`$'c\laude' -p "/away off"`,
     // A path into the queue.
     raw`echo x >> .cedarloom/$'\x71'uestions/project-1.md`,
     raw`cd $'.cedarloom\x2fquestions' && echo x > project-1.md`,

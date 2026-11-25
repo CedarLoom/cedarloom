@@ -94,18 +94,18 @@ export function validate(doc) {
   if (kind(doc) !== 'object') return [{ rule: 'not-object', path: '', message: 'must be a JSON object' }];
   const errors = [];
   check(supported(inlined(shipped('./orchestration.schema.json'))), doc, '', errors);
-  // A rule over two keys, which the keywords check() implements cannot state: the network allow list of automatic workers comes from this file alone.
-  if (doc.mode === 'automatic' && !(kind(doc.sandbox) === 'object' && Object.hasOwn(doc.sandbox, 'allowedDomains'))) errors.push({ rule: 'required', path: 'sandbox.allowedDomains', message: 'is required when mode is automatic: the hosts an automatic worker may reach' });
-  return errors.map((e) => (e.rule === 'unknown-key' && e.path === 'issues.repository' ? REFUSED_REPOSITORY : e));
+  return errors.map((e) => (e.rule !== 'unknown-key' ? e : e.path === 'issues.repository' ? REFUSED_REPOSITORY : e.path === 'sandbox' ? REFUSED_SANDBOX : e));
 }
 
 const REFUSED_REPOSITORY = { rule: 'refused', path: 'issues.repository', message: 'is refused: a policy file names no other repository; the tracker is the project repository' };
+// Policies written for earlier releases hold sandbox.allowedDomains, which mode: automatic required.
+const REFUSED_SANDBOX = { rule: 'refused', path: 'sandbox', message: 'is refused: CedarLoom does not support the Claude Code sandbox; remove the key' };
 
 const older = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i]; return false; };
 // Comment keys explain the file to its reader; the policy holds only what the coordinator acts on.
 const plain = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => !k.startsWith('//')));
 
-// { policy, errors, warnings }: the policy with every default filled in, or null with the errors. Fields are read by name, whatever the file's schemaVersion.
+// { policy, errors, warnings }: the policy with every default filled in, or null with the errors.
 export function effective(file, version = pluginVersion()) {
   // A committed file never sends work, questions or answers to another repository: the reader drops issues.repository with a warning and keeps the project repository as the tracker.
   const named = kind(file?.issues) === 'object' && Object.hasOwn(file.issues, 'repository');
@@ -116,7 +116,7 @@ export function effective(file, version = pluginVersion()) {
   if (!errors.length && doc.minPlugin && !version) errors.push({ rule: 'range', path: 'minPlugin', message: 'cannot be checked: the version of this plugin is unknown (no .claude-plugin/plugin.json two folders above the skill)' });
   else if (!errors.length && doc.minPlugin && older(version, doc.minPlugin)) errors.push({ rule: 'range', path: 'minPlugin', message: `must be at most ${version}, the version of this plugin` });
   if (errors.length) return { policy: null, errors, warnings };
-  const { merge = {}, review = {}, issues = {}, models = {}, sandbox = {} } = doc;
+  const { merge = {}, review = {}, issues = {}, models = {} } = doc;
   return {
     errors,
     warnings,
@@ -141,7 +141,6 @@ export function effective(file, version = pluginVersion()) {
       keepRunning: doc.keepRunning ?? false,
       permissionPrompts: doc.permissionPrompts ?? 'block',
       mode: doc.mode ?? 'supervised',
-      sandbox: { allowedDomains: sandbox.allowedDomains ?? [] },
       riskyPaths: doc.riskyPaths ?? [],
       review: { depth: review.depth ?? 'high', sensitiveDepth: review.sensitiveDepth ?? 'high', sensitivePaths: review.sensitivePaths ?? [] },
       issues: { labels: issues.labels ?? [] },

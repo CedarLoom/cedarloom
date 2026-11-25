@@ -22,7 +22,6 @@ const DEFAULTS = {
   keepRunning: false,
   permissionPrompts: 'block',
   mode: 'supervised',
-  sandbox: { allowedDomains: [] },
   riskyPaths: [],
   review: { depth: 'high', sensitiveDepth: 'high', sensitivePaths: [] },
   issues: { labels: [] },
@@ -49,9 +48,9 @@ test('policy: sh kills a command that outlives its timeout, also one that ignore
   assert.throws(() => sh(tmpdir(), process.execPath, ['-e', ignoring], 1000), { code: 'ETIMEDOUT', signal: 'SIGKILL' });
 });
 
-test('policy: a version 1 file, or one without schemaVersion, keeps its fields and gets every default', () => {
+test('policy: a file without schemaVersion, or of version 2, keeps its fields and gets every default', () => {
   assert.deepEqual(effective({}, '0.1.0'), { policy: DEFAULTS, errors: [], warnings: [] });
-  const file = { schemaVersion: 1, startLabel: 'agent-ready', trustedAuthors: ['review-bot[bot]'], hostWorkerLimit: 3, merge: { allowed: true, requiredChecks: ['ci'] }, closeIssue: true };
+  const file = { schemaVersion: 2, startLabel: 'agent-ready', trustedAuthors: ['review-bot[bot]'], hostWorkerLimit: 3, merge: { allowed: true, requiredChecks: ['ci'] }, closeIssue: true };
   assert.deepEqual(effective(file, '0.1.0').policy, { ...DEFAULTS, startLabel: 'agent-ready', trustedAuthors: ['review-bot[bot]'], hostWorkerLimit: 3, merge: { ...DEFAULTS.merge, allowed: true, requiredChecks: ['ci'] }, closeIssue: true });
 });
 
@@ -61,8 +60,8 @@ test('policy: a value the schema rejects gives no policy, not the default', () =
   assert.deepEqual(rules(errors), [['enum', 'merge.mode']]);
 });
 
-test('policy: the built-in owner-only paths stay first, whatever the file lists and whatever its schemaVersion', () => {
-  const paths = (ownerOnlyPaths) => effective({ schemaVersion: 1, merge: { ownerOnlyPaths } }, '0.1.0').policy.merge.ownerOnlyPaths;
+test('policy: the built-in owner-only paths stay first, whatever the file lists', () => {
+  const paths = (ownerOnlyPaths) => effective({ schemaVersion: 2, merge: { ownerOnlyPaths } }, '0.1.0').policy.merge.ownerOnlyPaths;
   assert.deepEqual(paths([]), BUILT_IN);
   assert.deepEqual(paths(['infra', '.github']), [...BUILT_IN, 'infra']);
 });
@@ -86,19 +85,19 @@ test('policy: a file that names another repository is refused and keeps the proj
   assert.deepEqual(rules(effective({ issues: { repository: 'owner/tracker', extra: 'value' } }, '0.1.0').errors), [['unknown-key', 'issues.extra']]);
 });
 
-test('policy: mode is supervised unless the file sets automatic, which takes its hosts from sandbox.allowedDomains', () => {
-  assert.equal(effective({ sandbox: { allowedDomains: ['registry.npmjs.org'] } }, '0.1.0').policy.mode, 'supervised');
-  const automatic = effective({ mode: 'automatic', sandbox: { '//': 'what the tests fetch', allowedDomains: ['registry.npmjs.org', '*.pythonhosted.org'] } }, '0.1.0');
+test('policy: mode is supervised unless the file sets automatic', () => {
+  assert.equal(effective({}, '0.1.0').policy.mode, 'supervised');
+  const automatic = effective({ mode: 'automatic' }, '0.1.0');
   assert.deepEqual(automatic.errors, []);
   assert.equal(automatic.policy.mode, 'automatic');
-  assert.deepEqual(automatic.policy.sandbox, { allowedDomains: ['registry.npmjs.org', '*.pythonhosted.org'] });
-  assert.equal(effective({ mode: 'automatic' }, '0.1.0').policy, null);
 });
 
-test('policy: a schemaVersion the reader does not know gives no policy', () => {
-  const { policy, errors } = effective({ schemaVersion: 3 }, '0.1.0');
-  assert.equal(policy, null);
-  assert.deepEqual(rules(errors), [['enum', 'schemaVersion']]);
+test('policy: a schemaVersion other than 2 gives no policy', () => {
+  for (const schemaVersion of [1, 3]) {
+    const { policy, errors } = effective({ schemaVersion }, '0.1.0');
+    assert.equal(policy, null, schemaVersion);
+    assert.deepEqual(rules(errors), [['enum', 'schemaVersion']], schemaVersion);
+  }
 });
 
 test('policy: minPlugin newer than the plugin gives no policy, and versions compare by number', () => {
@@ -153,12 +152,8 @@ const REFUSED = [
   [{ issuesPerWorker: 17 }, 'range', 'issuesPerWorker'],
   ...['', '--dangerously-skip-permissions', 'opus; id', 'opus fast', `o${'p'.repeat(128)}`].map((model) => [{ models: { worker: { model } } }, 'pattern', 'models.worker.model']),
   [{ later: true }, 'unknown-key', 'later'],
+  [{ mode: 'automatic', sandbox: { allowedDomains: ['registry.npmjs.org'] } }, 'refused', 'sandbox'],
   ...['auto', 'Automatic', 'bypassPermissions', ''].map((mode) => [{ mode }, 'enum', 'mode']),
-  ...[{}, { sandbox: {} }, { sandbox: { '//': 'none yet' } }].map((rest) => [{ mode: 'automatic', ...rest }, 'required', 'sandbox.allowedDomains']),
-  [{ mode: 'automatic', sandbox: { allowedDomains: [] } }, 'length', 'sandbox.allowedDomains'],
-  // An entry that would open every host, a local service or more than one host name.
-  ...['*', '*.com', 'localhost', 'Example.com', 'example.com:443', 'https://example.com', 'example.com/x', ' example.com', '-x.example.com', '169.254.169.254', '10.0.0.1'].map((host) => [{ sandbox: { allowedDomains: [host] } }, 'pattern', 'sandbox.allowedDomains[0]']),
-  [{ sandbox: { network: { allowedDomains: ['example.com'] } } }, 'unknown-key', 'sandbox.network'],
   [{ models: { phases: { plan: { modle: 'opus' } } } }, 'unknown-key', 'models.phases.plan.modle'],
   [{ models: { sensitive: { implement: { model: 'opus' } } } }, 'unknown-key', 'models.sensitive.implement'],
   [{ models: { sensitive: { independent: { model: 'claude-fable-5-2' } } } }, 'enum', 'models.sensitive.independent.model'],
@@ -173,6 +168,10 @@ test('policy: each refused value is named with its rule and path', () => {
   }
   // The longest name and the characters of a full model name stay allowed.
   for (const model of ['opus[1m]', 'vendor.family-4-5-v1:0', 'team/model@2026-01-01', 'p'.repeat(128)]) assert.deepEqual(validate({ models: { worker: { model } } }), [], model);
+});
+
+test('policy: permissionPrompts takes block alone', () => {
+  assert.deepEqual(validate({ permissionPrompts: 'decline' }), [{ rule: 'enum', path: 'permissionPrompts', message: 'must be one of "block"' }]);
 });
 
 test('policy: a skill folder copied alone, as for an agent without plugins, checks with its own schema; minPlugin cannot be checked there and gives no policy', async () => {

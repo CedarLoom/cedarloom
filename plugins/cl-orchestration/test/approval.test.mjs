@@ -39,7 +39,7 @@ ${MERGES}
 ${COST}
 | Undo | revert each PR |
 
-Answer: comment "a", "b" or free text, or run /cl-workflow:questions
+Answer: comment "a", "b" or free text, or run /cl-workflow:away off
 `;
 
 // A variant must differ from the filled text, or its case would pass on the text that passes.
@@ -202,7 +202,7 @@ test('approval: apply moves a question the owner answered to cl:ready-for-agent,
     const r = spawnSync(process.execPath, [script, 'apply', ...(args.length ? args : ['owner/tracker', '12'])], { encoding: 'utf8', env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
     return { ...r, edits: readFileSync(join(bin, 'log'), 'utf8').split('\n').filter((line) => line.startsWith('issue edit')) };
   };
-  // The answer the questions skill has just posted.
+  // The answer the question queue has just posted.
   const answered = run([SECOND]);
   assert.equal(answered.status, 0, answered.stderr);
   assert.deepEqual(JSON.parse(answered.stdout), { ...GO, labels: ['bug', 'cl:ready-for-agent'] });
@@ -280,7 +280,7 @@ test('approval: without a private tracker, the question goes into the local queu
   // Kept out of git, as the run folder is.
   assert.equal(spawnSync('git', ['check-ignore', '-q', '.cedarloom/questions/project-1.md'], { cwd: dir }).status, 0);
   assert.deepEqual(queue(), [{ file: 'project-1.md', status: 'open' }, { file: 'project-2.md', status: 'open' }]);
-  // What /cl-workflow:questions writes for an answer and a defer.
+  // What /cl-workflow:away off writes for an answer and a defer.
   writeFileSync(join(dir, '.cedarloom/questions/project-1.md'), `${filed.replace('Status: open', 'Status: answered')}\nOwner answer (2026-11-15): b. Hold it for now.\n`);
   // A question that holds back a work issue names it on its Issue line.
   writeFileSync(join(dir, '.cedarloom/questions/project-2.md'), `${filed.replace('Status: open', 'Status: deferred')}\nIssue: acme/app#7\nDeferred by the owner on 2026-11-15.\n`);
