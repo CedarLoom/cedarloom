@@ -1,7 +1,7 @@
 // SessionStart after a compaction (Claude Code and Codex) or a Codex clear: hands the coordinator's handoff file back with
-// the git drift since the coordinator wrote it, when the file names the session of the hook input. A clear starts a new
-// session id and this hook keeps no state between runs, so in practice it serves compaction; the Claude Code module
-// restores after a clear.
+// the git drift since the coordinator wrote it, when the file names the session of the hook input and no subagent compacted.
+// A clear starts a new session id and this hook keeps no state between runs, so in practice it serves compaction; the Claude
+// Code module restores after a clear.
 import { execFileSync } from 'node:child_process';
 import { constants, fstatSync, openSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -40,7 +40,9 @@ const drifted = (cwd, handle, handoff) => {
 let handoff;
 let drifting;
 try {
-  const { cwd, session_id: session } = JSON.parse(await text(process.stdin));
+  const { cwd, session_id: session, agent_id: agent } = JSON.parse(await text(process.stdin));
+  // A subagent shares the coordinator's session id; only its input carries agent_id.
+  if (agent) process.exit(0);
   // Claude Code's project folder, never a folder a shell cd moved to; Codex sets no such variable. The module's root follows
   // a /cd or worktree move; this variable may not.
   const root = process.env.CLAUDE_PROJECT_DIR || cwd;
