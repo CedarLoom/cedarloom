@@ -1,0 +1,26 @@
+schema_version: "1.1"
+name: agent-review-unvalidated-input
+description: 'The review agent reports missing validation where imported data enters as Blocking or Important, with file and line (from OpenReloading/Ballistics#1290). Needs --scaffold.'
+tags: [cl-workflow, agent-review]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:review` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Review the branch feat/labradar-import against main (`git diff main...HEAD` here). Task: import LabRadar CSV exports as chronograph sessions. Acceptance: a valid export creates one session with one shot per row; a row with a missing or non-numeric velocity rejects the whole file with an error naming the row, and adds no session. Depth: standard. Review alone, start no subagents.
+  max_turns: 15
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-review
+    tool: Agent
+    input_match: cl-workflow:review
+    min: 1
+  - type: regex
+    name: cites-import-line
+    pattern: 'src/import\.js:\d+'
+  - type: llm
+    name: validation-finding
+    criteria: 'A finding classed Blocking or Important says that non-numeric or missing velocity values become NaN and still create a session, against the acceptance row, with a suggested fix that validates each row before addSession.'
+expected_outcome: 'A Blocking or Important finding at src/import.js on unvalidated rows reaching addSession.'

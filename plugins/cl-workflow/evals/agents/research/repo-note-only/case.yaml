@@ -1,0 +1,34 @@
+schema_version: "1.1"
+name: agent-research-repo-note-only
+description: 'The research agent answers with file and line per claim, writes only the note file the brief names and leaves the rest of the repository as it is (like the workflow pin updates of CedarLoom/cedarloom#58). Needs --scaffold.'
+tags: [cl-workflow, agent-research]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:research` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Question: do the CI workflows of this repository pin the Node.js line that AGENTS.md names? Decision it feeds: whether to align the pins. Evidence that settles it: the files of this repository. Sources to trust: the files only. Return format: the answer, each claim with its file and line, a confidence. Scope: read-only except notes/research.md, where you add the answer under a heading "Node.js pins".
+  max_turns: 15
+  allowed_tools: [Bash, Write, Edit]
+graders:
+  - type: tool_used
+    name: starts-research
+    tool: Agent
+    input_match: cl-workflow:research
+    min: 1
+  - type: regex
+    name: finds-the-mismatch
+    pattern: '24\.4\.0'
+  - type: regex
+    name: cites-checks-yml
+    pattern: 'checks\.yml:?\D{0,8}6'
+  - type: regex
+    name: note-written
+    target: {source: file, path: notes/research.md}
+    pattern: 'Node\.js pins'
+  - type: regex
+    name: agents-md-untouched
+    target: {source: file, path: AGENTS.md}
+    pattern: 'The plugins run on Node\.js 22\.\n?$'
+expected_outcome: 'No for checks.yml (24.4.0 at line 6), yes for token-budget.yml, the note under "Node.js pins", no other file changed.'

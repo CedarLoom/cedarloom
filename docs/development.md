@@ -20,3 +20,7 @@
   - has a hook matcher in `hooks/*.json` whose `^<prefix>:` is not the plugin's name in `.claude-plugin/plugin.json`,
   - breaks rule `orca-only-orchestration`: the name `orca` as a word or inside an identifier (cases: `plugin-boundary.test.mjs`) fails in every plugin folder but `plugins/cl-orchestration`, which runs only on Orca, and `plugins/cedarloom`, the bundle that installs it; `cl-workflow` and `cl-repo` work without Orca.
 - Actions are pinned to commit SHAs with a version comment. Dependabot (`.github/dependabot.yml`) updates the `uses:` pins weekly.
+
+## Evals
+
+Each plugin keeps its `claude plugin eval` suites in `plugins/<plugin>/evals/`, run locally on your own credential, not in CI. A pull request that changes a skill or agent text reruns the suites it affects and reports pass rate (passing runs over all runs), tokens, wall time and cost before and after: [cl-workflow evals](../plugins/cl-workflow/evals/README.md). A lower pass rate on an affected suite blocks the merge until the case is fixed, or the drop is explained in the pull request and accepted in its review.

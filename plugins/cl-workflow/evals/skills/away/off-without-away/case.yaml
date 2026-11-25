@@ -1,0 +1,17 @@
+schema_version: "1.1"
+name: skill-away-off-without-away
+description: '/cl-workflow:away off in a session that was never away gives the hook''s reason and stops, asking no queued question (from CedarLoom/cedarloom#93).'
+tags: [cl-workflow, skill-away]
+execution:
+  prompt: /cl-workflow:away off
+  max_turns: 3
+graders:
+  - type: tool_used
+    name: asks-nothing
+    tool: AskUserQuestion
+    min: 0
+    max: 0
+  - type: llm
+    name: gives-reason-and-stops
+    criteria: 'The reply says why there is nothing to do (the session was not away, or no answer flag or queued question exists, or the hook did not run) in one or two lines, and runs no question round.'
+expected_outcome: 'A one- or two-line reason and no question.'

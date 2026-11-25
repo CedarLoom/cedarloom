@@ -1,0 +1,31 @@
+schema_version: "1.1"
+name: agent-test-passes-on-base
+description: 'The test agent runs a bug fix''s new test on the base commit and flags it when it passes there (from CedarLoom/cedarloom#96). Needs --scaffold.'
+tags: [cl-workflow, agent-test]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:test` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Test the change HEAD~1..HEAD of this repository. It claims to fix a bug: `clampRuns(3, 0)` returned 3, and a max of 0 must clamp to 0. Acceptance: clampRuns(3, 0) is 0 (test); clampRuns(9, 5) is 5 (test).
+  max_turns: 20
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-test
+    tool: Agent
+    input_match: cl-workflow:test
+    min: 1
+  - type: regex
+    name: flags-passes-on-base
+    pattern: 'passes on base'
+    flags: i
+  - type: llm
+    name: fails-the-phase
+    criteria: 'The report says the new test "clamps to the max" passes on the base commit, so it does not prove the fix, marks the acceptance row for clampRuns(3, 0) unmet or not checked by a test, and fails the phase for it.'
+  - type: regex
+    name: repository-untouched
+    target: {source: file, path: test/limit.test.js}
+    pattern: 'clampRuns\(9, 5\), 5'
+expected_outcome: '"passes on base" flagged for the new test, the phase failed, the repository unchanged.'

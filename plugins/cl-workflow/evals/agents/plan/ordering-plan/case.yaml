@@ -1,0 +1,33 @@
+schema_version: "1.1"
+name: agent-plan-ordering-plan
+description: 'The plan agent returns steps with files, an acceptance table with the wrong implementation per row, and the tests, and edits nothing (from CedarLoom/cedarloom#110). Needs --scaffold.'
+tags: [cl-workflow, agent-plan]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:plan` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Plan this task in this repository. Task: pickup orders ready issues by their `priority` field (high, medium, low), highest first, then oldest first; issues without a priority come last. Depth: standard.
+  max_turns: 15
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-plan
+    tool: Agent
+    input_match: cl-workflow:plan
+    min: 1
+  - type: regex
+    name: names-the-module
+    pattern: 'src/pickup\.js'
+  - type: regex
+    name: names-the-test
+    pattern: 'test/pickup\.test\.js'
+  - type: llm
+    name: acceptance-table
+    criteria: 'The plan has an acceptance table whose rows cover priority before age, same priority oldest first, and no priority last, each with an instrument and the wrong implementation it rejects.'
+  - type: regex
+    name: edits-nothing
+    target: {source: file, path: src/pickup.js}
+    pattern: 'a\.createdAt - b\.createdAt\);\n\}'
+expected_outcome: 'Steps naming src/pickup.js and test/pickup.test.js, a three-row acceptance table, no file changed.'

@@ -1,0 +1,32 @@
+schema_version: "1.1"
+name: agent-test-fails-on-base
+description: 'The test agent records that a bug fix''s new test fails on the base commit and passes on the head (from CedarLoom/cedarloom#96). Needs --scaffold.'
+tags: [cl-workflow, agent-test]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:test` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Test the change HEAD~1..HEAD of this repository. It claims to fix a bug: `clampRuns(3, 0)` returned 3, and a max of 0 must clamp to 0. Acceptance: clampRuns(3, 0) is 0 (test).
+  max_turns: 20
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-test
+    tool: Agent
+    input_match: cl-workflow:test
+    min: 1
+  - type: regex
+    name: fails-on-base
+    pattern: 'fails on base'
+    flags: i
+  - type: regex
+    name: no-passes-on-base
+    pattern: 'passes on base'
+    flags: i
+    match: not_contains
+  - type: llm
+    name: head-passes
+    criteria: 'The report says `node --test` passes on the head commit and the acceptance row clampRuns(3, 0) is 0 is met.'
+expected_outcome: 'The new test "fails on base", the suite passes on head, the row met.'

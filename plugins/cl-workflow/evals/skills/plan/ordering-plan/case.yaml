@@ -1,0 +1,26 @@
+schema_version: "1.1"
+name: skill-plan-ordering-plan
+description: '/cl-workflow:plan on a standard feature writes the plan with steps, acceptance rows and the check line (from CedarLoom/cedarloom#110).'
+tags: [cl-workflow, skill-plan]
+execution:
+  prompt: |
+    /cl-workflow:plan Pickup orders ready issues by the Priority field of the project board, highest first, then by age; issues without a priority come last.
+  max_turns: 20
+  allowed_tools: [Write]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode]
+graders:
+  - type: tool_used
+    name: writes-plan-with-check-line
+    tool: Write
+    input_match: 'Plan check: none'
+    min: 1
+  - type: tool_used
+    name: plan-has-depth-line
+    tool: Write
+    input_match: 'Depth: (standard|deep)'
+    min: 1
+  - type: llm
+    name: acceptance-covers-no-priority
+    criteria: 'The plan (in the Write call or the final message) has an acceptance row for issues without a priority coming last, and names the wrong implementation that row rejects.'
+    focus: trace
+expected_outcome: 'A plan file with a standard or deeper depth line, an acceptance row for the no-priority case, and `Plan check: none`.'

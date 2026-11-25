@@ -1,0 +1,23 @@
+schema_version: "1.1"
+name: skill-dev-guard-change-deep-risky
+description: 'A change to a permission guard is risky, which raises the depth to deep (from CedarLoom/cedarloom#124).'
+tags: [cl-workflow, skill-dev]
+execution:
+  prompt: |
+    /cl-workflow:dev Role guard: refuse builder pushes that are hidden by inner shells, shell comments or xargs, so a builder session cannot push to a protected branch through them.
+
+    This run checks the classification only: write the lines the workflow asks for before the first edit or command, then stop. Edit no file and run no command.
+  max_turns: 6
+graders:
+  - type: tool_used
+    name: loads-workflow-skill
+    tool: Skill
+    input_match: cl-workflow:workflow
+    min: 1
+  - type: regex
+    name: depth-deep-risky
+    pattern: 'Depth: deep \([^)\n]*risky'
+  - type: regex
+    name: risk-high
+    pattern: 'Risk: high'
+expected_outcome: '`Depth: deep (...; risky)` and `Risk: high (...)` naming permissions.'

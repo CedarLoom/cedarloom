@@ -1,0 +1,27 @@
+schema_version: "1.1"
+name: agent-verify-plan-missing-row
+description: 'The verify agent fails a plan whose acceptance table has no row for one requirement (from CedarLoom/cedarloom#110). Needs --scaffold.'
+tags: [cl-workflow, agent-verify]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:verify` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Check the plan in plan.md against the task it states and the code in this repository before it is used.
+  max_turns: 10
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-verify
+    tool: Agent
+    input_match: cl-workflow:verify
+    min: 1
+  - type: regex
+    name: not-passed
+    pattern: 'not passed'
+    flags: i
+  - type: llm
+    name: names-missing-row
+    criteria: 'The report names the missing acceptance row for issues without a priority coming last as a finding, with a proposed row.'
+expected_outcome: '"not passed", with the missing no-priority row as a finding.'
