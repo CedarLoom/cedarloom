@@ -94,10 +94,12 @@ export function validate(doc) {
   if (kind(doc) !== 'object') return [{ rule: 'not-object', path: '', message: 'must be a JSON object' }];
   const errors = [];
   check(supported(inlined(shipped('./orchestration.schema.json'))), doc, '', errors);
-  return errors.map((e) => (e.rule === 'unknown-key' && e.path === 'issues.repository' ? REFUSED_REPOSITORY : e));
+  return errors.map((e) => (e.rule !== 'unknown-key' ? e : e.path === 'issues.repository' ? REFUSED_REPOSITORY : e.path === 'sandbox' ? REFUSED_SANDBOX : e));
 }
 
 const REFUSED_REPOSITORY = { rule: 'refused', path: 'issues.repository', message: 'is refused: a policy file names no other repository; the tracker is the project repository' };
+// Policies written for earlier releases hold sandbox.allowedDomains, which mode: automatic required.
+const REFUSED_SANDBOX = { rule: 'refused', path: 'sandbox', message: 'is refused: CedarLoom does not support the Claude Code sandbox; remove the key' };
 
 const older = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i]; return false; };
 // Comment keys explain the file to its reader; the policy holds only what the coordinator acts on.

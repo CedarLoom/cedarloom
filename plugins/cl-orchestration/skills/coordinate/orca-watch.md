@@ -36,7 +36,7 @@ Liveness, in the guide's terms: `ready` or `unverifiable` is absence, not proof.
 
 ## A permission dialog
 
-An automatic worker shows none: under `dontAsk` a call that would prompt is denied. A dialog in its terminal (a trust question, a login) is the owner's.
+An automatic worker runs in auto mode and shows one only after repeated blocks of the auto mode check (below). A dialog in its terminal (a trust question, a login, such a prompt) is the owner's.
 
 A worker that Orca's own launch starts in a structured (chat) session shows none either: it has no terminal, and Orca answers its prompts by its agent permission setting ([Start the run](orca.md)), so nothing here declines a call. A supervised Claude Code worker runs in a coordinator-made terminal, in auto mode or in Manual where auto mode is unavailable, and can show one ([Start the run](orca.md)).
 

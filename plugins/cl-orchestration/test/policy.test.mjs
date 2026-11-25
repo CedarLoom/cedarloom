@@ -150,7 +150,7 @@ const REFUSED = [
   [{ issuesPerWorker: 17 }, 'range', 'issuesPerWorker'],
   ...['', '--dangerously-skip-permissions', 'opus; id', 'opus fast', `o${'p'.repeat(128)}`].map((model) => [{ models: { worker: { model } } }, 'pattern', 'models.worker.model']),
   [{ later: true }, 'unknown-key', 'later'],
-  [{ mode: 'automatic', sandbox: { allowedDomains: ['registry.npmjs.org'] } }, 'unknown-key', 'sandbox'],
+  [{ mode: 'automatic', sandbox: { allowedDomains: ['registry.npmjs.org'] } }, 'refused', 'sandbox'],
   ...['auto', 'Automatic', 'bypassPermissions', ''].map((mode) => [{ mode }, 'enum', 'mode']),
   [{ models: { phases: { plan: { modle: 'opus' } } } }, 'unknown-key', 'models.phases.plan.modle'],
   [{ models: { sensitive: { implement: { model: 'opus' } } } }, 'unknown-key', 'models.sensitive.implement'],

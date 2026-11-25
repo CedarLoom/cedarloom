@@ -52,10 +52,10 @@ The first two lines write and check its rule file ([Worker rules](modes.md#worke
 Rule file: `.claude/settings.local.json` in this worktree is the coordinator's. Never stage, commit, change or delete it.
 ```
 
-Automatic: a terminal of its own as well, its launch carrying `--permission-mode dontAsk` and the settings below:
+Automatic: a terminal of its own as well, its launch carrying `--permission-mode auto` and the settings below:
 
 ```text
-ORCA terminal create --worktree path:<worktree path> --title <number>-<slug> --command "env -u CEDARLOOM_ROLE CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false '<claude path>' --autocompact 200k --model '<model>' --effort <effort> --permission-mode dontAsk --settings '<run folder>/settings/<id>.json'" --json
+ORCA terminal create --worktree path:<worktree path> --title <number>-<slug> --command "env -u CEDARLOOM_ROLE CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false '<claude path>' --autocompact 200k --model '<model>' --effort <effort> --permission-mode auto --settings '<run folder>/settings/<id>.json'" --json
 ORCA terminal wait --terminal <terminal> --for tui-idle --timeout-ms 60000 --json
 ORCA orchestration worker-start --spec-file <filled spec file> --terminal <terminal> --worktree path:<worktree path> --task-title '<chat name>' --keep-open --json
 ```
@@ -80,7 +80,7 @@ A Codex worker starts with `ORCA orchestration worker-start --spec-file <filled 
 
 ### Fallback to supervised
 
-An automatic project whose [Automatic start](automatic-start.md) failed runs supervised for the rest of the run, and so does a Codex worker of an automatic project. Such a worker starts as a supervised one (above) and has none of the automatic bounds (no `dontAsk`, no settings file): a Claude Code one runs in auto mode with the worktree rule file of [Worker rules](modes.md#worker-rules), as every supervised one does, and a Codex one with Orca's agent permission setting, under the shipped "full-access" with no permission prompt. For a failed start, write in the handoff's `Mode:` line and the report the project, the failed check or step, and that its workers run without the automatic bounds, its Claude Code workers in auto mode, or after a failed version check that none starts ([Start the run](#start-the-run)). A Codex worker leaves its project's `Mode:` line as it is: the report names that worker and that it runs without the automatic bounds under Orca's setting.
+An automatic project whose [Automatic start](automatic-start.md) failed runs supervised for the rest of the run, and so does a Codex worker of an automatic project. Such a worker starts as a supervised one (above) and has none of the automatic bounds (no settings file): a Claude Code one runs in auto mode with the worktree rule file of [Worker rules](modes.md#worker-rules), as every supervised one does, and a Codex one with Orca's agent permission setting, under the shipped "full-access" with no permission prompt. For a failed start, write in the handoff's `Mode:` line and the report the project, the failed check or step, and that its workers run without the automatic bounds, its Claude Code workers in auto mode, or after a failed version check that none starts ([Start the run](#start-the-run)). A Codex worker leaves its project's `Mode:` line as it is: the report names that worker and that it runs without the automatic bounds under Orca's setting.
 
 ## Host limit
 

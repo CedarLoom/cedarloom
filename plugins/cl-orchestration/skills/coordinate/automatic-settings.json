@@ -1,10 +1,10 @@
 {
   "permissions": {
-    "defaultMode": "dontAsk",
+    "defaultMode": "auto",
     "disableBypassPermissionsMode": "disable",
     "blockWritesOutsideWorkingDirectories": true,
     "blockReadsOutsideWorkingDirectories": true,
-    "allow": ["Edit(//W/**)", "Bash"],
+    "allow": ["Edit(//W/**)"],
     "deny": [
       "Edit(//W/.claude/**)", "Edit(//W/.mcp.json)", "Edit(//W/.vscode/**)", "Edit(//W/.idea/**)",
       "Edit(//W/.bashrc)", "Edit(//W/.zshrc)", "Edit(//W/.gitconfig)",

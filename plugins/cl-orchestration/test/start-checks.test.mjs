@@ -258,7 +258,7 @@ test('start-checks: a plugin turned off only in a settings file the worktree ses
 test('start-checks: a settings key the script does not know to run no command is unresolved, and each command setting is read', () => {
   const s = setup({
     'managed/managed-settings.json': { policyHelper: { path: '/opt/corp/policy' }, extraKnownMarketplaces: {} },
-    'home/.claude/settings.json': { model: 'opus', processWrapper: '/opt/corp/launch', sandbox: { enabled: true } },
+    'home/.claude/settings.json': { model: 'opus', processWrapper: '/opt/corp/launch' },
     'wt/.claude/settings.json': { subagentStatusLine: { type: 'command', command: 'node scripts/status.js' }, futureHelper: 'sh run.sh' },
   });
   const r = s.run(), [managed, user, committed] = ['managed/managed-settings.json', 'home/.claude/settings.json', 'wt/.claude/settings.json'].map((file) => join(s.dir, file));
@@ -266,10 +266,28 @@ test('start-checks: a settings key the script does not know to run no command is
   assert.deepEqual(r.read, [{ source: `${user} processWrapper`, command: '/opt/corp/launch' }]);
   assert.deepEqual(r.unresolved, [
     { source: managed, reason: 'extraKnownMarketplaces is no key the script knows to run no command' },
-    { source: user, reason: 'sandbox is no key the script knows to run no command' },
     { source: committed, reason: 'futureHelper is no key the script knows to run no command' },
     { source: managed, reason: 'policyHelper holds no command the script reads' },
   ]);
+});
+
+test('start-checks: settings that keep the worker out of auto mode, turn off hooks, set the role or turn on the sandbox fail check 4', () => {
+  const s = setup({
+    'managed/managed-settings.json': { permissions: { disableAutoMode: 'disable' }, allowManagedHooksOnly: true },
+    'home/.claude/settings.json': { disableAllHooks: true, sandbox: { enabled: true } },
+    'project/.claude/settings.local.json': { env: { CEDARLOOM_ROLE: 'coordinator' }, sandbox: {} },
+    'wt/.claude/settings.json': { disableAllHooks: false, sandbox: { enabled: false }, permissions: { disableAutoMode: false } },
+  });
+  const r = s.run();
+  assert.deepEqual(r.failed.filter((f) => f.check === 4).map((f) => [f.source.slice(s.dir.length + 1), f.entry]), [
+    ['managed/managed-settings.json', 'permissions.disableAutoMode keeps the worker out of auto mode: "disable"'],
+    ['managed/managed-settings.json', 'allowManagedHooksOnly can turn off the role guard'],
+    ['home/.claude/settings.json', 'disableAllHooks turns off the role guard'],
+    ['home/.claude/settings.json', 'sandbox: CedarLoom ignores the Claude Code sandbox and does not support it; set sandbox.enabled to false or remove the key'],
+    ['project/.claude/settings.local.json', 'env sets CEDARLOOM_ROLE, which the worker must not inherit'],
+    ['project/.claude/settings.local.json', 'sandbox: CedarLoom ignores the Claude Code sandbox and does not support it; set sandbox.enabled to false or remove the key'],
+  ]);
+  assert.deepEqual(r.unresolved, []);
 });
 
 test('start-checks: an Edit, MultiEdit, Write or NotebookEdit allow rule outside the worktree is unresolved, one inside it is listed', () => {

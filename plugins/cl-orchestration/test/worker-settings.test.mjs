@@ -37,7 +37,7 @@ test('worker-settings: fills the worktree and the shared .git into the template'
     const w = `/${base}/${name}`;
     const folders = `/${base}/main/.git/worktrees`;
     assert.deepEqual(Object.keys(settings), ['permissions']);
-    assert.deepEqual(settings.permissions.allow, [`Edit(${w}/**)`, 'Bash']);
+    assert.deepEqual(settings.permissions.allow, [`Edit(${w}/**)`]);
     assert.deepEqual(settings.permissions.deny.slice(0, 14), [
       `Edit(${w}/.claude/**)`, `Edit(${w}/.mcp.json)`, `Edit(${w}/.vscode/**)`, `Edit(${w}/.idea/**)`,
       `Edit(${w}/.bashrc)`, `Edit(${w}/.zshrc)`, `Edit(${w}/.gitconfig)`,
@@ -51,7 +51,7 @@ test('worker-settings: fills the worktree and the shared .git into the template'
       'Bash(rm -r*)', 'Bash(rm -R*)', 'Bash(rm -fr*)', 'Bash(rm -fR*)', 'Bash(rm * -r*)', 'Bash(rm * -R*)', 'Bash(rm *--recursive*)',
       `Edit(${w}/.github/**)`, 'Edit(//**/.git)', 'Edit(//**/.git/**)',
     ]);
-    assert.equal(settings.permissions.defaultMode, 'dontAsk');
+    assert.equal(settings.permissions.defaultMode, 'auto');
     assert.equal(settings.permissions.disableBypassPermissionsMode, 'disable');
   }
 });
