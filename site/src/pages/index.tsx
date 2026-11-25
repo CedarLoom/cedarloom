@@ -92,7 +92,7 @@ export default function Home(): ReactNode {
           <CodeBlock language="text">{install}</CodeBlock>
           <p>
             Then run <code>/reload-plugins</code> and type <code>/cl-workflow:</code> to see the commands. You need
-            Claude Code 2.1.323 or later, Node.js on the PATH, Git and the GitHub CLI; the coordinator also needs Orca.
+            Claude Code 2.1.330 or later, Node.js on the PATH, Git and the GitHub CLI; the coordinator also needs Orca.
             The <Link href={`${repo}#install`}>README</Link> covers Codex, single plugins and updates.
           </p>
         </section>

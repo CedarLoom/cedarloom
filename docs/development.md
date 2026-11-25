@@ -11,7 +11,7 @@
 - `checks-core` runs:
   - `actionlint` and `zizmor` (a checkout keeps its credentials only with a `zizmor: ignore[artipacked]` reason).
   - No em dash or emoji in text files (lockfiles, PNG files and changelogs apart).
-  - No `2.1.x` version other than `2.1.323`, the Claude Code minimum in the README's Requirements, written into the step (other version lines pass; changelogs, tests, package manifests, lockfiles, workflows and the `plugin-checks` pin apart).
+  - No `2.1.x` version other than `2.1.330`, the Claude Code minimum in the README's Requirements, written into the step (other version lines pass; changelogs, tests, package manifests, lockfiles, workflows and the `plugin-checks` pin apart).
   - The `.github/scripts/` tests and checks (skill lint with the word budgets of [Authoring](authoring.md), plugin boundary, generated docs, version pins).
   - The token budget (`token-budget.mjs check --budget-only`).
 - The plugin boundary check (`.github/scripts/plugin-boundary.mjs`) fails when a tracked file under `plugins/*/` (the generated `CHANGELOG.md` apart):
@@ -23,4 +23,4 @@
 
 ## Evals
 
-Each plugin keeps its `claude plugin eval` suites in `plugins/<plugin>/evals/`, run locally on your own credential, not in CI. A pull request that changes a skill or agent text reruns the suites it affects and reports pass rate (passing runs over all runs), tokens, wall time and cost before and after: [cl-workflow evals](../plugins/cl-workflow/evals/README.md), [cl-repo evals](../plugins/cl-repo/evals/README.md). A lower pass rate on an affected suite blocks the merge until the case is fixed, or the drop is explained in the pull request and accepted in its review.
+Each plugin keeps its `claude plugin eval` suites in `plugins/<plugin>/evals/`, run locally on your own credential, not in CI. A pull request that changes a skill or agent text reruns the suites it affects on its merge base and its head, both with the head's case files, and compares only runs that completed every case: pass rate (passing runs over all runs), tokens, wall time and cost ([cl-workflow evals](../plugins/cl-workflow/evals/README.md), [cl-repo evals](../plugins/cl-repo/evals/README.md)). A lower pass rate on an affected suite blocks the merge until the case is fixed, or the drop is explained in the pull request and accepted in its review.
