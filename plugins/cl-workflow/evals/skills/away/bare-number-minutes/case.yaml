@@ -1,0 +1,17 @@
+schema_version: "1.1"
+name: skill-away-bare-number-minutes
+description: '/cl-workflow:away with a bare number reads it as minutes and answers with the hook''s line alone (from CedarLoom/cedarloom#90 and #93).'
+tags: [cl-workflow, skill-away]
+execution:
+  prompt: /cl-workflow:away 30
+  max_turns: 3
+graders:
+  - type: llm
+    name: one-line-30-minutes
+    criteria: 'The reply is one line that says the session works alone (the question tool and plan mode are refused) for 30 minutes or until a clock time about 30 minutes ahead. It asks nothing and adds no other text.'
+  - type: tool_used
+    name: asks-nothing
+    tool: AskUserQuestion
+    min: 0
+    max: 0
+expected_outcome: 'One line with the away span of 30 minutes, nothing else.'

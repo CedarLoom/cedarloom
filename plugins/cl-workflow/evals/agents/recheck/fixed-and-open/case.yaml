@@ -1,0 +1,25 @@
+schema_version: "1.1"
+name: agent-recheck-fixed-and-open
+description: 'The recheck agent gives each earlier finding its verdict on the fix range, fixed or not fixed (a fix round as in CedarLoom/cedarloom#97). Needs --scaffold.'
+tags: [cl-workflow, agent-recheck]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:recheck` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Re-review the fix range HEAD~1..HEAD of this repository (read it with git here). Earlier findings:
+    - F1 (Important): src/limit.js `parseRuns` accepts any text; "abc" gives NaN and "-3" gives -3. Reject values that are not positive integers.
+    - F2 (Important): src/limit.js:2 `clampRuns(3, 0)` returns 3: a max of 0 is ignored.
+  max_turns: 12
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-recheck
+    tool: Agent
+    input_match: cl-workflow:recheck
+    min: 1
+  - type: llm
+    name: verdicts
+    criteria: 'The report names the fix range HEAD~1..HEAD, marks F1 fixed and F2 not fixed (src/limit.js line 2 is unchanged and still ignores a max of 0), each with evidence.'
+expected_outcome: 'F1 fixed, F2 not fixed, both with evidence.'

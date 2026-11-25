@@ -1,0 +1,23 @@
+schema_version: "1.1"
+name: skill-full-guard-change-trial
+description: '/cl-workflow:full on a permission guard runs deep and risky, with trial set in the run''s args (from CedarLoom/cedarloom#124).'
+tags: [cl-workflow, skill-full]
+execution:
+  prompt: |
+    /cl-workflow:full Role guard: refuse builder pushes that are hidden by inner shells, shell comments or xargs.
+
+    This run checks the setup only: write the Depth and Risk lines and the args you would pass to the first stage of cl-workflow:full-run, then stop. Start no workflow or agent, edit no file and run no command.
+  max_turns: 8
+graders:
+  - type: tool_used
+    name: loads-workflow-skill
+    tool: Skill
+    input_match: cl-workflow:workflow
+    min: 1
+  - type: regex
+    name: depth-deep-risky
+    pattern: 'Depth: deep \([^)\n]*risky'
+  - type: llm
+    name: args-trial-true
+    criteria: 'The response lists the run''s args with `task` (the task in one paragraph), `stage` set to the plan stage, and `trial` set to true because the change is risky.'
+expected_outcome: '`Depth: deep (...; risky)`, a `Risk: high` line, and args with task, stage plan and trial true.'

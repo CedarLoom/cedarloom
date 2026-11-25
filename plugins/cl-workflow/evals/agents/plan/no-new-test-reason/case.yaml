@@ -1,0 +1,26 @@
+schema_version: "1.1"
+name: agent-plan-no-new-test-reason
+description: 'The plan agent follows the project''s test rule and plans no test for a copy change, saying why (as the docs PRs CedarLoom/cedarloom#108 and #70 did). Needs --scaffold.'
+tags: [cl-workflow, agent-plan]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:plan` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Plan this task in this repository. Task: docs/install.md should say to pick the units under Settings > Units, and add one sentence that the default units are metric. Depth: standard.
+  max_turns: 12
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-plan
+    tool: Agent
+    input_match: cl-workflow:plan
+    min: 1
+  - type: regex
+    name: names-the-file
+    pattern: 'docs/install\.md'
+  - type: llm
+    name: no-test-with-reason
+    criteria: 'The plan''s tests section says no new test, because the project''s test rule forbids testing copy; its acceptance table uses the docs build command or a read of the rendered text as the instrument.'
+expected_outcome: 'Steps for docs/install.md, "no new test" with the AGENTS.md reason, the docs build as instrument.'

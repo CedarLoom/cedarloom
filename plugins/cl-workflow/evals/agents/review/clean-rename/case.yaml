@@ -1,0 +1,23 @@
+schema_version: "1.1"
+name: agent-review-clean-rename
+description: 'The review agent reports no Blocking or Important finding on a complete rename and adds no speculative ones (a behavior-keeping refactor, as in CedarLoom/cedarloom#121). Needs --scaffold.'
+tags: [cl-workflow, agent-review]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:review` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Review the branch refactor/rename-order against main (`git diff main...HEAD` here). Task: rename orderReady to orderReadyIssues; behavior stays the same. Acceptance: no reference to orderReady remains; `node --test` passes. Depth: standard. Review alone, start no subagents.
+  max_turns: 15
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-review
+    tool: Agent
+    input_match: cl-workflow:review
+    min: 1
+  - type: llm
+    name: no-serious-finding
+    criteria: 'The report has a scope line and reports no Blocking or Important finding. It adds no finding that asks for a new guard, option or test for a case that cannot happen.'
+expected_outcome: 'A scope line and no Blocking or Important finding.'

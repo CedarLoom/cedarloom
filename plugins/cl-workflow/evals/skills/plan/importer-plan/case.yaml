@@ -1,0 +1,30 @@
+schema_version: "1.1"
+name: skill-plan-importer-plan
+description: '/cl-workflow:plan writes one plan file with an acceptance table outside the repository and edits nothing (from OpenReloading/Ballistics#1290).'
+tags: [cl-workflow, skill-plan]
+execution:
+  prompt: |
+    /cl-workflow:plan Add an import of LabRadar chronograph exports (the classic CSV and the LX format) that creates chronograph sessions with their shots.
+  max_turns: 20
+  allowed_tools: [Write]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode]
+graders:
+  - type: tool_used
+    name: writes-plan-with-check-line
+    tool: Write
+    input_match: 'Plan check: none'
+    min: 1
+  - type: tool_used
+    name: plan-has-acceptance-table
+    tool: Write
+    input_match: '[Aa]cceptance'
+    min: 1
+  - type: tool_used
+    name: writes-only-the-plan
+    tool: Write
+    min: 1
+    max: 1
+  - type: llm
+    name: ends-with-path-and-questions
+    criteria: 'The final message gives the plan file''s path, lists the open questions (each settled by a recommendation or still open), and says the plan needs a check by a session that did not write it.'
+expected_outcome: 'One Write of a plan file holding the depth and risk lines, an acceptance table and `Plan check: none`; the final message names its path and open questions.'

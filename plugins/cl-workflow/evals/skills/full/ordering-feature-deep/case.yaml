@@ -1,0 +1,26 @@
+schema_version: "1.1"
+name: skill-full-ordering-feature-deep
+description: '/cl-workflow:full sets a deep floor for a plain feature and leaves trial off when nothing is risky (from CedarLoom/cedarloom#110).'
+tags: [cl-workflow, skill-full]
+execution:
+  prompt: |
+    /cl-workflow:full Pickup orders ready issues by the Priority field of the project board, highest first, then by age.
+
+    This run checks the setup only: write the Depth and Risk lines and the args you would pass to the first stage of cl-workflow:full-run, then stop. Start no workflow or agent, edit no file and run no command.
+  max_turns: 8
+graders:
+  - type: tool_used
+    name: loads-workflow-skill
+    tool: Skill
+    input_match: cl-workflow:workflow
+    min: 1
+  - type: regex
+    name: depth-deep
+    pattern: 'Depth: deep'
+  - type: regex
+    name: risk-line
+    pattern: 'Risk: (low|medium|high)'
+  - type: llm
+    name: args-without-trial
+    criteria: 'The response lists the run''s args with `task` and `stage`, and `trial` is absent or false.'
+expected_outcome: '`Depth: deep (...)` even though the table alone would say standard, and args without trial.'

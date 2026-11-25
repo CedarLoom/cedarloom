@@ -1,0 +1,25 @@
+schema_version: "1.1"
+name: skill-lite-dependency-leaves-lite
+description: 'A dependency change hits the lite gate, so lite names the gate and hands over to the workflow skill (from OpenReloading/Feeder#184).'
+tags: [cl-workflow, skill-lite]
+execution:
+  prompt: |
+    /cl-workflow:lite Bump the Python dependency cachetools from 7.2.7 to 8.0.1.
+
+    This run checks the classification only: write the lines the workflow asks for before the first edit or command, then stop. Edit no file and run no command.
+  max_turns: 6
+graders:
+  - type: tool_used
+    name: hands-over-to-workflow
+    tool: Skill
+    input_match: cl-workflow:workflow
+    min: 1
+  - type: llm
+    name: names-the-gate
+    criteria: 'The response says the task leaves lite because it is a dependency change (or a dependency major), and does not proceed at `Depth: quick (lite: ...)`.'
+    focus: trace
+  - type: regex
+    name: not-lite-quick
+    pattern: 'Depth: quick \(lite'
+    match: not_contains
+expected_outcome: 'Lite names the dependency gate, loads cl-workflow:workflow and writes a standard or deeper depth line.'

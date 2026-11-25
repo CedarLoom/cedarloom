@@ -1,0 +1,28 @@
+schema_version: "1.1"
+name: agent-research-web-claims-sourced
+description: 'The research agent answers a web question with a source URL and a confidence per claim and stops when the evidence settles it (the license allow-list research behind OpenReloading/BuildGuide#223).'
+tags: [cl-workflow, agent-research]
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:research` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Question: is the ISC license on the OSI list of approved licenses? Decision it feeds: whether ISC goes on a dependency license allow-list. Evidence that settles it: the OSI license list. Sources to trust: opensource.org. Return format: the answer, each claim with its source URL and a confidence (high, medium, low), what you did not check. Scope: read-only, no further subagents.
+  max_turns: 15
+  allowed_tools: [WebFetch, WebSearch]
+graders:
+  - type: tool_used
+    name: starts-research
+    tool: Agent
+    input_match: cl-workflow:research
+    min: 1
+  - type: regex
+    name: osi-source
+    pattern: 'https://opensource\.org/'
+  - type: regex
+    name: confidence
+    pattern: '(?:confidence\W{0,3}(?:high|medium|low))|(?:(?:high|medium|low)\W{0,3}confidence)'
+    flags: i
+  - type: llm
+    name: answer
+    criteria: 'The answer says yes, ISC is OSI approved, with an opensource.org URL, and names what was not checked.'
+expected_outcome: 'Yes, with an opensource.org URL and a confidence.'
