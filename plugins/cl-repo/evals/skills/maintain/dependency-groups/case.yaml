@@ -23,7 +23,7 @@ graders:
     pattern: 'Group \d+:[^\n@]*quill-args@5\.0\.0[^\n@]*(\n|$)'
   - type: regex
     name: minors-together
-    pattern: 'Group \d+:[^\n]*(hue-text@2\.2\.0[^\n]*tinydate@1\.4\.3|tinydate@1\.4\.3[^\n]*hue-text@2\.2\.0)'
+    pattern: 'Group \d+:[^\n]*(hue-text@2\.4\.0[^\n]*tinydate@1\.4\.3|tinydate@1\.4\.3[^\n]*hue-text@2\.4\.0)'
   - type: regex
     name: breaking-change-found
     pattern: 'quill-args[^\n]*src/cli\.js'
@@ -33,4 +33,4 @@ graders:
   - type: llm
     name: unused-changes-marked
     criteria: 'The answer marks the yaml-lite deprecation of `loadAll()` without a callback as not used in this repository, and names the `parse()` string-to-array change of quill-args 5.0.0 as the breaking change to handle.'
-expected_outcome: 'Group 1 yaml-lite@0.9.4 (the high advisory); @lumen/core and @lumen/render 3.3.0 together; quill-args@5.0.0 alone, with its `parse()` change at src/cli.js:7; hue-text@2.2.0 and tinydate@1.4.3 together, with the `hue.bold()` deprecation at src/report.js:8; the yaml-lite `loadAll()` deprecation not used here.'
+expected_outcome: 'Group 1 yaml-lite@0.9.4 (the high advisory); @lumen/core and @lumen/render 3.3.0 together; quill-args@5.0.0 alone, with its `parse()` change at src/cli.js:7; hue-text@2.4.0 and tinydate@1.4.3 together, with the `hue.bold()` deprecation at src/report.js:8; the yaml-lite `loadAll()` deprecation not used here.'

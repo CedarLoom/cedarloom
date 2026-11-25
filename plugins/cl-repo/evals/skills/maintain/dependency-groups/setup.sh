@@ -23,7 +23,7 @@ cat > package.json <<'EOF'
   "dependencies": {
     "@lumen/core": "3.2.0",
     "@lumen/render": "3.2.0",
-    "hue-text": "2.1.0",
+    "hue-text": "2.3.0",
     "quill-args": "4.1.0",
     "tinydate": "1.4.2",
     "yaml-lite": "0.9.1"
@@ -69,7 +69,7 @@ cat > registry/outdated.json <<'EOF'
 {
   "@lumen/core": { "current": "3.2.0", "latest": "3.3.0", "repository": "github:lumen-ui/lumen (packages/core)", "published": "2026-10-02" },
   "@lumen/render": { "current": "3.2.0", "latest": "3.3.0", "repository": "github:lumen-ui/lumen (packages/render)", "published": "2026-10-02" },
-  "hue-text": { "current": "2.1.0", "latest": "2.2.0", "repository": "github:hue-text/hue-text", "published": "2026-09-14" },
+  "hue-text": { "current": "2.3.0", "latest": "2.4.0", "repository": "github:hue-text/hue-text", "published": "2026-09-14" },
   "quill-args": { "current": "4.1.0", "latest": "5.0.0", "repository": "github:quill/quill-args", "published": "2026-09-30" },
   "tinydate": { "current": "1.4.2", "latest": "1.4.3", "repository": "github:tinydate/tinydate", "published": "2026-08-21" },
   "yaml-lite": { "current": "0.9.1", "latest": "0.9.4", "repository": "github:yaml-lite/yaml-lite", "published": "2026-10-11" }
@@ -94,12 +94,12 @@ EOF
 cat > registry/changelogs/hue-text.md <<'EOF'
 # Changelog
 
-## 2.2.0
+## 2.4.0
 
 - Deprecated: the chained helpers `hue.bold()`, `hue.dim()` and `hue.italic()`. Use `hue.style('bold', text)`; the helpers are removed in 3.0.0.
 - Adds `hue.style()`.
 
-## 2.1.0
+## 2.3.0
 
 - Adds 256-color support.
 EOF
