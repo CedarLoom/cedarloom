@@ -4,7 +4,7 @@
 // Pickable: open, carries startLabel and every issues.labels entry, not labeled cl:needs-human (an owner question), cl:in-progress (a worker holds it) or cl:deferred (the owner parked it), named by no question that waits for the owner (approval.mjs waiting), written by a trusted author (the repository owner, a trustedAuthors login, or a member or collaborator with write access), and no pull request for it: none merged or open in the repository with a head branch <type>/<number>-<slug> (an open one from a fork does not count, since anyone can open it).
 // An issue that several of the given projects list starts in none of them: it is printed once on stderr, as "several projects: <owner/repo>#<number> (<paths>)".
 // Unread: the prompt file of a builder run in round 0 (a build or plan from the spec, before its pull request) in the project bot's prompts folder whose result file holds text; the pick sweep deletes the prompt file once it read the result (bot-project.md, Start). Each is printed on stderr as "<folder>: <reason>".
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { readQueue, waiting } from './approval.mjs';
@@ -217,6 +217,9 @@ export function lockToken(lock) {
 
 // One try to take lock with token: true when taken. A token file older than LOCK_STALE_MS was left by a run that died holding the lock: removing that very file empties the folder for the next try, and of two starts that saw it, one removes it and neither touches a lock taken since.
 export function tryLock(lock, token, now) {
+  // The token file ages from this try, not from its making: a wait before a take would else count toward LOCK_STALE_MS.
+  const at = new Date(now());
+  utimesSync(join(own(lock, token), token), at, at);
   try { renameSync(own(lock, token), lock); return true; } catch (e) { if (e.code !== 'ENOTEMPTY' && e.code !== 'EEXIST') throw e; }
   let names = [];
   try { names = readdirSync(lock); } catch (e) { if (e.code !== 'ENOENT') throw e; }

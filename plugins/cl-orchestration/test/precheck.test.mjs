@@ -194,6 +194,16 @@ test('precheck: a start whose host limit lock was freed as stale releases it wit
   assert.deepEqual(readdirSync(lock), [next]);
 });
 
+test('precheck: a start that waited for the host limit lock holds it for the stale age from its take', () => {
+  const lock = join(mkdtempSync(join(tmpdir(), 'cl-lock-')), 'host-limit.lock');
+  const after = (ms) => () => Date.now() + ms;
+  const waited = lockToken(lock), next = lockToken(lock);
+  // Taken 10 s after its token was made; 35 s after that token was made, the lock is 25 s old.
+  assert.equal(tryLock(lock, waited, after(10_000)), true);
+  assert.equal(tryLock(lock, next, after(35_000)), false);
+  assert.deepEqual(readdirSync(lock), [waited]);
+});
+
 test('precheck: the host limit lock needs no bot home: its folder is made on first use and left empty', () => {
   const alpha = home(), folder = join(mkdtempSync(join(tmpdir(), 'cl-host-')), 'host-limit');
   const script = fileURLToPath(new URL('../skills/coordinate/precheck.mjs', import.meta.url));
