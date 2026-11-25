@@ -1,8 +1,8 @@
-// Usage: node precheck.mjs [--prompts <folder>] <project paths...>. Sample precheck for a scheduled coordinator run: exit 0 when a project has an issue to pick or a planner or worker result in <folder> is unread, else 1. It starts and merges nothing.
+// Usage: node precheck.mjs [--prompts <folder>] <project paths...>. Sample precheck for a scheduled coordinator run: exit 0 when a project has an issue to pick or a builder's build result in <folder> is unread, else 1. It starts and merges nothing.
 // node precheck.mjs --catch-up <clone> [--state <folder>]: the project bot's catch-up precheck (catch-up.mjs).
 // Pickable: open, carries startLabel and every issues.labels entry, not labeled cl:needs-human (an owner question), cl:in-progress (a worker holds it) or cl:deferred (the owner parked it), named by no question that waits for the owner (approval.mjs waiting), written by a trusted author (the repository owner, a trustedAuthors login, or a member or collaborator with write access), and no pull request for it: none merged or open in the repository with a head branch <type>/<number>-<slug> (an open one from a fork does not count, since anyone can open it).
 // An issue that several of the given projects list starts in none of them: it is printed once on stderr, as "several projects: <owner/repo>#<number> (<paths>)".
-// Unread: a planner or worker prompt file in the project bot's prompts folder whose result file holds text; the pick sweep deletes the prompt file once it read the result (bot-project.md, Start). Each is printed on stderr as "<folder>: <reason>".
+// Unread: the prompt file of a builder run in round 0 (a build or plan from the spec, before its pull request) in the project bot's prompts folder whose result file holds text; the pick sweep deletes the prompt file once it read the result (bot-project.md, Start). Each is printed on stderr as "<folder>: <reason>".
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -117,7 +117,7 @@ export function distinct(lists) {
 }
 
 // A role bot run's prompt file name, <repo>-<n>-<role>-<round>-<run id>-<k>.md, and the line that names its result file: the last one, since the spec before it may hold such a line.
-const PROMPT = /-(planner|worker|reviewer|fixer|maintainer)-\d+-\d{8}T\d{6}Z-[0-9a-f]{6}-[1-9]\d*\.md$/;
+const PROMPT = /-(builder|reviewer|maintain)-(\d+)-\d{8}T\d{6}Z-[0-9a-f]{6}-[1-9]\d*\.md$/;
 const RESULT_LINE = /^Result file: (.+)$/gm;
 
 // shortcut: a fixed window of two ticks, since stallMinutes is read per project only after the precheck. Past it, a file the precheck cannot check is the sweep's to report, and no longer starts it every tick.
@@ -128,16 +128,16 @@ function age(file, now) {
   try { return now - statSync(file).mtimeMs; } catch { return 0; }
 }
 
-// The reasons that the planner and worker runs of folder have an unread result. A missing or unreadable folder counts too, and so does a file that cannot be read or checked while it or its result file changed within CANNOT_CHECK_MS, so a person sees it. An empty result file is a write not done, like a missing one. Reviewer and fixer results are read through their state files (catch-up.mjs, condition 7).
+// The reasons that the round 0 builder runs of folder have an unread result. A missing or unreadable folder counts too, and so does a file that cannot be read or checked while it or its result file changed within CANNOT_CHECK_MS, so a person sees it. An empty result file is a write not done, like a missing one. Reviewer results and the builder's fix rounds are read through their state files (catch-up.mjs, condition 7).
 export function unread(folder, now = Date.now()) {
   let names;
   try { names = readdirSync(folder); } catch (e) { return [e.code === 'ENOENT' ? 'the folder does not exist' : `the folder is unreadable (${e.code})`]; }
   const found = [];
   for (const name of names.filter((n) => !n.startsWith('.')).sort()) {
     const cannot = (reason, ...files) => { if ([join(folder, name), ...files].some((f) => age(f, now) < CANNOT_CHECK_MS)) found.push(reason); };
-    const role = PROMPT.exec(name)?.[1];
+    const [, role, round] = PROMPT.exec(name) ?? [];
     if (!role) { cannot(`${name} is no role bot prompt file`); continue; }
-    if (role !== 'planner' && role !== 'worker') continue;
+    if (role !== 'builder' || round !== '0') continue;
     let file;
     try { file = [...readFileSync(join(folder, name), 'utf8').matchAll(RESULT_LINE)].at(-1)?.[1]; } catch (e) { cannot(`${name} is unreadable (${e.code})`); continue; }
     if (!file || !isAbsolute(file)) { cannot(`${name} names no absolute result file`); continue; }

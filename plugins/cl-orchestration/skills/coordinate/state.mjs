@@ -1,6 +1,6 @@
 // A project bot's state folder, <bot home>/state/: per pull request pr-<n>.json, then tip.json, red-main.json, merge-log.md and the merge lock, which only merge.mjs takes.
 // pr-<n>.json: repo, pr, issue, branch, project (the bot's checkout of the repository), dispatches, reviewedHead, reviewUrl, riskClass, round, claim, trialBase, updatedAt (the bot's last update of the branch), mergeCommandAt, mergedAt, held (why it waits for the owner), cappedOn (the UTC day the pull request reached its run limit), rules, clones (scratch clones, the newest last), runs and handled ({ head, action }: the last head the bot judged and its verdict's next).
-// Each entry of dispatches and runs: { startedAt, head, role, resultFile, result }, head the head it started for, role worker, reviewer or fixer, resultFile naming a headless job's result file, result set once the bot read the result.
+// Each entry of dispatches and runs: { startedAt, head, role, resultFile, result }, head the head it started for, role builder or reviewer for a role bot run in runs, worker, reviewer or fixer for an Orca worker in dispatches, resultFile naming a headless job's result file, result set once the bot read the result.
 // tip.json: { sha, firstSeen, passed }, the default branch's tip, when the bot first saw it, and the last tip whose watch passed. red-main.json: { sha, report, pr }, the red tip, its report and the pull request the answered report named.
 // answered.json: ["<file> <at>" or "#<n> <at>"...], each owner answer the bot acted on, of a local question (approval.mjs queue) or of issue n (approval.mjs answer). claim-<n>-<head>: the folder a review claim makes. counts-<day>.json: count() below. probe-<day>.json and failed-<day>.json: the catch-up run's daily probe and reported precheck failure. maintain.json: decide() below.
 import { spawnSync } from 'node:child_process';
@@ -57,8 +57,8 @@ export function writeState(path, value) {
   }
 }
 
-// The owner's answer to a maintain question in maintain.json, { <id>: { approved, issue } } by the maintainer's finding id: each id of ids is decided, approved when approved lists it.
-// approved null is a Hold, which decides none: its findings stay open and come back in a later maintainer result. Gives the ids decided.
+// The owner's answer to a maintain question in maintain.json, { <id>: { approved, issue } } by the maintain bot's finding id: each id of ids is decided, approved when approved lists it.
+// approved null is a Hold, which decides none: its findings stay open and come back in a later maintain result. Gives the ids decided.
 export function decide(state, ids, approved) {
   if (approved === null) return [];
   const path = join(state, 'maintain.json');
