@@ -1,0 +1,37 @@
+schema_version: "1.1"
+name: skill-debloat-budget-out-of-reach
+description: 'With a budget only protected text could meet, debloat keeps every Never rule, reports the minimum it can reach and stops. Constructed: plugins/cl-repo/skills/debloat/SKILL.md:18 and 20. Needs --scaffold.'
+tags: [cl-repo, skill-debloat]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-repo:debloat AGENTS.md 20
+
+    Approved in advance, as my answer to each question of this run: the protect list you show, and every cut whose dry run shows no error. Apply them without asking, then report. Do not write a baseline.
+  max_turns: 40
+  allowed_tools: [Bash, Write]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: secrets-rule-kept
+    target: { source: file, path: AGENTS.md }
+    pattern: '- Never commit a file from `secrets/`\.'
+  - type: regex
+    name: terraform-rule-kept
+    target: { source: file, path: AGENTS.md }
+    pattern: '- Never run `terraform apply` outside CI\.'
+  - type: regex
+    name: force-push-rule-kept
+    target: { source: file, path: AGENTS.md }
+    pattern: '- Never force-push to main\.'
+  - type: tool_used
+    name: never-writes-the-file
+    tool: Write
+    input_match: 'AGENTS\.md'
+    min: 0
+    max: 0
+  - type: llm
+    name: reports-minimum
+    criteria: 'The report says the 20-token budget cannot be reached without cutting protected text and names the smallest token count it can reach (or reached) instead.'
+expected_outcome: 'The three Never rules stay; the report names the minimum reachable token count and that 20 is out of reach.'

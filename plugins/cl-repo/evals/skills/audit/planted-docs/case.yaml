@@ -1,0 +1,55 @@
+schema_version: "1.1"
+name: skill-audit-planted-docs
+description: 'The docs audit finds a planted duplicate, a default the code contradicts and a dead link, each with file and line, and changes no file. Constructed: the patterns are plugins/cl-repo/skills/audit/docs.md:7-9 and the change-nothing rule plugins/cl-repo/skills/audit/SKILL.md:17. Needs --scaffold.'
+tags: [cl-repo, skill-audit]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-repo:audit docs
+  max_turns: 30
+  allowed_tools: [Bash]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: duplicate-found
+    pattern: '(README\.md|docs/install\.md):\d+(-\d+)?[^\n]*duplicate'
+    flags: i
+  - type: regex
+    name: wrong-default-found
+    pattern: 'docs/config\.md:7\b[^\n]*wrong'
+    flags: i
+  - type: regex
+    name: dead-link-found
+    pattern: 'README\.md:11\b[^\n]*dead reference'
+    flags: i
+  - type: llm
+    name: wrong-default-cites-code
+    criteria: 'The finding on docs/config.md:7 says the documented `maxDepth` default 8 is wrong because src/config.js line 1 sets 4, citing that file.'
+  - type: tool_used
+    name: no-changing-command
+    tool: Bash
+    input_match: 'git (add|commit|checkout|restore|reset|stash|rm)\b|sed -i|perl -pi|\brm |\bmv |\btee '
+    min: 0
+    max: 0
+  - type: file_exists
+    name: creates-no-file
+    path: '**'
+    exists: false
+  - type: regex
+    name: planted-default-kept
+    target: { source: file, path: docs/config.md }
+    pattern: '^# Configuration\n\n`tally\.yml` in the working directory sets the options\.\n\n\| Option \| Default \| Meaning \|\n\|---\|---\|---\|\n\| `maxDepth` \| `8` \| how many folder levels tally walks into \|\n\| `ignore` \| `\[\]` \| globs it skips \|\n$'
+  - type: regex
+    name: planted-link-kept
+    target: { source: file, path: README.md }
+    pattern: '^# Tally\n\nTally counts[^\n]*table\.\n\n## Install\n\n1\. [^\n]*\n2\. [^\n]*\n3\. [^\n]*\n\nSee \[configuration\]\(docs/config\.md\) and \[deployment\]\(docs/deploy\.md\)\.\n$'
+  - type: regex
+    name: planted-duplicate-kept
+    target: { source: file, path: docs/install.md }
+    pattern: '^# Install\n\n1\. Install Node\.js 22\.\n2\. Run `npm install -g tally-cli`\.\n3\. Run `tally --version` to check the install\.\n$'
+  - type: regex
+    name: code-unchanged
+    target: { source: file, path: src/config.js }
+    pattern: '^export const defaults = \{ maxDepth: 4, ignore: \[\] \};\n'
+expected_outcome: 'Findings at README.md or docs/install.md (duplicate install steps), docs/config.md:7 (wrong, against src/config.js:1) and README.md:11 (dead reference to docs/deploy.md); every file as the scaffold left it.'

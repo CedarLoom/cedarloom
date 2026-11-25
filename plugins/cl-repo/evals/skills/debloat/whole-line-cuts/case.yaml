@@ -1,0 +1,45 @@
+schema_version: "1.1"
+name: skill-debloat-whole-line-cuts
+description: 'debloat cuts the restated heading, history and recap of a doc as whole lines through token-budget.mjs cut, keeps the Never rule and the deploy step, and never writes the file back as a whole. Constructed: plugins/cl-repo/skills/debloat/SKILL.md:17-18. Needs --scaffold.'
+tags: [cl-repo, skill-debloat]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-repo:debloat docs/guide.md
+
+    Approved in advance, as my answer to each question of this run: the protect list you show, and every cut whose dry run shows no error. Apply them without asking, then report. Do not write a baseline.
+  max_turns: 40
+  allowed_tools: [Bash, Write]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: tool_used
+    name: cuts-through-script
+    tool: Bash
+    input_match: 'token-budget\.mjs.*\bcut\b.*--apply'
+    min: 1
+  - type: tool_used
+    name: never-writes-the-doc
+    tool: Write
+    input_match: 'docs/guide\.md'
+    min: 0
+    max: 0
+  - type: regex
+    name: never-rule-kept
+    target: { source: file, path: docs/guide.md }
+    pattern: 'Never run `\./deploy\.sh production` from a branch other than main\.'
+  - type: regex
+    name: deploy-step-kept
+    target: { source: file, path: docs/guide.md }
+    pattern: 'Run `\./deploy\.sh staging`, then `\./deploy\.sh production` once the staging checks pass\.'
+  - type: regex
+    name: history-cut
+    target: { source: file, path: docs/guide.md }
+    pattern: 'Capistrano'
+    match: not_contains
+  - type: regex
+    name: recap-cut
+    target: { source: file, path: docs/guide.md }
+    pattern: 'In short:'
+    match: not_contains
+expected_outcome: 'Lines 5, 11-13 and 15-17 cut through `token-budget.mjs cut --apply`; lines 7 and 9 kept word for word.'

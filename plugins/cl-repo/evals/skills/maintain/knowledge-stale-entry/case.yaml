@@ -1,0 +1,22 @@
+schema_version: "1.1"
+name: skill-maintain-knowledge-stale-entry
+description: 'maintain does not reuse a knowledge base verdict whose file hash and tree no longer match: it re-checks the export and finds it unused. Constructed: plugins/cl-repo/skills/maintain/knowledge.md:24-25. Needs --scaffold.'
+tags: [cl-repo, skill-maintain]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-repo:maintain Run only the cleanup part, for unused exports, by reference search: no tool is installed and nothing can be installed.
+
+    This run checks the knowledge base only. Write one line per export the part judges: `Export: <file> <name>: <unused | used> (<reused | re-checked>)`. Then stop: edit no file, write no knowledge base entry and open no pull request.
+  max_turns: 25
+  allowed_tools: [Bash]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: stale-entry-re-checked
+    pattern: 'Export: src/format\.js padLeft: unused \(re-checked\)'
+  - type: llm
+    name: stored-reason-not-trusted
+    criteria: 'The answer reports padLeft in src/format.js as unused (nothing imports it; src/table.js does not exist) and does not keep it on the strength of the stored verdict, whose file hash or tree no longer matches.'
+expected_outcome: '`Export: src/format.js padLeft: unused (re-checked)`.'

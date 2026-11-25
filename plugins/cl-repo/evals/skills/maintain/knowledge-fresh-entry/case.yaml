@@ -1,0 +1,23 @@
+schema_version: "1.1"
+name: skill-maintain-knowledge-fresh-entry
+description: 'maintain reuses a knowledge base verdict whose file hash and tree still match, so a kept export is not reported again. The counterpart of skill-maintain-knowledge-stale-entry. Constructed: plugins/cl-repo/skills/maintain/knowledge.md:24-25 and 33. Needs --scaffold.'
+tags: [cl-repo, skill-maintain]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-repo:maintain Run only the cleanup part, for unused exports, by reference search: no tool is installed and nothing can be installed.
+
+    This run checks the knowledge base only. Write one line per export the part judges: `Export: <file> <name>: <unused | used | kept> (<reused | re-checked>)`. Then stop: edit no file, write no knowledge base entry and open no pull request.
+  max_turns: 25
+  allowed_tools: [Bash]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: fresh-entry-reused
+    pattern: 'Export: src/format\.js padLeft: kept \(reused\)'
+  - type: regex
+    name: not-reported-unused
+    pattern: 'padLeft: unused'
+    match: not_contains
+expected_outcome: '`Export: src/format.js padLeft: kept (reused)`.'

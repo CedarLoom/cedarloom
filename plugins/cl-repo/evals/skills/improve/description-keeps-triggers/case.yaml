@@ -1,0 +1,44 @@
+schema_version: "1.1"
+name: skill-improve-description-keeps-triggers
+description: 'A rewrite of a first-person skill description keeps its trigger and boundary sentences. Constructed: plugins/cl-repo/skills/improve/SKILL.md:18. Needs --scaffold.'
+tags: [cl-repo, skill-improve]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-repo:improve .claude/skills/release/SKILL.md
+
+    The audit of this target, from earlier in this conversation (no file changed since):
+
+    Audit of .claude/skills/release/SKILL.md: 1 file, 90 tokens
+
+    Should fix
+    1. .claude/skills/release/SKILL.md:3 trigger text, rewrite, confidence high
+       "description: \"I cut a release: I bump the version, ... use the hotfix skill there.\""
+       Why: the description is in the first person; the host lists it to choose the skill.
+    Protected, flagged only: none
+    Not checked: none
+    The findings are suggestions; no file changed.
+  max_turns: 15
+  allowed_tools: [Edit, Write]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: keeps-trigger
+    pattern: 'Use when the user asks for a release'
+  - type: regex
+    name: keeps-boundary
+    pattern: 'Do not use for hotfix branches'
+  - type: llm
+    name: third-person-rewrite
+    criteria: 'The answer shows one diff for line 3 whose new description is not in the first person and still holds the sentences "Use when the user asks for a release." and "Do not use for hotfix branches; use the hotfix skill there." (or the same meaning), and asks whether to apply it.'
+  - type: tool_used
+    name: applies-nothing-unapproved
+    tool: Edit
+    min: 0
+    max: 0
+  - type: regex
+    name: skill-unchanged
+    target: { source: file, path: .claude/skills/release/SKILL.md }
+    pattern: 'description: "I cut a release: I bump the version, write the changelog and tag the commit\. Use when the user asks for a release\. Do not use for hotfix branches; use the hotfix skill there\."\n'
+expected_outcome: 'One diff with a third-person description that keeps the trigger and boundary sentences; nothing applied.'
