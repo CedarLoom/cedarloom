@@ -2,7 +2,7 @@
 
 Where and how the coordinator clones a worker's pull request, and the limits on every read there. The names are those of [review.md](review.md#names).
 
-The project's checkout shares its git directory with the workers: a branch, a ref, a grafts file or a setting that a worker writes there makes git show other commits than the remote holds. So no git command of [review.md](review.md), [merge.md](merge.md) or [trial-merge.md](trial-merge.md) runs there. Once `<head>` is read, before any other step, clone the pull request's repository, without a checkout, into a new folder under `clones/` of the run folder ([SKILL.md](SKILL.md#run-files)). `<scratch path>` is that folder's absolute path:
+The project's checkout shares its git directory with the workers: a branch, a ref, a grafts file or a setting that a worker writes there makes git show other commits than the remote holds. So no git command of [review.md](review.md), [merge.md](merge.md) or [trial-merge.md](trial-merge.md) runs there. Once `<head>` is read, before any other step, clone the pull request's repository, without a checkout, into a new folder under `clones/` of the run folder ([run-files.md](run-files.md#run-files)). `<scratch path>` is that folder's absolute path:
 
 ```text
 gh repo clone <owner/repo> <scratch path> --no-upstream -- --filter=blob:none --no-checkout
@@ -24,4 +24,4 @@ git -C <scratch path> fetch origin
 - Write the default branch as `refs/remotes/origin/<default branch>` in every command, never as `origin/<default branch>`: a tag of that name on the remote answers the short name first.
 - Besides your own `<scratch path>`, these commands take `<owner/repo>` and `<default branch>` by the names rule ([SKILL.md](SKILL.md#names)) and commit ids that `gh` or git printed. The one other text is a path of the pull request, inside single quotes as above.
 - Nothing of the pull request runs in a scratch clone. Its code runs in one place, the check of a trial merge, which gets a clone of its own ([Merge](merge.md#merge), step 3; [trial-merge.md](trial-merge.md)).
-- Delete a pull request's clones once it is merged or left for the owner, so that a `keepRunning` run piles up none: each with a command of its own that names the folder's literal absolute path, no variable and no wildcard. The rest goes with the run folder ([SKILL.md](SKILL.md#run-files)).
+- Delete a pull request's clones once it is merged or left for the owner, so that a `keepRunning` run piles up none: each with a command of its own that names the folder's literal absolute path, no variable and no wildcard. The rest goes with the run folder ([run-files.md](run-files.md#run-files)).

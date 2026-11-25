@@ -23,14 +23,14 @@ What the steps of this file, [scratch-clone.md](scratch-clone.md), [merge.md](me
 - `AGENTS.md` is the default branch's, read with `git -C <scratch path> show refs/remotes/origin/<default branch>:AGENTS.md`, never the pull request's copy.
 - The verdict of `<head>` is the JSON that `node <skill folder>/merge-checks.mjs <project path> <scratch path> <default branch> <reviewed head> <head> <risk class>` prints: `next`, `allowed`, `ownerOnly`, `unsafePaths`, `sensitive`, `risky`, `risk`, `pin`, `upToDate` and `shared`.
   - Run it after each read of `<head>`, once the `fetch` has passed ([Scratch clone](scratch-clone.md)). Before the first review, pass `<head>` as the reviewed head too.
-  - `<risk class>` is `low`, `medium` or `high`, the class you decide for `<head>` ([SKILL.md](SKILL.md#risk-class)). `risky` lists its files under `riskyPaths`, and `risk` is the class the verdict used: yours, raised to medium by such a file.
+  - `<risk class>` is `low`, `medium` or `high`, the class you decide for `<head>` ([decisions.md](decisions.md#risk-class)). `risky` lists its files under `riskyPaths`, and `risk` is the class the verdict used: yours, raised to medium by such a file.
   - Any exit but 0 is no verdict: the step stops, and the report names the line the script printed.
   - A head with several merge bases with the default branch gets none: its file list would hide what a merge of it takes back, so the pull request is the owner's to judge ([Owner-only](merge.md#owner-only)).
 
 A project bot takes these steps with these changes ([bot-project.md](bot-project.md)):
 
 - The run folder is the bot run's `.cedarloom/runs/<run id>/`, the clones lie in `<bot home>/clones/`, and what the steps write into the handoff file goes into the state file `<bot home>/state/pr-<n>.json`.
-- The reviewer, re-reviewer and verifier are reviewer bot runs ([bot-reviewer.md](bot-reviewer.md)), and a follow-up is a fixer bot run ([bot-fixer.md](bot-fixer.md)), each started by the project bot with its brief in the prompt.
+- The reviewer, re-reviewer and verifier are reviewer bot runs ([bot-reviewer.md](bot-reviewer.md)), and a follow-up is a builder bot run that fixes ([bot-builder.md](bot-builder.md)), each started by the project bot with its brief in the prompt.
 - "At a later wake-up" is a later run, woken by a pull request event or the catch-up sweep.
 - Merge steps 1 to 5.2 write the subject and body files beside the state file, as `pr-<n>-subject.txt` and `pr-<n>-body.md`. Steps 5.3 to 6.7 and the [Merge log](merge.md#merge-log) are `merge.mjs`'s, in the state folder's `merge-log.md`.
 
@@ -39,7 +39,7 @@ A project bot takes these steps with these changes ([bot-project.md](bot-project
 Read the pull request's diff (`git -C <scratch path> diff refs/remotes/origin/<default branch>...<head>`). The change is sensitive when one of these holds:
 
 - the verdict's `sensitive` lists a file: one under a `review.sensitivePaths` or `riskyPaths` entry, or an owner-only one ([Owner-only](merge.md#owner-only))
-- its risk class is high ([SKILL.md](SKILL.md#risk-class))
+- its risk class is high ([decisions.md](decisions.md#risk-class))
 - it is a risky change by step 1 of the workflow skill
 - it changes CI, guards, data formats, money, what agents are told and allowed (`AGENTS.md`, `.claude`, `docs/agents`), or what runs on the host for a worktree or a trial (`orca.yaml`, whose archive script Clean up runs, and `.devcontainer`, whose `initializeCommand` runs on the host)
 - you cannot place it
@@ -122,5 +122,5 @@ The reviewer's working directory is not the clone, so neither built-in command f
   - The head that re-review accepts is the new reviewed head.
 - A review or re-review that reports itself void counts as no review and no round: split its scope into parts that together cover all of it, and start a fresh one on each part. They count as one review: void while one part is void, and clean only when every part is.
 - A round is one fix and its re-review; a review or re-review with a Blocking or Important finding starts the next round. A push made while no Blocking or Important finding is open (a conflict resolution, say) gets its re-review but is no round; that re-review, the new review of a change that became sensitive ([Sensitive or routine](#sensitive-or-routine)) and the review of a late bot thread on the same head ([Threads](#threads)) put the number of the last round in their review of record (0 before the first), and findings in them start the next round. When the re-review of round 2 still has such findings, the follow-up for round 3 tells the worker to make the fix on a stronger model or a higher effort (by default `sonnet` to `opus`, `opus` to `fable`, or an effort below `high` to `high`; `xhigh` only as [policy.md](policy.md) says). With no step left, the findings go to the owner at once, as the next bullet says.
-- When the re-review of round 3 still has such findings, it is a question for the owner ([SKILL.md](SKILL.md#owner-decisions)): the pull request stays a draft and is named in the report. There is no fourth round.
+- When the re-review of round 3 still has such findings, it is a question for the owner ([decisions.md](decisions.md#owner-decisions)): the pull request stays a draft and is named in the report. There is no fourth round.
 

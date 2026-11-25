@@ -1,12 +1,12 @@
 # Approvals
 
-How an owner decision reaches the owner outside the session ([SKILL.md](SKILL.md#owner-decisions)). `<owner/repo>`, `<n>` and `<head>` are the names of the worker's spec and of [review.md](review.md#names).
+How an owner decision reaches the owner outside the session ([decisions.md](decisions.md#owner-decisions)). `<owner/repo>`, `<n>` and `<head>` are the names of the worker's spec and of [review.md](review.md#names).
 
 ## The text
 
 Copy [approval-template.md](approval-template.md) into the run folder and fill each `<...>`:
 
-- What: the decision in one sentence, starting with its gate and subject: `design` with the issue as `<owner/repo>#<number>` (an issue held before its worker starts, [SKILL.md](SKILL.md#risk-class)); `merge` or `owner-only` (an owner-only file or a release) with the pull request as `<owner/repo>#<n>`; any other owner decision with one word of your own and its issue or pull request.
+- What: the decision in one sentence, starting with its gate and subject: `design` with the issue as `<owner/repo>#<number>` (an issue held before its worker starts, [decisions.md](decisions.md#risk-class)); `merge` or `owner-only` (an owner-only file or a release) with the pull request as `<owner/repo>#<n>`; any other owner decision with one word of your own and its issue or pull request.
 - Runs on: the reader's `models` for the worker at the task's depth and each phase (a sensitive change: plan and review from `models.sensitive`), a phase it omits by the field table ([policy.md](policy.md)), `inherit` as the worker's. Review: `review.*`. Merges: `merge.*`.
 - Recommended: starts with the label of the first option row, `(a)`.
 - Answer: what is true where the issue lands. In the local queue: `run /cl-workflow:away off` (in <working folder>, from a session other than the coordinator's). In a repository: `run /cl-workflow:away off` in a clone of it, or `comment on this issue "a" or "b" alone, or "Owner answer (date): a." with "b" in place of "a" and your own text after it` (only these forms are read, [The answer](#the-answer)).
@@ -37,7 +37,7 @@ The lifecycle of a question issue:
 - Deferred: the owner adds `cl:deferred`; the `questions` skill skips it until the owner asks for the deferred ones.
 - Answered: `cl:needs-human` and `cl:deferred` off, `cl:ready-for-agent` on whatever the answer says, never on an approval (a body with an Approval table) or a question with an Issue line, whose work lives in what it names: the edit takes `cl:ready-for-agent` off them. The `questions` skill closes an issue whose answer drops the work as not planned, before any label (Done, below); one left open with the label is listed for the owner at Pick (the Loop of SKILL.md). `node <skill folder>/approval.mjs apply <repository> <issue number>` reads the answer as [The answer](#the-answer) does and makes that edit (exit 0 prints the answer and the labels, 1 is no answer, 2 an error); the `questions` skill runs it on each answer, and `facts.mjs write --approvals <owner/repo>` on every open `cl:needs-human` issue there, so an answer recorded by an agent or commented by the owner on GitHub moves on at the next facts run.
 - Between answer and edit: an answer commented on GitHub keeps `cl:needs-human` until `approval.mjs apply` runs, so a bot tells an answer by its key `#<n> <at>` in `answered.json`, never by a label ([bot-catch-up.md](bot-catch-up.md)).
-- Done: closed, an approval by the owner and other work by its merge (the Close an issue row of SKILL.md), with a comment linking what settled it. Rejected work is closed as not planned, with no label: `gh issue close <issue number> -R <repository> --reason "not planned"`.
+- Done: closed, an approval by the owner and other work by its merge (the Close an issue row of roles.md), with a comment linking what settled it. Rejected work is closed as not planned, with no label: `gh issue close <issue number> -R <repository> --reason "not planned"`.
 
 ## Once per pull request and gate
 
