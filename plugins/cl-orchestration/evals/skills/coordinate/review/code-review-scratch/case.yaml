@@ -27,10 +27,10 @@ graders:
     name: code-review-invoked
     tool: Skill
     input_match: 'code-review'
-  - type: tool_used
-    name: no-checkout-or-cd-in-clone
-    tool: Bash
-    input_match: '\b(checkout|switch|restore|worktree)\b|\bcd\b[^\n]*widget-14-1'
-    min: 0
-    max: 0
+  # review.md:109 drops /code-review's result after a checkout in the clone, so only an undeclared one fails
+  - type: regex
+    name: no-checkout-or-cd-in-clone-unless-dropped
+    target: trace
+    match: not_contains
+    pattern: '(git[^\n]{0,60}?-C (\\"|'')?[^\s''"\\]*widget-14-1(\\"|'')?[^\n]{0,40}?\b(checkout|switch|restore|worktree)\b|\bcd (\\"|'')?[^\s''"\\]*widget-14-1)(?![\s\S]*Code review: dropped)'
 expected_outcome: 'A Blocking or Important finding at src/session.js (requireActive throws while the session is still active and returns an expired one: the comparison is inverted), read with `git -C <scratch path> diff` of refs/remotes/origin/main...<head>, after `/code-review low refs/remotes/origin/main...<head> in the repository at <scratch path>, read only with git -C <scratch path>`; no checkout and no cd in the clone.'
