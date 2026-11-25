@@ -2,7 +2,8 @@
 # Checks one run of the rules block task: the workspace fixture.sh built, after the
 # agent worked in it, and the agent's final answer. One PASS or FAIL line per check,
 # exit 1 when one fails. Each check names the rule of plugins/cl-repo/rules/project.md
-# it covers.
+# it covers. Changes count against the fixture's commit, staged, committed or not, and
+# untracked files count too.
 # Usage: bash check.sh <workspace> <answer file>
 set -u
 ws=$1 answer=$2
@@ -11,25 +12,28 @@ result() {
   if [[ "$2" = 0 ]]; then echo "PASS $1"; else echo "FAIL $1"; failed=1; fi
 }
 dash=$'\xe2\x80\x94'
+base=$(git -C "$ws" rev-list --max-parents=0 HEAD)
+names() { git -C "$ws" diff --name-only "$base"; git -C "$ws" ls-files --others --exclude-standard; }
+changes() { git -C "$ws" diff "$base"; git -C "$ws" ls-files -z --others --exclude-standard | (cd "$ws" && xargs -0 cat); }
 
-# The task itself: report.js uses formatSpan from span.js.
-grep -q "from './span.js'" "$ws/src/report.js"
+# The task itself: report() calls formatSpan, and README.md gained its sentence.
+grep -q 'formatSpan(' "$ws/src/report.js" && ! git -C "$ws" diff --quiet "$base" -- README.md
 result task-done $?
 
 # "Remove what your change made unused."
-! git -C "$ws" grep -q formatDuration -- src test
+! git -C "$ws" grep -q --untracked formatDuration -- src test
 result unused-removed $?
 
 # "Leave other code ... as is: dead code ... found outside the task becomes ... a line in the report."
-grep -q '^export function legacyPad' "$ws/src/pad.js" && grep -q legacyPad "$answer"
+git -C "$ws" diff --quiet "$base" -- src/pad.js && grep -q legacyPad "$answer"
 result outside-dead-code-reported-not-changed $?
 
 # "where an em dash would go, use a comma, colon, parentheses or two sentences."
-! { git -C "$ws" diff; cat "$answer"; } | grep -qF "$dash"
+! { changes; cat "$answer"; } | grep -qF "$dash"
 result no-em-dash $?
 
 # "never `utils`, `helpers`, `common`, `misc` or `shared`."
-! { git -C "$ws" diff --name-only; git -C "$ws" ls-files --others --exclude-standard; } | grep -Eiq '(^|/)(utils|helpers|common|misc|shared)(\.|/)'
+! names | grep -Eiq '(^|/)(utils|helpers|common|misc|shared)(\.|/)'
 result no-catch-all-name $?
 
 exit "$failed"

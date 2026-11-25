@@ -38,7 +38,7 @@ graders:
     min: 0
     max: 0
   - type: regex
-    name: never-rule-kept
+    name: rules-unchanged
     target: { source: file, path: AGENTS.md }
-    pattern: '- Never deploy carelessly\.'
+    pattern: '\n- Never deploy carelessly\.\n- Write good commit messages\.\n$'
 expected_outcome: 'Finding 1 stays a flag (no diff for the Never rule), finding 2 gets one diff, and the answer asks before applying.'

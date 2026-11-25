@@ -18,7 +18,7 @@ EOF
 cat > docs/usage.md <<'EOF'
 # Usage
 
-`tally <folder>` prints one row per language: files, lines and the share of all lines.
+`tally <folder>` prints one row per language: files, lines and the share of all lines, as a whole percent. It counts `.go`, `.js` and `.py` files in the folder and every folder below it.
 
 | Option | Effect |
 |---|---|
@@ -34,8 +34,24 @@ if (flag === '--json') process.stdout.write(`${JSON.stringify(rows)}\n`);
 else for (const r of rows) process.stdout.write(`${r.language}\t${r.files}\t${r.lines}\t${r.share}%\n`);
 EOF
 cat > src/count.js <<'EOF'
+import { readdirSync, readFileSync } from 'node:fs';
+import { extname, join } from 'node:path';
+
+const LANGUAGES = { '.go': 'Go', '.js': 'JavaScript', '.py': 'Python' };
+
 export function count(folder) {
-  return [{ language: 'JavaScript', files: 2, lines: 12, share: 100, folder }];
+  const totals = new Map();
+  for (const entry of readdirSync(folder, { recursive: true, withFileTypes: true })) {
+    const language = LANGUAGES[extname(entry.name)];
+    if (!entry.isFile() || !language) continue;
+    const lines = readFileSync(join(entry.parentPath, entry.name), 'utf8').split('\n').length - 1;
+    const total = totals.get(language) ?? { language, files: 0, lines: 0 };
+    total.files += 1;
+    total.lines += lines;
+    totals.set(language, total);
+  }
+  const all = [...totals.values()].reduce((n, t) => n + t.lines, 0);
+  return [...totals.values()].map((t) => ({ ...t, share: all ? Math.round((t.lines / all) * 100) : 0 }));
 }
 EOF
 cat > package.json <<'EOF'

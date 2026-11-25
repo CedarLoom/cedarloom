@@ -37,8 +37,15 @@ test('rules block: check.sh fails the untouched fixture and passes only a run th
   solve(good, 'Durations print as hours and minutes, for example 1h 2m.');
   assert.deepEqual(check(good, 'Done. src/pad.js:1 legacyPad has no caller: a maintenance pass item.\n'), { status: 0, failed: [] });
 
+  // README.md back to the fixture's text and legacyPad's body changed, though the answer names it.
+  const partial = workspace();
+  solve(partial, '');
+  writeFileSync(join(partial, 'README.md'), '# Jobs\n\nPrints one line per finished job: its name, the files it touched and how long it took.\n');
+  writeFileSync(join(partial, 'src/pad.js'), 'export function legacyPad(text) {\n  return `  ${text}`;\n}\n');
+  assert.deepEqual(check(partial, 'Done. legacyPad has no caller.\n'), { status: 1, failed: ['task-done', 'outside-dead-code-reported-not-changed'] });
+
   const broken = workspace();
-  solve(broken, 'Durations print as hours and minutes \u2014 for example 1h 2m.');
-  writeFileSync(join(broken, 'src/helpers.js'), 'export const noop = () => {};\n');
+  solve(broken, 'Durations print as hours and minutes.');
+  writeFileSync(join(broken, 'src/helpers.js'), '// Kept for later \u2014 unused.\nexport const noop = () => {};\n');
   assert.deepEqual(check(broken, 'Done.\n'), { status: 1, failed: ['outside-dead-code-reported-not-changed', 'no-em-dash', 'no-catch-all-name'] });
 });

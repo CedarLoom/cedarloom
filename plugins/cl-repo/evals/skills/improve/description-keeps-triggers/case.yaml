@@ -37,4 +37,8 @@ graders:
     tool: Edit
     min: 0
     max: 0
+  - type: regex
+    name: skill-unchanged
+    target: { source: file, path: .claude/skills/release/SKILL.md }
+    pattern: 'description: "I cut a release: I bump the version, write the changelog and tag the commit\. Use when the user asks for a release\. Do not use for hotfix branches; use the hotfix skill there\."\n'
 expected_outcome: 'One diff with a third-person description that keeps the trigger and boundary sentences; nothing applied.'

@@ -16,12 +16,12 @@ From the repository root, signed in to Claude Code:
 
 ```sh
 # one suite
-claude plugin eval plugins/cl-repo --allow-tools Bash Edit Write --tag skill-audit --scaffold --no-publish --runs 3 --json skill-audit.json
+claude plugin eval plugins/cl-repo --model opus --allow-tools Bash Edit Write --tag skill-audit --scaffold --no-publish --runs 3 --json skill-audit.json
 # every suite
-claude plugin eval plugins/cl-repo --allow-tools Bash Edit Write --scaffold --no-publish --runs 3 --max-cost-usd 20 --json cl-repo.json
+claude plugin eval plugins/cl-repo --model opus --allow-tools Bash Edit Write --scaffold --no-publish --runs 3 --max-cost-usd 20 --json cl-repo.json
 ```
 
-The same command with `--tag skill-debloat`, `skill-improve`, `skill-maintain` or `skill-setup` runs the other suites. Each case still gets only the gated tools its `allowed_tools` lists.
+The same command with `--tag skill-debloat`, `skill-improve`, `skill-maintain` or `skill-setup` runs the other suites. Each case still gets only the gated tools its `allowed_tools` lists. Both sides of a comparison, and the baseline below, use the same `--model` and `--judge-model`.
 
 ## Rules block
 

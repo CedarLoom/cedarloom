@@ -49,4 +49,12 @@ graders:
     tool: Write
     min: 0
     max: 0
+  - type: regex
+    name: config-unchanged
+    target: { source: file, path: docs/config.md }
+    pattern: '\| `maxDepth` \| `8` \| how many folder levels tally walks into \|\n'
+  - type: regex
+    name: readme-unchanged
+    target: { source: file, path: README.md }
+    pattern: '^# Tally\n\nTally counts[^\n]*table\.\n\n## Install\n'
 expected_outcome: 'Diff 1 sets the documented maxDepth default to 4, diff 3 adds a usage line to README.md, finding 2 is listed for /cl-repo:debloat, and the answer asks which diffs to apply; no file changed.'

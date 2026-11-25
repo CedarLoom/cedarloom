@@ -29,7 +29,7 @@ graders:
   - type: tool_used
     name: no-changing-command
     tool: Bash
-    input_match: 'git (add|commit|checkout|restore|reset|stash|rm)\b|sed -i|perl -pi|\brm |\bmv '
+    input_match: 'git (add|commit|checkout|restore|reset|stash|rm)\b|sed -i|perl -pi|\brm |\bmv |\btee '
     min: 0
     max: 0
   - type: file_exists
@@ -39,9 +39,17 @@ graders:
   - type: regex
     name: planted-default-kept
     target: { source: file, path: docs/config.md }
-    pattern: '\| `maxDepth` \| `8` \|'
+    pattern: '^# Configuration\n\n`tally\.yml` in the working directory sets the options\.\n\n\| Option \| Default \| Meaning \|\n\|---\|---\|---\|\n\| `maxDepth` \| `8` \| how many folder levels tally walks into \|\n\| `ignore` \| `\[\]` \| globs it skips \|\n$'
   - type: regex
     name: planted-link-kept
     target: { source: file, path: README.md }
-    pattern: '\(docs/deploy\.md\)'
+    pattern: '^# Tally\n\nTally counts[^\n]*table\.\n\n## Install\n\n1\. [^\n]*\n2\. [^\n]*\n3\. [^\n]*\n\nSee \[configuration\]\(docs/config\.md\) and \[deployment\]\(docs/deploy\.md\)\.\n$'
+  - type: regex
+    name: planted-duplicate-kept
+    target: { source: file, path: docs/install.md }
+    pattern: '^# Install\n\n1\. Install Node\.js 22\.\n2\. Run `npm install -g tally-cli`\.\n3\. Run `tally --version` to check the install\.\n$'
+  - type: regex
+    name: code-unchanged
+    target: { source: file, path: src/config.js }
+    pattern: '^export const defaults = \{ maxDepth: 4, ignore: \[\] \};\n'
 expected_outcome: 'Findings at README.md or docs/install.md (duplicate install steps), docs/config.md:7 (wrong, against src/config.js:1) and README.md:11 (dead reference to docs/deploy.md); every file as the scaffold left it.'
