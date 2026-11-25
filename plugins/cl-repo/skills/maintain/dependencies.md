@@ -1,8 +1,8 @@
 # Dependency pass
 
 1. Collect the package manager's audit (`npm audit --json`, `pip-audit`, `cargo audit`: id, severity, first fixed version) and its outdated list (`npm outdated --json`, `pip list --outdated`, `cargo outdated`: current and newest version at least 3 days old).
-2. Group, each update in one group and to its newest version at least 3 days old (an advisory fix at least to its first fixed version), in this order:
-   1. Each advisory fix with the packages released together with it, by severity (critical, high, moderate, low).
+2. Group, each update to its newest version from step 1 in one group, in this order:
+   1. Each advisory fix with its released-together packages, by severity (critical, high, moderate, low).
    2. Packages released together (one monorepo, a shared version, or peers that need each other): one group, a major included.
    3. Each other major: alone.
    4. All other minors and patches: one group.
