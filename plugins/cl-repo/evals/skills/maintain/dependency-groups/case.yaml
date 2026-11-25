@@ -8,28 +8,28 @@ execution:
   prompt: |
     /cl-repo:maintain Run only the dependency part.
 
-    This run checks the groups only. Write one line per group, in the order the pass gives: `Group <n>: <package>@<new version>, <package>@<new version>`. Under each group, one line per breaking change or deprecation its changelogs name: `Change: <package> <version>: <what> at <file>:<line>`, or `... not used here`. Then stop: edit no file and open no pull request.
+    This run checks the groups only. Write one line per group, numbered in the order the pass gives: `Group <n>: <package>@<new version>, <package>@<new version>`. Under each group, one line per breaking change or deprecation its changelogs name: `Change: <package> <version>: <what> at <file>:<line>`, or `... not used here`. Then stop: edit no file and open no pull request.
   max_turns: 25
   disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
 graders:
   - type: regex
-    name: advisory-first
-    pattern: 'Group 1:[^\n]*yaml-lite@0\.9\.4'
+    name: advisory-first-and-alone
+    pattern: 'Group 1:[^\n@]*yaml-lite@0\.9\.4[^\n@]*(\n|$)'
   - type: regex
-    name: released-together
-    pattern: 'Group \d+:[^\n]*(@lumen/core@3\.3\.0[^\n]*@lumen/render@3\.3\.0|@lumen/render@3\.3\.0[^\n]*@lumen/core@3\.3\.0)'
+    name: released-together-second
+    pattern: 'Group 2:[^\n@]*(@lumen/core@3\.3\.0[^\n@]*@lumen/render@3\.3\.0|@lumen/render@3\.3\.0[^\n@]*@lumen/core@3\.3\.0)[^\n@]*(\n|$)'
   - type: regex
-    name: major-alone
-    pattern: 'Group \d+:[^\n@]*quill-args@5\.0\.0[^\n@]*(\n|$)'
+    name: major-alone-third
+    pattern: 'Group 3:[^\n@]*quill-args@5\.0\.0[^\n@]*(\n|$)'
   - type: regex
-    name: minors-together
-    pattern: 'Group \d+:[^\n]*(hue-text@2\.4\.0[^\n]*tinydate@1\.4\.3|tinydate@1\.4\.3[^\n]*hue-text@2\.4\.0)'
+    name: minors-together-last
+    pattern: 'Group 4:[^\n@]*(hue-text@2\.4\.0[^\n@]*tinydate@1\.4\.3|tinydate@1\.4\.3[^\n@]*hue-text@2\.4\.0)[^\n@]*(\n|$)'
   - type: regex
     name: breaking-change-found
-    pattern: 'quill-args[^\n]*src/cli\.js'
+    pattern: 'quill-args[^\n]*src/cli\.js:7\b'
   - type: regex
     name: deprecation-found
-    pattern: 'hue-text[^\n]*src/report\.js'
+    pattern: 'hue-text[^\n]*src/report\.js:8\b'
   - type: llm
     name: unused-changes-marked
     criteria: 'The answer marks the yaml-lite deprecation of `loadAll()` without a callback as not used in this repository, and names the `parse()` string-to-array change of quill-args 5.0.0 as the breaking change to handle.'
