@@ -241,11 +241,11 @@ function shellReadings(source, nested) {
   return [...new Map(all).values()];
 }
 
-// The commands of a quoted word read again, in every reading, each command once and each word read once, so that the readings
-// of deep nesting do not multiply.
+// The commands of a quoted word read again: each distinct reading whole and in its order, one after the other, so that a
+// switch or cd only one reading holds still comes before that reading's push. Each word is read once.
 const nestedCache = new Map();
 function nestedCommands(word) {
-  if (!nestedCache.has(word)) nestedCache.set(word, [...new Map(shellReadings(word, true).flat().map((c) => [JSON.stringify(c), c])).values()]);
+  if (!nestedCache.has(word)) nestedCache.set(word, shellReadings(word, true).flat());
   return nestedCache.get(word);
 }
 

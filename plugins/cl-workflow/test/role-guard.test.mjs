@@ -310,6 +310,12 @@ test('role guard: a fixer or worker bot pushes only the branch checked out where
     for (const command of ['git checkout feat/other && git push', 'git switch -c feat/y && git push origin HEAD', 'git branch -M feat/y && git push origin feat/x', 'git rebase origin/trunk trunk && git push', 'git symbolic-ref HEAD refs/heads/feat/other && git push', 'git branch --mov feat/y && git push origin HEAD', 'git bisect reset trunk && git push']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
     // git's folder is unknown after a later cd, so the checked-out branch cannot be read.
     assert.equal(decision(`git status && cd ${feature} && git push origin feat/x`, { role, cwd: feature }), 'deny', role);
+    // Only zsh runs the switch or cd: it keeps the NUL that ends the eval string in bash. The push is the same in every reading.
+    for (const command of [
+      `zsh -c 'eval $'"'"'\\0; git checkout trunk'"'"'; git push origin feat/x'`,
+      String.raw`zsh -c $'eval $\'\\0; git checkout trunk\'; git push origin feat/x'`,
+      `zsh -c 'eval $'"'"'\\0; cd /tmp'"'"'; git push origin feat/x'`,
+    ]) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
   }
 });
 
