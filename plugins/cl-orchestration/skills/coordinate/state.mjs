@@ -22,7 +22,7 @@ const text = (path) => { try { return readFileSync(path, 'utf8'); } catch { retu
 // The parsed file, or null for a missing or unreadable one: the caller rebuilds it or fails closed.
 export const readState = (path) => { try { return JSON.parse(text(path) ?? 'null'); } catch { return null; } };
 
-const unique = () => `${process.pid}-${randomBytes(6).toString('hex')}`;
+export const unique = () => `${process.pid}-${randomBytes(6).toString('hex')}`;
 // Per project and UTC day: runs of the project bot, worker starts (a role bot run counts as one), and runs per pull request, after which the catch-up counts that pull request for no condition until the UTC day ends.
 export const LIMITS = { runs: 320, workerStarts: 120, prRuns: 12 };
 const COUNTED = ['runs', 'workerStarts', 'catchUp'];
