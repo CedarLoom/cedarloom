@@ -46,6 +46,11 @@ test('rules block: check.sh fails the untouched fixture and passes only a run th
   writeFileSync(join(partial, 'src/format.js'), `${formatCount}\nexport function legacyPad(text) {\n  return \`  \${text}\`;\n}\n`);
   assert.deepEqual(check(partial, 'Done. legacyPad has no caller.\n'), { status: 1, failed: ['task-done', 'outside-dead-code-reported-not-changed'] });
 
+  // The function stays untouched, but the answer says it is used instead of reporting it as dead code.
+  const claimed = workspace();
+  solve(claimed, 'Durations print as hours and minutes.');
+  assert.deepEqual(check(claimed, 'Done. legacyPad is used by the formatter.\n'), { status: 1, failed: ['outside-dead-code-reported-not-changed'] });
+
   const broken = workspace();
   solve(broken, 'Durations print as hours and minutes.');
   writeFileSync(join(broken, 'src/helpers'), '// Kept for later \u2014 unused.\nexport const noop = () => {};\n');

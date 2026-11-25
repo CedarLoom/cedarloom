@@ -24,9 +24,10 @@ result task-done $?
 ! git -C "$ws" grep -q --untracked formatDuration -- src test
 result unused-removed $?
 
-# "Leave other code ... as is: dead code ... found outside the task becomes ... a line in the report."
+# "Leave other code ... as is: dead code ... found outside the task becomes ... a line in the report": the answer names legacyPad as unused or dead.
 pad=$'export function legacyPad(text) {\n  return ` ${text}`;\n}'
-[[ "$(grep -A2 '^export function legacyPad(' "$ws/src/format.js")" = "$pad" ]] && grep -q legacyPad "$answer"
+unused='(unused|dead([^a-z]|$)|dead (code|function)|no callers?|never (called|used)|not (called|used))'
+[[ "$(grep -A2 '^export function legacyPad(' "$ws/src/format.js")" = "$pad" ]] && grep -Eiq "legacyPad[^.]*$unused|(unused|dead)( code| function| export)?[:,]? \`?legacyPad" "$answer"
 result outside-dead-code-reported-not-changed $?
 
 # "where an em dash would go, use a comma, colon, parentheses or two sentences."
