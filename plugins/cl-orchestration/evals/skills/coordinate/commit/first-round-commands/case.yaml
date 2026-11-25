@@ -35,7 +35,7 @@ graders:
     pattern: 'Push:[^\n]*(origin HEAD|--force|\s-f\b|\s\+[0-9a-f])'
   - type: regex
     name: draft-pr-from-body-file
-    pattern: 'PR:(?=[^\n]*gh pr create)(?=[^\n]*-R example-org/widget)(?=[^\n]*--draft)(?=[^\n]*--base main(?=[\s"''`]|$))(?=[^\n]*--head feat/12-login-timeout(?=[\s"''`]|$))(?=[^\n]*--title)(?=[^\n]*--body-file\s+["''`]?(?:\./)?(?:[^\s"''`/]+|[^\s"''`]*\.cedarloom/runs/20261125T101500Z-a1b2c3/[^\s"''`/]+)(?=[\s"''`]|$))'
+    pattern: 'PR:(?=[^\n]*gh pr create)(?=[^\n]*-R example-org/widget(?=[\s"''`]|$))(?=[^\n]*--draft)(?=[^\n]*--base main(?=[\s"''`]|$))(?=[^\n]*--head feat/12-login-timeout(?=[\s"''`]|$))(?=[^\n]*--title\s+["''`]?[^\s"''`-])(?=[^\n]*--body-file\s+["''`]?(?:\./)?(?:[^\s"''`/]+|[^\s"''`]*\.cedarloom/runs/20261125T101500Z-a1b2c3/[^\s"''`/]+)(?=[\s"''`]|$))'
   - type: regex
     name: pr-runs-in-run-folder
     pattern: 'PR runs in:[^\n]*(run folder|\.cedarloom/runs/20261125T101500Z-a1b2c3)'
