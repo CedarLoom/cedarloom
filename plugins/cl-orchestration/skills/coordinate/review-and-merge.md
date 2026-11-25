@@ -20,7 +20,7 @@ What the steps name:
 - `AGENTS.md` is the default branch's, read with `git -C <scratch path> show refs/remotes/origin/<default branch>:AGENTS.md`, never the pull request's copy.
 - The verdict of `<head>` is the JSON that `node <skill folder>/merge-checks.mjs <project path> <scratch path> <default branch> <reviewed head> <head> <risk class>` prints: `next`, `allowed`, `ownerOnly`, `unsafePaths`, `sensitive`, `risky`, `risk`, `pin`, `upToDate` and `shared`.
   - Run it after each read of `<head>`, once the `fetch` has passed ([Scratch clone](#scratch-clone)). Before the first review, pass `<head>` as the reviewed head too.
-  - `<risk class>` is `low`, `medium` or `high`, the class you decide for `<head>` ([SKILL.md](SKILL.md#risk-class)). `risky` lists its files under `riskyPaths`, and `risk` is the class the verdict used: yours, raised to medium by such a file.
+  - `<risk class>` is `low`, `medium` or `high`, the class you decide for `<head>` ([decisions.md](decisions.md#risk-class)). `risky` lists its files under `riskyPaths`, and `risk` is the class the verdict used: yours, raised to medium by such a file.
   - Any exit but 0 is no verdict: the step stops, and the report names the line the script printed.
   - A head with several merge bases with the default branch gets none: its file list would hide what a merge of it takes back, so the pull request is the owner's to judge ([Owner-only](#owner-only)).
 
@@ -33,7 +33,7 @@ A project bot takes these steps with these changes ([bot-project.md](bot-project
 
 ## Scratch clone
 
-The project's checkout shares its git directory with the workers: a branch, a ref, a grafts file or a setting that a worker writes there makes git show other commits than the remote holds. So no git command of this file runs there. Once `<head>` is read, before any other step, clone the pull request's repository, without a checkout, into a new folder under `clones/` of the run folder ([SKILL.md](SKILL.md#run-files)). `<scratch path>` is that folder's absolute path:
+The project's checkout shares its git directory with the workers: a branch, a ref, a grafts file or a setting that a worker writes there makes git show other commits than the remote holds. So no git command of this file runs there. Once `<head>` is read, before any other step, clone the pull request's repository, without a checkout, into a new folder under `clones/` of the run folder ([run-files.md](run-files.md#run-files)). `<scratch path>` is that folder's absolute path:
 
 ```text
 gh repo clone <owner/repo> <scratch path> --no-upstream -- --filter=blob:none --no-checkout
@@ -55,14 +55,14 @@ git -C <scratch path> fetch origin
 - Write the default branch as `refs/remotes/origin/<default branch>` in every command, never as `origin/<default branch>`: a tag of that name on the remote answers the short name first.
 - Besides your own `<scratch path>`, these commands take `<owner/repo>` and `<default branch>` by the names rule ([SKILL.md](SKILL.md#names)) and commit ids that `gh` or git printed. The one other text is a path of the pull request, inside single quotes as above.
 - Nothing of the pull request runs in a scratch clone. Its code runs in one place, the check of a trial merge, which gets a clone of its own ([Merge](#merge), step 3; [trial-merge.md](trial-merge.md)).
-- Delete a pull request's clones once it is merged or left for the owner, so that a `keepRunning` run piles up none: each with a command of its own that names the folder's literal absolute path, no variable and no wildcard. The rest goes with the run folder ([SKILL.md](SKILL.md#run-files)).
+- Delete a pull request's clones once it is merged or left for the owner, so that a `keepRunning` run piles up none: each with a command of its own that names the folder's literal absolute path, no variable and no wildcard. The rest goes with the run folder ([run-files.md](run-files.md#run-files)).
 
 ## Sensitive or routine
 
 Read the pull request's diff (`git -C <scratch path> diff refs/remotes/origin/<default branch>...<head>`). The change is sensitive when one of these holds:
 
 - the verdict's `sensitive` lists a file: one under a `review.sensitivePaths` or `riskyPaths` entry, or an owner-only one ([Owner-only](#owner-only))
-- its risk class is high ([SKILL.md](SKILL.md#risk-class))
+- its risk class is high ([decisions.md](decisions.md#risk-class))
 - it is a risky change by step 1 of the workflow skill
 - it changes CI, guards, data formats, money, what agents are told and allowed (`AGENTS.md`, `.claude`, `docs/agents`), or what runs on the host for a worktree or a trial (`orca.yaml`, whose archive script Clean up runs, and `.devcontainer`, whose `initializeCommand` runs on the host)
 - you cannot place it
@@ -145,7 +145,7 @@ The reviewer's working directory is not the clone, so neither built-in command f
   - The head that re-review accepts is the new reviewed head.
 - A review or re-review that reports itself void counts as no review and no round: split its scope into parts that together cover all of it, and start a fresh one on each part. They count as one review: void while one part is void, and clean only when every part is.
 - A round is one fix and its re-review; a review or re-review with a Blocking or Important finding starts the next round. A push made while no Blocking or Important finding is open (a conflict resolution, say) gets its re-review but is no round; that re-review, the new review of a change that became sensitive ([Sensitive or routine](#sensitive-or-routine)) and the review of a late bot thread on the same head ([Threads](#threads)) put the number of the last round in their review of record (0 before the first), and findings in them start the next round. When the re-review of round 2 still has such findings, the follow-up for round 3 tells the worker to make the fix on a stronger model or a higher effort (by default `sonnet` to `opus`, `opus` to `fable`, or an effort below `high` to `high`; `xhigh` only as [policy.md](policy.md) says). With no step left, the findings go to the owner at once, as the next bullet says.
-- When the re-review of round 3 still has such findings, it is a question for the owner ([SKILL.md](SKILL.md#owner-decisions)): the pull request stays a draft and is named in the report. There is no fourth round.
+- When the re-review of round 3 still has such findings, it is a question for the owner ([decisions.md](decisions.md#owner-decisions)): the pull request stays a draft and is named in the report. There is no fourth round.
 
 ## Ready
 
@@ -161,8 +161,8 @@ A required check that is red on `<head>` after the worker's report goes to the o
 
 The body passes when GitHub will close exactly the issues the pull request completes. `gh pr view <n> -R <owner/repo> --json closingIssuesReferences --jq '.closingIssuesReferences[] | "\(.repository.owner.login)/\(.repository.name)#\(.number)"'` prints them, one per line, compared below ignoring letter case. Only an exit code of 0 gives the list: a read that fails decides nothing, so read again at a later wake-up. It lists the issues the pull request may close ([PullRequest](https://docs.github.com/en/graphql/reference/pulls)), by a closing keyword in its body or by a link made in its sidebar, which needs no keyword, and GitHub closes them when the pull request merges, whatever `closeIssue` says ([linking a pull request to an issue](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)).
 
-- With `closeIssue` true, for a pull request that is not one of an approved pull request list, the output is exactly `<owner/repo>#<number>`, the issue of the pull request's branch, when its worker reported it DONE, also a worker that continued it for the whole issue ([SKILL.md](SKILL.md#outcomes)).
-- Otherwise the command exits 0 and prints nothing: `closeIssue` false, an issue whose pull request lost its `Closes` line ([SKILL.md](SKILL.md#outcomes)) until such a worker reports DONE, and a pull request of an approved pull request list, whose issue closes only once the whole list is merged ([SKILL.md](SKILL.md#outcomes)).
+- With `closeIssue` true, for a pull request that is not one of an approved pull request list, the output is exactly `<owner/repo>#<number>`, the issue of the pull request's branch, when its worker reported it DONE, also a worker that continued it for the whole issue ([outcomes.md](outcomes.md)).
+- Otherwise the command exits 0 and prints nothing: `closeIssue` false, an issue whose pull request lost its `Closes` line ([outcomes.md](outcomes.md)) until such a worker reports DONE, and a pull request of an approved pull request list, whose issue closes only once the whole list is merged ([outcomes.md](outcomes.md)).
 - Any other line, an issue of another repository or of the same batch included, fails the body.
 
 A body that fails goes back to the owning worker as a follow-up; a list that its fix leaves different (a sidebar link, which no body edit removes) is the owner's to clear: the pull request stays a draft, so release its worker ([Clean up](orca.md#clean-up)) and name the pull request and the reason in the report.
@@ -177,7 +177,7 @@ A pull request is the owner's when its verdict's `next` is `owner` ([merge-check
 
 The verdict's `next` is never `merge` or `trial` without `merge.allowed` (its `allowed`): it is then `ready`, which leaves the pull request ready. Put it to the owner ([SKILL.md](SKILL.md#rules)) and name it in the report; no step below runs for it. Otherwise merge one pull request at a time per project, by these steps in order, with the policy as the reader prints it now. A step that does not pass stops the merge. After a branch update or a re-review, start again at step 1.
 
-1. **Head and class.** Read `<head>`, decide its risk class ([SKILL.md](SKILL.md#risk-class)) and take its verdict with it: steps 2 to 5 use both, and never read the head again. Decide [Sensitive or routine](#sensitive-or-routine) for it. With `next` `owner` the pull request is left for the owner ([Owner-only](#owner-only)), with `ready` it stays ready for the owner (above), and a change that became sensitive goes back to its review.
+1. **Head and class.** Read `<head>`, decide its risk class ([decisions.md](decisions.md#risk-class)) and take its verdict with it: steps 2 to 5 use both, and never read the head again. Decide [Sensitive or routine](#sensitive-or-routine) for it. With `next` `owner` the pull request is left for the owner ([Owner-only](#owner-only)), with `ready` it stays ready for the owner (above), and a change that became sensitive goes back to its review.
 2. **Pin.** `pin` must be `reviewed` (the reviewed head) or `clean-merges`, and every check in `merge.requiredChecks` must be green on `<head>` (`gh pr checks <n> -R <owner/repo>`).
    - A check that still runs does not pass: read the checks once and start again at step 1 at a later wake-up, since a watch command would hold the loop for a whole CI run.
    - `clean-merges` is a head reached from the reviewed head only by clean merges of the default branch: the reviewed head is its ancestor, and each commit since, on the first-parent line, has exactly two parents, the first the head accepted before it and the second on the default branch, and the tree that `git merge-tree --write-tree` gives for those two.
@@ -220,11 +220,11 @@ The verdict's `next` is never `merge` or `trial` without `merge.allowed` (its `a
       - An expected workflow with no run 30 minutes after `mergedAt` counts as not run: the watch ends without it, and the report names it.
       - With no expected workflow, a list still empty 10 minutes after `mergedAt` counts as no CI on the default branch: the watch ends, and the report says so.
    6. A run with the `conclusion` `cancelled` lists as `completed` and shows nothing: a newer run of the same workflow can have replaced it (a concurrency group), or someone cancelled it. It counts as replaced only by a run in the list of step 6.4, which holds the merge commit's runs alone, with the same `workflowDatabaseId` and a later `createdAt`; take the newest such run. Never match by `workflowName`: two workflow files can carry the same `name`. The watch waits for it in the cancelled one's place; a cancelled run with no such newer run counts as red.
-   7. Red is any other completed run whose `conclusion` is not `success`, `skipped` or `neutral`. A red default branch is fixed before the next merge: merge nothing more in this project and put the failing run to the owner ([SKILL.md](SKILL.md#owner-decisions)).
+   7. Red is any other completed run whose `conclusion` is not `success`, `skipped` or `neutral`. A red default branch is fixed before the next merge: merge nothing more in this project and put the failing run to the owner ([decisions.md](decisions.md#owner-decisions)).
 
 ## Merge log
 
-The coordinator keeps one merge log for all its projects, `.cedarloom/runs/merge-log.md` of its working directory, beside the handoff file and covered by the same ignore line ([SKILL.md](SKILL.md#run-files)). It outlives the run: the daily reconciliation compares GitHub's merges against it ([SKILL.md](SKILL.md#reconciliation)).
+The coordinator keeps one merge log for all its projects, `.cedarloom/runs/merge-log.md` of its working directory, beside the handoff file and covered by the same ignore line ([run-files.md](run-files.md#run-files)). It outlives the run: the daily reconciliation compares GitHub's merges against it ([run-files.md](run-files.md#reconciliation)).
 
 - One line per merge, appended once `state` is `MERGED` (step 6): the date and time in UTC, `<owner/repo>`, `#<n>`, the reviewed head, the head that merged (`headRefOid` of step 6.1), the merge commit, the URL of the review of record ([Review of record](#review-of-record)) and the run id, with `unreviewed head` where step 6.1 found one.
 - Values from `gh` and git output only, never a title or other text of the pull request.

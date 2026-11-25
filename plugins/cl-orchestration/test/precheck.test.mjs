@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { argsOf, check, distinct, pickable, report, unfinished, unread } from '../skills/coordinate/precheck.mjs';
+import { argsOf, check, distinct, pickable, priorities, report, unfinished, unread } from '../skills/coordinate/precheck.mjs';
 
 const POLICY = { startLabel: 'agent-ready', trustedAuthors: ['helper[bot]'] };
 const issue = (number, extra = {}) => ({ number, author_association: 'OWNER', user: { login: 'owner' }, labels: [{ name: 'agent-ready' }], ...extra });
@@ -175,6 +175,26 @@ test('precheck: the command line prints no issue that several projects list, nam
   assert.deepEqual(report(['/a'], () => ({ tracker: 'owner/project', numbers: [], warnings: [{ rule: 'refused', path: 'issues.repository', message: 'is refused' }] })), { out: [], err: ['/a: refused at issues.repository: is refused'], code: 1 });
 });
 
+test('precheck: prints the issues by Priority, Urgent to Low and then none, oldest first within a level, each with its level', () => {
+  const priority = { 3: 'Low', 8: 'Urgent', 9: 'high', 12: 'Medium', 14: 'High', 15: 'Someday' };
+  assert.deepEqual(report(['/a'], () => ({ tracker: 'owner/project', numbers: [15, 14, 12, 9, 8, 5, 3], priority })).out, ['/a: #8 (urgent) #9 (high) #14 (high) #12 (medium) #3 (low) #5 #15']);
+});
+
+test('precheck: reads the Priority field through GraphQL, and an issue without it or an API without issue fields has none', () => {
+  const value = (field, name) => ({ name, field: { name: field } });
+  const data = { i7: { number: 7, issueFieldValues: { nodes: [value('Effort', 'High'), value('Priority', 'Urgent')] } }, i8: { number: 8, issueFieldValues: { nodes: [value('Effort', 'Low'), {}] } }, i9: { number: 9, issueFieldValues: { nodes: [] } } };
+  const asked = [];
+  const exec = (cmd, args) => { asked.push(args); return JSON.stringify({ data: { repository: data } }); };
+  assert.deepEqual(priorities('owner/project', [7, 8, 9], exec), { 7: 'Urgent' });
+  assert.deepEqual(asked[0].slice(0, 2), ['api', 'graphql']);
+  assert.deepEqual(asked[0].slice(-4), ['-f', 'owner=owner', '-f', 'name=project']);
+  assert.deepEqual(priorities('owner/project', [], () => { throw new Error('not asked'); }), {});
+  // execFileSync's message quotes the command, which names the issue fields; stderr holds gh's error alone.
+  const fails = (stderr) => (cmd, args) => { throw Object.assign(new Error(`Command failed: ${cmd} ${args.join(' ')}\n${stderr}`), { stderr }); };
+  assert.deepEqual(priorities('owner/project', [7], fails("gh: Field 'issueFieldValues' doesn't exist on type 'Issue'")), {});
+  assert.throws(() => priorities('owner/project', [7], fails('gh: HTTP 502')), /HTTP 502/);
+});
+
 const calls = [];
 const stub = (policy, origin = 'git@github.com:owner/project.git') => (dir, cmd, withSettings) => {
   calls.push([cmd, ...withSettings].join(' '));
@@ -185,6 +205,7 @@ const stub = (policy, origin = 'git@github.com:owner/project.git') => (dir, cmd,
   if (args[0] === 'remote') return `${origin}\n`;
   if (args[0] === 'ls-tree') return policy ? 'docs/agents/orchestration.json\n' : '';
   if (args[0] === 'show') return JSON.stringify(policy);
+  if (args[0] === 'api' && args[1] === 'graphql') return JSON.stringify({ data: { repository: {} } });
   if (args[0] === 'api') return JSON.stringify([7, 8, 9, 10].map((n) => [issue(n)]));
   // 7: a closed pull request and an open one from a fork, which anyone can open; 8: an open one of the project; 9: a merged one from a fork; 10: a merged one.
   return JSON.stringify([
@@ -224,7 +245,7 @@ test('precheck: a member or collaborator counts only with write access to the re
   const roles = { reader: 'read', writer: 'write', maintainer: 'write', admin: 'admin', mona_acme: 'write' };
   const asked = [];
   const run = (fails) => (dir, cmd, args) => {
-    if (args[0] !== 'api') return stub(POLICY)(dir, cmd, args);
+    if (args[0] !== 'api' || args[1] === 'graphql') return stub(POLICY)(dir, cmd, args);
     if (args[1] === '--paginate') return JSON.stringify([issues]);
     asked.push(args.join(' '));
     if (fails) throw new Error('HTTP 502');
