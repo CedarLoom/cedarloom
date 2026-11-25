@@ -24,16 +24,17 @@ From the repository root, signed in to Claude Code:
 
 ```sh
 # one suite
-claude plugin eval plugins/cl-workflow --allow-tools Bash Edit Write WebFetch --tag skill-lite --scaffold --no-publish --runs 3 --json skill-lite.json
+claude plugin eval plugins/cl-workflow --allow-tools Bash Edit Write WebFetch --tag skill-lite --scaffold --no-publish --keep-temp --runs 3 --json skill-lite.json
 # one case
 claude plugin eval plugins/cl-workflow --allow-tools Edit Bash --case skill-lite-config-value-edit --scaffold --no-publish
 # everything
-claude plugin eval plugins/cl-workflow --allow-tools Bash Edit Write WebFetch --scaffold --no-publish --runs 3 --max-cost-usd 20 --json all.json
+claude plugin eval plugins/cl-workflow --allow-tools Bash Edit Write WebFetch --scaffold --no-publish --keep-temp --runs 3 --max-cost-usd 20 --json all.json
 ```
 
 - `--allow-tools` grants the gated tools for the whole run, and each case still gets only the ones its `allowed_tools` lists, so the full list above is safe for any selection. A one-case run can grant just that case's list.
 - Granted `Bash` runs in Claude Code's OS sandbox: built in on macOS, and on Linux it needs `bubblewrap` (`bwrap`) and `socat` installed ([Sandboxing](https://code.claude.com/docs/en/sandboxing)).
 - `--scaffold` runs the cases' `setup.sh` (bash, as you); without it those cases run in an empty workspace and fail.
+- `--keep-temp` keeps each run's temporary folder, with its `trace.jsonl` (`tracePath` in the JSON); the traces hold the token counts a pull request comparison needs and are deleted without it.
 - `--no-publish` keeps the HTML report local; by default it is published to claude.ai where the account supports it.
 - The first run asks whether you trust this plugin directory; `--trust-plugin` asserts it where nothing can ask (CI).
 - Results (`aggregate-result.json`, `report.html`) go to the folder the run prints, by default `<eval dir>/results/<timestamp>/`, or to `--output-dir`; do not commit them.
@@ -56,6 +57,31 @@ Compare only complete runs: both sides ran every selected case `--runs` times. A
 | Suite | Pass rate before | Pass rate after | Tokens before | Tokens after | Wall time before | Wall time after | Cost before | Cost after |
 |---|---|---|---|---|---|---|---|---|
 
-Pass rate is passing runs over all runs of the suite, counting each of a case's `--runs` runs on its own: a case that passes 2 of its 3 runs adds 2 passing runs and 3 runs. Tokens and cost are the sums the run reports, wall time is the run's duration. Name the model, the judge and the run count above the table.
+Pass rate is passing runs over all runs of the suite, counting each of a case's `--runs` runs on its own: a case that passes 2 of its 3 runs adds 2 passing runs and 3 runs. Cost is the sum of `costUsd` and `judgeCostUsd` in the JSON. Tokens are the sum, over every model in the `modelUsage` of each run's final `result` event in its `trace.jsonl`, of `inputTokens`, `cacheCreationInputTokens`, `cacheReadInputTokens` and `outputTokens`; `modelUsage` covers the main thread and its subagents, `usage` only the main thread. The run keeps the trace only with `--keep-temp`. Wall time is the run's duration. In the before and after table, tokens, wall time and cost count the with-plugin runs only (the suite's runs of the `with` arm), so both sides compare like with like whether or not the no-plugin arm ran. Name the model, the judge and the run count above the table.
 
 A pull request that lowers the pass rate of an affected suite does not merge until the case is fixed, or the drop is explained in the pull request and accepted in its review.
+
+## Baseline
+
+Runs on `main` at commit `dbea48552b3c85cf8a2fbecf0e016a0ed7219d1f`, model `claude-opus-5-5` at the default effort, judge `haiku` (default), `--runs 3`, with the no-plugin arm (`with-without`). Wall time and Cost per suite count the with-plugin runs only; the All cost covers both arms.
+
+| Suite | Pass rate | Pass rate without plugin | Tokens | Wall time | Cost |
+|---|---|---|---|---|---|
+| `agent-gather` | 5/9 (56%) | 0/9 | | 6m52s | $1.22 |
+| `agent-implement` | 6/9 (67%) | 0/9 | | 9m30s | $2.30 |
+| `agent-plan` | 7/9 (78%) | 0/9 | | 15m08s | $2.82 |
+| `agent-recheck` | 4/9 (44%) | 0/9 | | 17m07s | $2.42 |
+| `agent-research` | 9/9 (100%) | 0/9 | | 7m33s | $1.98 |
+| `agent-review` | 7/9 (78%) | 0/9 | | 11m52s | $2.85 |
+| `agent-test` | 8/9 (89%) | 0/9 | | 15m37s | $3.33 |
+| `agent-verify` | 6/9 (67%) | 0/9 | | 9m04s | $1.82 |
+| `skill-away` | 2/9 (22%) | 1/9 | | 8m17s | $0.86 |
+| `skill-dev` | 9/9 (100%) | 0/9 | | 5m33s | $1.35 |
+| `skill-full` | 7/9 (78%) | 1/9 | | 6m20s | $1.56 |
+| `skill-lite` | 6/9 (67%) | 0/9 | | 7m08s | $1.50 |
+| `skill-plan` | 7/9 (78%) | 0/9 | | 7m56s | $2.38 |
+| `skill-research` | 3/9 (33%) | 0/9 | | 13m22s | $2.59 |
+| `skill-workflow` | 12/12 (100%) | 0/12 | | 8m58s | $1.84 |
+| All | 98/138 (71%) | 2/138 | | 2h00m (run, 2 in parallel) | $44.66 (both arms) |
+
+Tokens were not recorded for this run: the eval JSON has no token counts, and the traces that hold them are deleted unless the run passes `--keep-temp`.
