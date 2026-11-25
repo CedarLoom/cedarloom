@@ -7,12 +7,12 @@ A repository run by bots maps these roles: the coordinator's rows are its projec
 | Action | Who | Never |
 |---|---|---|
 | Choose the work (`startLabel`), merge a pull request with an owner-only file, releases and tags, settings, rulesets, secrets, tokens, spend limits, user-scope settings, approve a permission or trust dialog | the owner; `approval.mjs apply` puts `cl:ready-for-agent` on each question the owner answered that has no Approval table, whatever the answer says; Pick lists an open one whose answer drops the work for the owner ([Labels and title](approvals.md#labels-and-title)) | any other role |
-| Merge any other pull request | the coordinator, the only merger besides the owner, by the policy ([review-and-merge.md](review-and-merge.md#merge)); a project bot only through `merge.mjs`, never with `--admin` | workers, phase subagents, reviewers, headless jobs, role bots |
+| Merge any other pull request | the coordinator, the only merger besides the owner, by the policy ([merge.md](merge.md#merge)); a project bot only through `merge.mjs`, never with `--admin` | workers, phase subagents, reviewers, headless jobs, role bots |
 | Split an issue into several pull requests | the worker posts the list on the issue; the coordinator approves it before implementation ([Outcomes](outcomes.md), Needs replan) | a worker implementing a list nobody approved |
 | Choose model and effort | the policy's `models` tables are the ceiling; the coordinator records the choice in the spec (`Agent:` and Flow lines); a worker may run a phase on a lower model or effort | a model or effort above the spec's |
 | Change the shared git directory: add or remove a worktree, delete a branch, `git gc`, `git prune`, `git stash`, write `git config` | the coordinator ([Clean up](run-files.md#clean-up)) | workers, phase subagents, reviewers |
-| Review of record | the coordinator posts the verdict its reviewer returned, naming the head and the round ([review-and-merge.md](review-and-merge.md#review-of-record)) | a bot's or a headless job's review counting as one |
-| Resolve review threads | the reviewer its own, after verifying; the coordinator a review bot's, at merge ([review-and-merge.md](review-and-merge.md#threads)) | the worker, who replies with the fix commit |
+| Review of record | the coordinator posts the verdict its reviewer returned, naming the head and the round ([review.md](review.md#review-of-record)) | a bot's or a headless job's review counting as one |
+| Resolve review threads | the reviewer its own, after verifying; the coordinator a review bot's, at merge ([review.md](review.md#threads)) | the worker, who replies with the fix commit |
 | Close an issue | the coordinator by `closeIssue` ([Outcomes](outcomes.md)); the owner closes the approval issues | workers |
 | File a follow-up issue in a private repository | the coordinator, from the reported follow-ups ([Outcomes](outcomes.md)) | workers, phase subagents, reviewers and headless jobs; an issue filed with `startLabel` |
 | Launch a headless job | the coordinator ([Headless jobs](#headless-jobs)) | workers |
