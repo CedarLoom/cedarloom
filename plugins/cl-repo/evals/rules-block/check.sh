@@ -25,7 +25,8 @@ result task-done $?
 result unused-removed $?
 
 # "Leave other code ... as is: dead code ... found outside the task becomes ... a line in the report."
-git -C "$ws" diff --quiet "$base" -- src/pad.js && grep -q legacyPad "$answer"
+pad=$'export function legacyPad(text) {\n  return ` ${text}`;\n}'
+[[ "$(grep -A2 '^export function legacyPad(' "$ws/src/format.js")" = "$pad" ]] && grep -q legacyPad "$answer"
 result outside-dead-code-reported-not-changed $?
 
 # "where an em dash would go, use a comma, colon, parentheses or two sentences."

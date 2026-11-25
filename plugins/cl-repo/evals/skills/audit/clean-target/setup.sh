@@ -18,7 +18,7 @@ EOF
 cat > docs/usage.md <<'EOF'
 # Usage
 
-`tally <folder>` prints one row per language: files, lines and the share of all lines, as a whole percent. It counts `.go`, `.js` and `.py` files in the folder and every folder below it.
+`tally <folder> [--json]` prints one row per language: files, lines and the share of all lines, as a whole percent. It counts `.go`, `.js` and `.py` files in the folder and every folder below it.
 
 | Option | Effect |
 |---|---|

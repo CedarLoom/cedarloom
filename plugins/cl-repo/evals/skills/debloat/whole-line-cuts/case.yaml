@@ -16,7 +16,7 @@ graders:
   - type: tool_used
     name: cuts-through-script
     tool: Bash
-    input_match: 'token-budget\.mjs[^"]*cut[^"]*--apply'
+    input_match: 'token-budget\.mjs.*\bcut\b.*--apply'
     min: 1
   - type: tool_used
     name: never-writes-the-doc
