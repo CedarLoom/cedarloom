@@ -294,6 +294,39 @@ test('role guard: refuses a merge with --admin in every role, the coordinator in
   }
 });
 
+test('role guard: refuses a commit that skips the commit hooks in every role, the coordinator included', () => {
+  const skips = [
+    'git commit --no-verify -m x',
+    'git commit -n -m x',
+    'git commit -m x -n',
+    'git commit -an -m x',
+    'git commit -nm x',
+    'git commit -anmx',
+    'git commit --no-verif -m x',
+    'git commit --no-veri -m x',
+    'git commit -m x file.txt --no-verify',
+    'git commit -m -- -n',
+    'git commit -m --end-of-options -n',
+    'git commit -am -- -n',
+    'git commit --mess -- -n',
+    'git commit -C HEAD -n',
+    'git -C . commit -n -m x',
+    'git -c user.name=t commit -n -m x',
+    'bash -c "git commit -n -m x"',
+  ];
+  for (const role of [undefined, 'coordinator']) {
+    for (const command of skips) assert.equal(decision(command, { role }), 'deny', `${role}: ${command}`);
+  }
+  assert.equal(decision('git commit -n -m x', { tool: 'PowerShell' }), 'deny');
+});
+
+test('role guard: passes a commit that runs the commit hooks', () => {
+  const commits = ['git commit -m x', 'git commit -am x', 'git commit -mnote', 'git commit -m x -- -n', 'git commit -m x --end-of-options -n', 'git commit -m -n', 'git commit --message -n', 'git commit --verify -m x', 'git push -n origin feat/x'];
+  for (const role of [undefined, 'coordinator']) {
+    for (const command of commits) assert.equal(decision(command, { role, cwd: feature }), 'none', `${role}: ${command}`);
+  }
+});
+
 const ROLE_BOTS = ['builder-bot', 'reviewer-bot', 'maintain-bot'];
 
 test('role guard: the project, reviewer and maintain bots never push', () => {
