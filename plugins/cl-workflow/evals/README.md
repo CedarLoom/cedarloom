@@ -57,13 +57,13 @@ Compare only complete runs: both sides ran every selected case `--runs` times. A
 | Suite | Pass rate before | Pass rate after | Tokens before | Tokens after | Wall time before | Wall time after | Cost before | Cost after |
 |---|---|---|---|---|---|---|---|---|
 
-Pass rate is passing runs over all runs of the suite, counting each of a case's `--runs` runs on its own: a case that passes 2 of its 3 runs adds 2 passing runs and 3 runs. Cost is the sum of `costUsd` and `judgeCostUsd` in the JSON. Tokens are the sum of the `usage` of each run's final `result` event in its `trace.jsonl` (`input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens` and `output_tokens`), which the run keeps only with `--keep-temp`. Wall time is the run's duration. Name the model, the judge and the run count above the table.
+Pass rate is passing runs over all runs of the suite, counting each of a case's `--runs` runs on its own: a case that passes 2 of its 3 runs adds 2 passing runs and 3 runs. Cost is the sum of `costUsd` and `judgeCostUsd` in the JSON. Tokens are the sum, over every model in the `modelUsage` of each run's final `result` event in its `trace.jsonl`, of `inputTokens`, `cacheCreationInputTokens`, `cacheReadInputTokens` and `outputTokens`; `modelUsage` covers the main thread and its subagents, `usage` only the main thread. The run keeps the trace only with `--keep-temp`. Wall time is the run's duration. In the before and after table, tokens, wall time and cost count the with-plugin runs only (the suite's runs of the `with` arm), so both sides compare like with like whether or not the no-plugin arm ran. Name the model, the judge and the run count above the table.
 
 A pull request that lowers the pass rate of an affected suite does not merge until the case is fixed, or the drop is explained in the pull request and accepted in its review.
 
 ## Baseline
 
-Runs on `main` at commit `dbea48552b3c85cf8a2fbecf0e016a0ed7219d1f`, model `claude-opus-5-5` at the default effort, judge `haiku` (default), `--runs 3`, with the no-plugin arm (`with-without`).
+Runs on `main` at commit `dbea48552b3c85cf8a2fbecf0e016a0ed7219d1f`, model `claude-opus-5-5` at the default effort, judge `haiku` (default), `--runs 3`, with the no-plugin arm (`with-without`). Wall time and Cost per suite count the with-plugin runs only; the All cost covers both arms.
 
 | Suite | Pass rate | Pass rate without plugin | Tokens | Wall time | Cost |
 |---|---|---|---|---|---|
@@ -82,6 +82,6 @@ Runs on `main` at commit `dbea48552b3c85cf8a2fbecf0e016a0ed7219d1f`, model `clau
 | `skill-plan` | 7/9 (78%) | 0/9 | | 7m56s | $2.38 |
 | `skill-research` | 3/9 (33%) | 0/9 | | 13m22s | $2.59 |
 | `skill-workflow` | 12/12 (100%) | 0/12 | | 8m58s | $1.84 |
-| All | 98/138 (71%) | 2/138 | | 2h00m (run, 2 in parallel) | $44.50 (both arms) |
+| All | 98/138 (71%) | 2/138 | | 2h00m (run, 2 in parallel) | $44.66 (both arms) |
 
 Tokens were not recorded for this run: the eval JSON has no token counts, and the traces that hold them are deleted unless the run passes `--keep-temp`.
