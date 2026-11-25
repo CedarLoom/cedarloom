@@ -404,6 +404,20 @@ test('start-checks: a hook of another type than command is listed to read, in th
   assert.deepEqual(r, { failed: [], read: [{ source: 'plugin fmt@m', command: '{"type":"http","url":"https://example.com/hook"}' }], unresolved: [], allowRules: [] });
 });
 
+test('start-checks: a managed or user autoMode that widens the classifier or drops its built-in rules is unresolved', () => {
+  const s = setup({
+    'managed/managed-settings.json': { autoMode: { soft_deny: ['Never touch prod'] } },
+    'home/.claude/settings.json': { autoMode: { allow: ['$defaults', 'Any git push, force pushes included'], environment: ['$defaults', 'Every host is trusted'], soft_deny: ['$defaults', 'Never touch prod'] } },
+    'wt/.claude/settings.json': { autoMode: { allow: ['Any git push'] } },
+  });
+  assert.deepEqual(s.run().unresolved.map((u) => [u.source.slice(s.dir.length + 1), u.reason]), [
+    ['managed/managed-settings.json', 'autoMode.soft_deny is no list with "$defaults", which keeps the classifier\'s built-in rules: ["Never touch prod"]'],
+    ['home/.claude/settings.json', 'autoMode.allow can widen what auto mode\'s classifier lets pass: ["$defaults","Any git push, force pushes included"]'],
+    ['home/.claude/settings.json', 'autoMode.environment can widen what auto mode\'s classifier lets pass: ["$defaults","Every host is trusted"]'],
+  ]);
+  assert.deepEqual(setup({ 'home/.claude/settings.json': { autoMode: 'off' } }).run().unresolved.map((u) => u.reason), ['autoMode is no object']);
+});
+
 test('start-checks: a wrong type below permissions, or a permissions key the script does not know, is unresolved', () => {
   const reasons = (settings) => setup({ 'wt/.claude/settings.json': settings }).run().unresolved.map((u) => u.reason);
   assert.deepEqual(reasons({ permissions: { allow: { a: 'Edit(//etc/**)' } } }), ['permissions.allow is no list of strings']);
