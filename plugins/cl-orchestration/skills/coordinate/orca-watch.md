@@ -1,7 +1,5 @@
 # Orca watch
 
-How the coordinator waits and what it checks at each wake-up, and a permission dialog in a worker terminal. `ORCA` and the Orca guide are as [orca.md](orca.md) says.
-
 Contents: [Watch](#watch), [A permission dialog](#a-permission-dialog).
 
 ## Watch
@@ -24,12 +22,12 @@ At each wake-up, including an empty one, run these in this order; a wake-up that
 
 1. `worker-list --run <run id>` for state, with `--full` because the concise rows carry no `projection`.
 2. `gh pr list -R <owner/repo> --head <branch> --state merged --json number,title,mergedAt` for merged PRs.
-3. The stall check, and the [acknowledgement](orca-messages.md#acknowledgement) of each worker that has none yet.
+3. The stall check, and the [acknowledgement](orca-messages.md) of each worker that has none yet.
 4. The next step of each pull request that waits for its checks or its default-branch watch ([review-and-merge.md](review-and-merge.md#merge)).
 
 For a row whose `projection.attention.requiresAction` is true:
 
-- Run `ORCA` with its `projection.nextAction.argv` only when that command is `worker-read` or `worker-show`, or `worker-release` for a worker that the release rule lets go, a Claude Code worker's only after its terminal close ([Clean up](orca-clean-up.md#clean-up)): a Codex or supervised Claude Code worker whose pull request is in review or merge stays, whatever the row asks.
+- Run `ORCA` with its `projection.nextAction.argv` only when that command is `worker-read` or `worker-show`, or `worker-release` for a worker that the release rule lets go, a Claude Code worker's only after its terminal close ([Clean up](orca-clean-up.md)): a Codex or supervised Claude Code worker whose pull request is in review or merge stays, whatever the row asks.
 - Any other next action goes in the report.
 
 Acknowledge a delivery only after its outcome is handled (`check --ack <delivery_id>`).
@@ -40,7 +38,7 @@ Liveness, in the guide's terms: `ready` or `unverifiable` is absence, not proof.
 
 An automatic worker shows none: under `dontAsk` a call that would prompt is denied. A dialog in its terminal (a trust question, a login) is the owner's.
 
-A worker that Orca's own launch starts in a structured (chat) session shows none either: it has no terminal, and Orca answers its prompts by its agent permission setting ([Start the run](orca.md#start-the-run)), so nothing here declines a call. A supervised Claude Code worker runs in a coordinator-made terminal, in auto mode or in Manual where auto mode is unavailable, and can show one ([Start the run](orca.md#start-the-run)).
+A worker that Orca's own launch starts in a structured (chat) session shows none either: it has no terminal, and Orca answers its prompts by its agent permission setting ([Start the run](orca.md)), so nothing here declines a call. A supervised Claude Code worker runs in a coordinator-made terminal, in auto mode or in Manual where auto mode is unavailable, and can show one ([Start the run](orca.md)).
 
 In auto mode a single block of the auto mode check refuses one action, and the worker carries on with nothing shown. After 3 blocks in a row or 20 in total auto mode pauses and Claude Code prompts again; approving the prompted action resumes auto mode. A dialog also shows for an ask rule in the user's settings, for the first Read, Grep or Glob call on a path outside the working directories, and for every unlisted action in Manual ([permission modes](https://code.claude.com/docs/en/permission-modes)). With `permissionPrompts` `block`, list the dialog for the owner, and the item waits. Its approval says to answer once ("Yes"), never "Yes, and don't ask again" or another standing answer: that saves an allow rule in `.claude/settings.local.json` at the main checkout's root, which applies to every later worker of the project and to the user's own sessions there ([settings](https://code.claude.com/docs/en/settings#where-claude-code-keeps-the-local-file-in-a-git-repository)), and a narrow allow rule stays in effect in auto mode.
 

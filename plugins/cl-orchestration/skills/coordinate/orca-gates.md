@@ -1,7 +1,5 @@
 # Orca questions and gates
 
-A worker's questions, the gates that hold an item for the owner and the Orca tasks they sit on. `ORCA` and the Orca guide are as [orca.md](orca.md) says.
-
 Contents: [Questions](#questions), [Gates](#gates), [Tasks and gates](#tasks-and-gates).
 
 ## Questions
@@ -22,7 +20,7 @@ By ask and reply, in supervised mode ([Gates](modes.md#gates)):
 | --- | --- |
 | Which questions | each question that the written sources do not settle; for an owner-only decision, only the sources of [Owner-only decisions](SKILL.md#owner-only-decisions) |
 | The worker | asks ([Questions](#questions)) and waits |
-| While it waits | send no reply; once its turn ended while its `ask`, or a `needs-input` question held for the owner ([Stops](orca-messages.md#stops)), waits for the owner, with no other work left open, it does not count as working until the reply ([Host limit](orca.md#host-limit)), and that turn is no stall ([Watch](orca-watch.md#watch)) |
+| While it waits | send no reply; once its turn ended while its `ask`, or a `needs-input` question held for the owner ([Stops](orca-messages.md#stops)), waits for the owner, with no other work left open, it does not count as working until the reply ([Host limit](orca.md#host-limit)), and that turn is no stall ([Watch](orca-watch.md)) |
 | After the answer | once a slot is free, `reply --id <message id>` with the chosen option in a file, as [Questions](#questions) says |
 
 Automatic: the worker never asks ([Worker reports](orca-messages.md#worker-reports)). An owner-only question is a `BLOCKED` report with the question, and its answer a new start in its worktree, as [Gates](modes.md#gates) says.
@@ -69,4 +67,4 @@ On the answer, or once a wake-up check sees the pull request merged: `gate-resol
 
 ### An automatic worker's task
 
-An automatic worker sends no `worker_done`, so nothing settles its task: the item task for its first start, the start's own task for each later one. Once its release is confirmed ([Clean up](orca-clean-up.md#clean-up), Release), set that task by its final answer: `ORCA orchestration task-update --id <task id> --status completed --result DONE --json` for DONE, else `--status failed` with the outcome word (`BLOCKED`, `NEEDS_REPLAN`, `failed`) as the result. Unverified: the task's status after that release, and that Orca accepts the update there (read from Orca 1.4.259's source, not run). After a `worker-stop` of a worker that sent no `worker_done`, its task was `blocked` and `task-update --status completed` was accepted (observed with Orca 1.4.259).
+An automatic worker sends no `worker_done`, so nothing settles its task: the item task for its first start, the start's own task for each later one. Once its release is confirmed ([Clean up](orca-clean-up.md), Release), set that task by its final answer: `ORCA orchestration task-update --id <task id> --status completed --result DONE --json` for DONE, else `--status failed` with the outcome word (`BLOCKED`, `NEEDS_REPLAN`, `failed`) as the result. Unverified: the task's status after that release, and that Orca accepts the update there (read from Orca 1.4.259's source, not run). After a `worker-stop` of a worker that sent no `worker_done`, its task was `blocked` and `task-update --status completed` was accepted (observed with Orca 1.4.259).
