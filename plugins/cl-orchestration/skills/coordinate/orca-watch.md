@@ -11,7 +11,7 @@ How the coordinator waits:
 - **Always.** The coordinator never polls, but for the foreground wait without session crons (below), and never runs `check --wait` in the background: a background wait keeps a task alive at every turn end, so the plugin never clears an idle coordinator.
 - **With session crons.** End the turn after starting or messaging workers. At run start, create one recurring session cron (`CronCreate`) every 10 minutes on minutes off the hour (`3-59/10 * * * *`). Its prompt names the run id and the absolute path of this file, and lists the four wake-up checks below, so a wake runs them without reading a file and a silent worker is seen without mail.
   - The cron fires only while the session is idle and survives `/clear`.
-  - It expires after 7 days, and an expired cron cannot wake the session, so name its expiry date in the report of each wake and replace it before then.
+  - It expires after 30 days, and an expired cron cannot wake the session, so name its expiry date in the report of each wake and replace it before then.
   - To replace it: at the first wake within 2 days of that date, or when `CronList` no longer shows it, `CronDelete` it and create it again as at run start, with the same schedule and a new expiry date. A run that only waits for new issues (`keepRunning`) then keeps waking with no owner restart.
   - Delete it (`CronDelete`) when the run closes.
 - **Without session crons** (`CronCreate` missing, or `CLAUDE_CODE_DISABLE_CRON` set). It runs `check --wait` for those types with `--timeout-ms 600000` in the foreground, never looped faster than once a minute, and runs the wake-up checks when it returns.

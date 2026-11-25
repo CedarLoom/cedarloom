@@ -10,6 +10,9 @@
   "homepage": "https://github.com/CedarLoom/cedarloom#readme",
   "repository": "https://github.com/CedarLoom/cedarloom",
   "license": "ISC",
+  "engines": {
+    "claude-code": ">=2.1.330"
+  },
   "dependencies": [
     "cl-workflow",
     "cl-repo",
