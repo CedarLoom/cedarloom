@@ -39,6 +39,6 @@ graders:
     flags: i
   - type: regex
     name: one-builder-fix-run-recorded
-    pattern: 'Run C action:(?=[^\n]*builder)(?=[^\n]*\bhandled\W+(?:\w+\W+){0,4}?b2c3d4e5)(?=[^\n]*fix)'
+    pattern: 'Run C action:(?=[^\n]*builder)(?![^\n]*\b(?:two|2|both|second)\s+(?:\w+\s+){0,2}?builder)(?=[^\n]*\bhandled\W+(?:\w+\W+){0,4}?b2c3d4e5)(?=[^\n]*fix)'
     flags: i
 expected_outcome: 'Run A: end (handled names that head as fix). Run B: go on (a green event on a head handled as fix goes on). Run C: go on; one builder fix run for head b2c3d4e5..., recording handled { head: b2c3d4e5..., action: "fix" }.'
