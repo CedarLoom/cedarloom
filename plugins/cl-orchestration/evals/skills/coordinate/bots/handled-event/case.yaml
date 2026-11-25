@@ -1,0 +1,44 @@
+schema_version: "1.1"
+name: coord-bots-handled-event
+description: 'A project bot run ends when the state''s handled entry names the event''s head with an action that already answers the event (fix for a red head), goes on for a green event on a head handled as fix, and starts one builder fix run for a conflict on a head handled does not name. The case starts the skill, then has the session take SOUL.md and bot-project.md, the procedure an automation''s prompt names for a project bot run. Constructed for the rules at plugins/cl-orchestration/skills/coordinate/bot-project.md:9 and bot-project.md:37. Needs --scaffold.'
+tags: [cl-orchestration, coord-bots]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This session stands for three separate runs of the project bot of example-org/widget, each started by an event rule for pull request 31, not for a coordinator run: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure. It is a dry run: run no command and write no file. Decide step 3 (State) of each run from these facts only.
+
+    - Every run reads the same `pr-31.json`: `"handled": { "head": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678", "action": "fix" }`, `"held": null`, and no answer of the owner is new.
+    - Run A: `ci_failed` for head `a1b2c3d4e5f60718293a4b5c6d7e8f9012345678`.
+    - Run B: `ci_passed` for head `a1b2c3d4e5f60718293a4b5c6d7e8f9012345678`.
+    - Run C: `pr_conflicted` for head `b2c3d4e5f60718293a4b5c6d7e8f901234567890`.
+    - The daily counts leave room for every run.
+
+    Write exactly these four lines:
+    Run A: <end | go on>
+    Run B: <end | go on>
+    Run C: <end | go on>
+    Run C action: <what run C starts and the handled value it records, or none>
+    then stop.
+  max_turns: 12
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: red-head-already-handled-ends
+    pattern: 'Run A:\s*[`*_]*\s*end\b'
+    flags: i
+  - type: regex
+    name: green-on-fixed-head-goes-on
+    pattern: 'Run B:\s*[`*_]*\s*go on\b'
+    flags: i
+  - type: regex
+    name: new-conflict-goes-on
+    pattern: 'Run C:\s*[`*_]*\s*go on\b'
+    flags: i
+  - type: regex
+    name: one-builder-fix-run-recorded
+    pattern: 'Run C action:(?=[^\n]*builder)(?![^\n]*\b(?:two|2|both|second)\s+(?:\w+\s+){0,2}?builder)(?=[^\n]*\bhandled\W+(?:\w+\W+){0,4}?b2c3d4e5\w*\W+(?:\w+\W+){0,3}?"?fix\b)'
+    flags: i
+expected_outcome: 'Run A: end (handled names that head as fix). Run B: go on (a green event on a head handled as fix goes on). Run C: go on; one builder fix run for head b2c3d4e5..., recording handled { head: b2c3d4e5..., action: "fix" }.'

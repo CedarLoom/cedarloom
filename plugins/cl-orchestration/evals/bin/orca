@@ -1,0 +1,3 @@
+#!/bin/sh
+# The evals' orca: the fake of test/fake-orca.mjs, first on PATH for a run (evals/README.md).
+exec node "$(dirname "$0")/../../test/fake-orca.mjs" orca "$@"

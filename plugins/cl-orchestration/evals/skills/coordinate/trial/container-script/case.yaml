@@ -1,0 +1,35 @@
+schema_version: "1.1"
+name: coord-trial-container-script
+description: 'A pull request that changes a script the default branch''s dev container definition runs (its initializeCommand) can define the trial''s container, so the trial cannot run and the pull request takes the update path with gh pr update-branch, never --rebase. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/trial-merge.md:15. Needs --scaffold.'
+tags: [cl-orchestration, coord-trial]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run of the trial merge for one pull request: run no command and change no file. Decide from the facts below and the files in `project/`, which hold the default branch's commit: its `AGENTS.md`, `.devcontainer/` and `docs/agents/orchestration.json` are the default branch's.
+
+    - Repository example-org/widget, default branch main. Pull request #31 for issue 31, `<head>` 4c1d9e0a7b2f3c4d5e6f708192a3b4c5d6e7f809, which is also the reviewed head.
+    - The pull request changes `src/client.js`, `test/client.test.js`, `tools/container-prep.sh` and adds `docs/changelog.d/31.md`. The default branch has changed only `docs/changelog.d/29.md` since, so `shared` is empty.
+    - The verdict at step 3 of Merge: `next` trial, `pin` reviewed, `upToDate` false, `ownerOnly` [], `unsafePaths` [].
+
+    Write the line `Trial: <runs or cannot run>`, then the line `Container file: <the path of a file of the pull request that can define the trial's container, or none>`, then the line `Command: <the exact gh command you run next for this pull request>`, then stop.
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: trial-cannot-run
+    pattern: 'Trial:\W*cannot run'
+    flags: i
+  - type: regex
+    name: names-the-container-script
+    pattern: 'Container file:[^\n]*tools/container-prep\.sh'
+  - type: regex
+    name: update-branch-command
+    pattern: 'Command:[^\n]*gh pr update-branch 31 -R example-org/widget'
+  - type: regex
+    name: no-rebase-or-trial-clone
+    pattern: 'Command:[^\n]*(--rebase|gh repo clone|devcontainer|gh pr merge)'
+    match: not_contains
+expected_outcome: 'Trial: cannot run; Container file: tools/container-prep.sh (run by the default branch''s initializeCommand, so it is on the container list); Command: gh pr update-branch 31 -R example-org/widget.'

@@ -1,0 +1,36 @@
+schema_version: "1.1"
+name: coord-bots-plan-report
+description: 'At a builder plan report the project bot first checks the spec''s branch on origin: an absent branch (exit 2) lets the plan go on and takes cl:in-progress off the issue, an existing one makes the item BLOCKED for the owner and starts no build. The case starts the skill, then has the session take SOUL.md and bot-project.md, the procedure the pick sweep''s prompt names. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/bot-project.md:31. Needs --scaffold.'
+tags: [cl-orchestration, coord-bots]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This session stands for one pick sweep run of the project bot of example-org/widget (default branch `main`), not for a coordinator run: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure. It is a dry run: run no command and write no file. Decide what the run does with two plan reports, from these facts only.
+
+    - The prompts folder holds two builder prompt files of round 0, each a plan run (the line `Plan only.`), whose result files hold a plan report: one for issue 12, whose spec's branch is `feat/12-login-timeout`, and one for issue 14, whose spec's branch is `fix/14-cache-key`. Both issues carry `cl:in-progress`.
+    - Neither plan lists an open question.
+    - `git -C <clone> ls-remote --exit-code --heads origin feat/12-login-timeout` exited 2 and printed nothing.
+    - `git -C <clone> ls-remote --exit-code --heads origin fix/14-cache-key` exited 0 and printed `5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f80	refs/heads/fix/14-cache-key`.
+
+    Write exactly these three lines:
+    Issue 12: <BLOCKED for the owner | not blocked>
+    Issue 12 label: <the exact gh command this run takes for its cl:in-progress label, or none>
+    Issue 14: <BLOCKED for the owner | not blocked>
+    then stop.
+  max_turns: 12
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: absent-branch-not-blocked
+    pattern: 'Issue 12:\s*[`*_]*\s*not blocked'
+    flags: i
+  - type: regex
+    name: label-off-command
+    pattern: 'Issue 12 label:(?=[^\n]*gh issue edit 12\b)(?=[^\n]*-R example-org/widget)(?=[^\n]*--remove-label cl:in-progress)'
+  - type: regex
+    name: existing-branch-blocked
+    pattern: 'Issue 14:\s*[`*_]*\s*BLOCKED'
+expected_outcome: 'Issue 12: not blocked, label off with gh issue edit 12 -R example-org/widget --remove-label cl:in-progress. Issue 14: BLOCKED for the owner, as its branch exists on origin, and no build starts.'

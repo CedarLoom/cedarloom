@@ -1,0 +1,41 @@
+schema_version: "1.1"
+name: coord-merge-auto-merge-off
+description: 'When the first read after the merge command shows autoMergeRequest set, the coordinator switches auto-merge off with gh pr merge --disable-auto, runs the merge command no second time and leaves the pull request for the owner. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/merge.md:73. Needs --scaffold.'
+tags: [cl-orchestration, coord-merge]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    Run only step 6.1 of Merge for one pull request. The merge command of step 5.5 for pull request #31 of example-org/widget (default branch main, `<head>` 4c1d9e0a7b2f3c4d5e6f708192a3b4c5d6e7f809) ran today at 09:12:04 UTC, with `--squash`. Nothing else of this run is open.
+
+    Run the read of step 6.1 once now and whatever that read calls for, and nothing more: start no run and no worker, run no Orca command, and write no file.
+
+    Then write the line `Auto-merge: <on or off, as it is after your commands>`, then the line `Left for: <owner or coordinator>`, then stop.
+  max_turns: 20
+  allowed_tools: [Bash]
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: reads-merge-state
+    pattern: '"args":\["pr","view","31","-R","example-org/widget","--json","state,mergeCommit,mergedAt,headRefOid,autoMergeRequest"\]'
+    target: { source: file, path: .fake/gh-calls.jsonl }
+  - type: regex
+    name: disables-auto-merge
+    pattern: '"args":\["pr","merge","31","-R","example-org/widget","--disable-auto"\]'
+    target: { source: file, path: .fake/gh-calls.jsonl }
+  - type: regex
+    name: no-second-merge-command
+    pattern: '"args":\["pr","merge"(?!,"31","-R","example-org/widget","--disable-auto"\])'
+    match: not_contains
+    target: { source: file, path: .fake/gh-calls.jsonl }
+  - type: regex
+    name: auto-merge-off
+    pattern: 'Auto-merge:\W*off\b'
+    flags: i
+  - type: regex
+    name: left-for-owner
+    pattern: 'Left for:\W*(the\s+)?owner\b'
+    flags: i
+expected_outcome: 'The coordinator runs gh pr view 31 -R example-org/widget --json state,mergeCommit,mergedAt,headRefOid,autoMergeRequest, sees autoMergeRequest set, runs gh pr merge 31 -R example-org/widget --disable-auto and no other merge command, and writes Auto-merge: off and Left for: owner.'

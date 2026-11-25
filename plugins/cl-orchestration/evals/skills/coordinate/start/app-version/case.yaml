@@ -1,0 +1,35 @@
+schema_version: "1.1"
+name: coord-start-app-version
+description: 'A running Orca app older than 1.4.259, compared number by number (1.4.26 is older), fails the start condition, so the run starts nothing and the owner hears which check failed, with the installed CLI version only as information. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca.md:13. Needs --scaffold.'
+tags: [cl-orchestration, coord-start]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    Dry run of the start condition: run no command, change no file, and decide from these facts as the skill says.
+    - This session is Claude Code.
+    - `orca` on the PATH is the Orca executable, and `orca skills get orchestration` printed the orchestration guide and exited 0.
+    - `orca status --json` printed `{"ok":true,"result":{"runtime":{"appVersion":"1.4.26"}}}`.
+    - `orca --version` printed `1.4.262`.
+    - Issue 12 in `project` is ready to pick, and a worker slot is free.
+
+    Write these three lines, then stop:
+    `Failed condition: <the number of the start condition that fails, or none>`
+    `Next command: <the exact next orca command you would run, or none>`
+    `Owner message: <one sentence to the owner>`
+  max_turns: 8
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: version-condition-fails
+    pattern: 'Failed condition:\W*3\b'
+  - type: regex
+    name: no-run-create
+    pattern: 'Next command:\W*none'
+    flags: i
+  - type: regex
+    name: owner-told-app-and-cli-version
+    pattern: 'Owner message:(?=[^\n]*1\.4\.26\b)(?=[^\n]*1\.4\.259)(?=[^\n]*1\.4\.262)[^\n]*'
+expected_outcome: 'Failed condition: 3 (the app version 1.4.26 is below 1.4.259 number by number). Next command: none, so no run-create. The owner message names the app version 1.4.26, the minimum 1.4.259, and the installed CLI 1.4.262, which admits no start.'

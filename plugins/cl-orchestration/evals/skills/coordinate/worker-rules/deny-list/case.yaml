@@ -1,0 +1,36 @@
+schema_version: "1.1"
+name: coord-worker-rules-deny-list
+description: 'The deny rules of a supervised Claude Code worker''s rule file refuse the plain `git push` and `gh pr create` forms, a recursive `rm` and a `cat` of `.env` over any allow rule, and match the command as written, so `git -C . push` and a `cut` of `.env` pass them. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/modes.md:31. Needs --scaffold.'
+tags: [cl-orchestration, coord-worker-rules]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    Dry run, a question about the worker rules: run no command and change no file. A supervised Claude Code worker on Orca for issue 12 of `project` runs with the rule file that worker-settings.mjs wrote from worker-rules.json. The user's settings allow `Bash(git push *)` and `Bash(rm *)`. For each command below, decide whether the rule file's deny rules alone refuse it when the worker runs it in its worktree, leaving aside auto mode's classifier and the role guard:
+    1. `git push origin fix/12-login-timeout`
+    2. `git -C . push origin fix/12-login-timeout`
+    3. `gh pr create --draft --title "Fix login timeout"`
+    4. `gh pr view 40 --json state`
+    5. `cat .env`
+    6. `cut -d= -f1 .env`
+    7. `rm -rf build`
+
+    Write one line per command, `<number>: <refused|passes>`, then stop.
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: push-and-pr-forms
+    pattern: '\b1:\W*refused\b[\s\S]*\b2:\W*passes\b[\s\S]*\b3:\W*refused\b'
+    flags: i
+  - type: regex
+    name: env-reads
+    pattern: '\b5:\W*refused\b[\s\S]*\b6:\W*passes\b'
+    flags: i
+  - type: regex
+    name: read-only-gh-and-recursive-rm
+    pattern: '\b4:\W*passes\b[\s\S]*\b7:\W*refused\b'
+    flags: i
+expected_outcome: '1 refused, 2 passes (a Bash rule matches the command as written), 3 refused, 4 passes, 5 refused (a Read deny binds the Bash file commands Claude Code recognizes), 6 passes, 7 refused (deny wins over the user''s allow rules).'
