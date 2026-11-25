@@ -48,6 +48,9 @@ export function lintSkill(dir) {
   if (!/^".*"$/.test(fm.description ?? '')) errors.push(`${skillFile}: description must be in double quotes`);
   else if (fm.description.length - 2 > 1024) errors.push(`${skillFile}: description longer than 1024 characters`);
   if (text.split('\n').length > 500) errors.push(`${skillFile}: more than 500 lines`);
+  // Hidden from the / menu and closed to the model: nobody can start it (https://code.claude.com/docs/en/skills).
+  if (fm['user-invocable'] === 'false' && fm['disable-model-invocation'] === 'true')
+    errors.push(`${skillFile}: user-invocable: false with disable-model-invocation: true leaves no way to start the skill`);
   const files = markdownFiles(dir);
   const all = files.map((f) => readFileSync(f, 'utf8')).join('\n');
   if (/\bworkers?\b/i.test(all) && HANDS_TEXT.test(all) && !AUTHOR_FILTER.every((re) => re.test(all)))
