@@ -4,11 +4,12 @@
 // Pickable: open, carries startLabel and every issues.labels entry, not labeled cl:needs-human (an owner question), cl:in-progress (a worker holds it) or cl:deferred (the owner parked it), named by no question that waits for the owner (approval.mjs waiting), written by a trusted author (the repository owner, a trustedAuthors login, or a member or collaborator with write access), and no pull request for it: none merged or open in the repository with a head branch <type>/<number>-<slug> (an open one from a fork does not count, since anyone can open it).
 // An issue that several of the given projects list starts in none of them: it is printed once on stderr, as "several projects: <owner/repo>#<number> (<paths>)".
 // Unread: the prompt file of a builder run in round 0 (a build or plan from the spec, before its pull request) in the project bot's prompts folder whose result file holds text; the pick sweep deletes the prompt file once it read the result (bot-project.md, Start). Each is printed on stderr as "<folder>: <reason>".
-import { mkdirSync, readdirSync, readFileSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { readQueue, waiting } from './approval.mjs';
 import { errorLine, escaped, isMain, json, read, sh } from './policy.mjs';
+import { unique } from './state.mjs';
 
 // MEMBER is any member of the owning organization and COLLABORATOR any invited collaborator: either may have only the Read role, so each counts only with write access.
 const ASSOCIATED = ['MEMBER', 'COLLABORATOR'];
@@ -202,19 +203,44 @@ export function hostArgs(argv) {
   return { limit, working, folders: positionals, reserve, result, lock };
 }
 
-// The host-wide lock of the count and the reservation: mkdir is atomic, so one start at a time counts and creates its prompt file. A lock older than LOCK_STALE_MS was left by a run that died holding it.
+// The host-wide lock of the count and the reservation, so one start at a time counts and creates its prompt file: a folder that holds one empty file named by its holder's token. A start takes it by renaming a folder of its own onto the path, which fails while a holder's folder is there, since a rename replaces only an empty folder. Nothing moves a holder's folder, so the path is never free while the lock is held.
 const LOCK_STALE_MS = 30_000, LOCK_WAIT_MS = 10_000;
+const own = (lock, token) => `${lock}-new-${token}`;
+
+// A new token, its folder beside lock holding its token file. The folder that holds the lock is made on first use, so no bot home needs to hold it.
+export function lockToken(lock) {
+  const token = unique();
+  mkdirSync(own(lock, token), { recursive: true });
+  writeFileSync(join(own(lock, token), token), '');
+  return token;
+}
+
+// One try to take lock with token: true when taken. A token file older than LOCK_STALE_MS was left by a run that died holding the lock: removing that very file empties the folder for the next try, and of two starts that saw it, one removes it and neither touches a lock taken since.
+export function tryLock(lock, token, now) {
+  try { renameSync(own(lock, token), lock); return true; } catch (e) { if (e.code !== 'ENOTEMPTY' && e.code !== 'EEXIST') throw e; }
+  let names = [];
+  try { names = readdirSync(lock); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  for (const name of names) {
+    try { if (now() - statSync(join(lock, name)).mtimeMs > LOCK_STALE_MS) unlinkSync(join(lock, name)); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  }
+  return false;
+}
+
+// Frees the lock taken with token: its token file, then the folder, which stays when another start took the lock after a stale check removed that file.
+export function unlock(lock, token) {
+  try { unlinkSync(join(lock, token)); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  try { rmdirSync(lock); } catch (e) { if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(e.code)) throw e; }
+}
+
 function locked(lock, now, fn) {
-  const until = now() + LOCK_WAIT_MS;
-  for (;;) {
-    try { mkdirSync(lock); break; } catch (e) {
-      if (e.code !== 'EEXIST') throw e;
-      try { if (now() - statSync(lock).mtimeMs > LOCK_STALE_MS) rmdirSync(lock); } catch (e2) { if (e2.code !== 'ENOENT') throw e2; }
+  const token = lockToken(lock), until = now() + LOCK_WAIT_MS;
+  try {
+    while (!tryLock(lock, token, now)) {
       if (now() > until) throw new Error(`the host limit lock ${lock} is held`);
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
     }
-  }
-  try { return fn(); } finally { rmdirSync(lock); }
+  } catch (e) { rmSync(own(lock, token), { recursive: true, force: true }); throw e; }
+  try { return fn(); } finally { unlock(lock, token); }
 }
 
 // { runs, fits }: with reserve, the count and the placeholder prompt file (its result line only) are one step under the lock, so starts at the same time never pass the limit; the project bot then writes the prompt into that file, which counts as unfinished meanwhile.

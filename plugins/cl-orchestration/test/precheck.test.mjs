@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { argsOf, check, distinct, pickable, priorities, report, unfinished, unread } from '../skills/coordinate/precheck.mjs';
+import { argsOf, check, distinct, lockToken, pickable, priorities, report, tryLock, unfinished, unlock, unread } from '../skills/coordinate/precheck.mjs';
 
 const POLICY = { startLabel: 'agent-ready', trustedAuthors: ['helper[bot]'] };
 const issue = (number, extra = {}) => ({ number, author_association: 'OWNER', user: { login: 'owner' }, labels: [{ name: 'agent-ready' }], ...extra });
@@ -160,6 +160,48 @@ test('precheck: starts of two repositories at the same time for one free slot: e
     // The run that started and the one that reserved the slot; the refused starts left no file.
     assert.equal(readdirSync(alpha.prompts).length + readdirSync(beta.prompts).length, 2, `round ${round}`);
   }
+});
+
+const STALE = new Date('2026-01-01T00:00:00Z');
+
+test('precheck: a host limit lock a dead run left is freed by one start, and a lock taken since stays its holder\'s', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cl-lock-')), lock = join(dir, 'host-limit.lock');
+  const dead = lockToken(lock);
+  assert.equal(tryLock(lock, dead, Date.now), true);
+  utimesSync(join(lock, dead), STALE, STALE);
+  const first = lockToken(lock), second = lockToken(lock);
+  // The first try removes the dead run's stale token; the next try of another start takes the lock.
+  assert.equal(tryLock(lock, first, Date.now), false);
+  assert.equal(tryLock(lock, second, Date.now), true);
+  // The start that saw the stale lock tries again: it waits, and the new holder keeps its lock.
+  assert.equal(tryLock(lock, first, Date.now), false);
+  assert.deepEqual(readdirSync(lock), [second]);
+  unlock(lock, second);
+  assert.equal(tryLock(lock, first, Date.now), true);
+  unlock(lock, first);
+  assert.deepEqual(readdirSync(dir), []);
+});
+
+test('precheck: a start whose host limit lock was freed as stale releases it without an error and leaves the next holder\'s lock', () => {
+  const lock = join(mkdtempSync(join(tmpdir(), 'cl-lock-')), 'host-limit.lock');
+  const slow = lockToken(lock);
+  assert.equal(tryLock(lock, slow, Date.now), true);
+  utimesSync(join(lock, slow), STALE, STALE);
+  const next = lockToken(lock);
+  assert.equal(tryLock(lock, next, Date.now), false);
+  assert.equal(tryLock(lock, next, Date.now), true);
+  unlock(lock, slow);
+  assert.deepEqual(readdirSync(lock), [next]);
+});
+
+test('precheck: the host limit lock needs no bot home: its folder is made on first use and left empty', () => {
+  const alpha = home(), folder = join(mkdtempSync(join(tmpdir(), 'cl-host-')), 'host-limit');
+  const script = fileURLToPath(new URL('../skills/coordinate/precheck.mjs', import.meta.url));
+  const run = spawnSync(process.execPath, [script, '--host-limit', '1', '--working', '0', '--reserve', join(alpha.prompts, `alpha-3-builder-0-${RUN}`),
+    '--result', join(alpha.results, 'alpha-3.md'), '--lock', join(folder, 'host-limit.lock'), alpha.prompts], { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(readdirSync(alpha.prompts), [`alpha-3-builder-0-${RUN}`]);
+  assert.deepEqual(readdirSync(folder), []);
 });
 
 test('precheck: an issue that several projects list starts in none of them', () => {
