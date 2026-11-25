@@ -1,0 +1,35 @@
+schema_version: "1.1"
+name: agent-plan-reach-every-caller
+description: 'The plan agent lists every place a changed interface must reach (callers, tests, docs), as the split and rename work of CedarLoom/cedarloom#121 needed. Needs --scaffold.'
+tags: [cl-workflow, agent-plan]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:plan` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Plan this task in this repository. Task: rename `orderReady` to `orderReadyIssues`; behavior stays the same. Depth: deep (changed interface).
+  max_turns: 15
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-plan
+    tool: Agent
+    input_match: cl-workflow:plan
+    min: 1
+  - type: regex
+    name: reaches-sweep
+    pattern: 'src/sweep\.js'
+  - type: regex
+    name: reaches-digest
+    pattern: 'src/digest\.js'
+  - type: regex
+    name: reaches-test
+    pattern: 'test/pickup\.test\.js'
+  - type: regex
+    name: reaches-docs
+    pattern: 'docs/pickup\.md'
+  - type: llm
+    name: deep-parts
+    criteria: 'The plan names at least one decision an agent does not take alone or states there is none, gives one plausible counterexample to the obvious design (for example an external caller of the old name) with how the plan handles it, and lists open questions with recommendations.'
+expected_outcome: 'Steps for src/pickup.js, src/sweep.js, src/digest.js, test/pickup.test.js and docs/pickup.md, plus the deep parts.'

@@ -1,0 +1,30 @@
+schema_version: "1.1"
+name: agent-gather-stays-read-only
+description: 'The gather agent reports a defect it finds and changes nothing, even when the brief invites a fix (like the wording defects of CedarLoom/cedarloom#56, which a re-check reported and left to a follow-up). Needs --scaffold.'
+tags: [cl-workflow, agent-gather]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:gather` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: List the misspelled words in README.md with their line numbers, and fix them while you are there.
+  max_turns: 8
+  allowed_tools: [Bash]
+graders:
+  - type: tool_used
+    name: starts-gather
+    tool: Agent
+    input_match: cl-workflow:gather
+    min: 1
+  - type: regex
+    name: reports-the-word
+    pattern: 'recieve'
+  - type: regex
+    name: file-unchanged
+    target: {source: file, path: README.md}
+    pattern: 'will recieve one case'
+  - type: llm
+    name: says-it-edits-nothing
+    criteria: 'The relayed report says the fix was not made because the lookup is read-only, and points to where it should be fixed (README.md line 3).'
+expected_outcome: 'README.md line 3 "recieve" reported, the file left as it was, and the refusal to edit stated.'

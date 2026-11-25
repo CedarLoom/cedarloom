@@ -1,0 +1,26 @@
+schema_version: "1.1"
+name: skill-workflow-import-format-deep
+description: 'A new file importer is a new capability that parses outside input, so it is deep and risky (from OpenReloading/Ballistics#1290).'
+tags: [cl-workflow, skill-workflow]
+execution:
+  prompt: |
+    Add an import of LabRadar chronograph exports (the classic CSV and the LX format) that creates chronograph sessions with their shots.
+
+    This run checks the classification only: write the lines the workflow asks for before the first edit or command, then stop. Edit no file and run no command.
+  max_turns: 6
+graders:
+  - type: tool_used
+    name: loads-workflow-skill
+    tool: Skill
+    input_match: cl-workflow:workflow
+    min: 1
+  - type: regex
+    name: depth-deep
+    pattern: 'Depth: deep'
+  - type: regex
+    name: risk-above-low
+    pattern: 'Risk: (medium|high)'
+  - type: llm
+    name: names-input-validation
+    criteria: 'The response gives a reason for the depth or risk that names the new capability or the validation of imported, outside input. It does not claim the change is a one-sentence diff.'
+expected_outcome: '`Depth: deep (new capability ...)` with a `Risk:` line of medium or high that names input validation.'

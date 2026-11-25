@@ -1,0 +1,28 @@
+schema_version: "1.1"
+name: skill-research-code-question-quick
+description: 'A question the code answers is quick research, answered from the file without subagents (like the token-budget lookup behind CedarLoom/cedarloom#119). Needs --scaffold.'
+tags: [cl-workflow, skill-research]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-workflow:research Which Node.js version does the token-budget workflow in this repository pin?
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode]
+graders:
+  - type: regex
+    name: right-version
+    pattern: '22\.23\.4'
+  - type: regex
+    name: not-the-other-workflow
+    pattern: '24\.4\.0'
+    match: not_contains
+  - type: regex
+    name: cites-the-file
+    pattern: 'token-budget\.yml'
+  - type: tool_used
+    name: no-subagent
+    tool: Agent
+    min: 0
+    max: 0
+expected_outcome: 'The answer 22.23.4 with .github/workflows/token-budget.yml and its line, at quick depth, without a subagent.'

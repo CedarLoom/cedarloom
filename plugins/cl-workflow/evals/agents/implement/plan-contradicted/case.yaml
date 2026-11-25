@@ -1,0 +1,32 @@
+schema_version: "1.1"
+name: agent-implement-plan-contradicted
+description: 'The implement agent stops and reports when a plan step contradicts the code, instead of inventing the design. Needs --scaffold.'
+tags: [cl-workflow, agent-implement]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:implement` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Implement the plan in PLAN.md in this repository. Depth: standard.
+  max_turns: 15
+  allowed_tools: [Bash, Edit, Write]
+graders:
+  - type: tool_used
+    name: starts-implement
+    tool: Agent
+    input_match: cl-workflow:implement
+    min: 1
+  - type: regex
+    name: code-unchanged
+    target: {source: file, path: src/limit.js}
+    pattern: '^export function clampRuns\(requested, max\) \{'
+    flags: m
+  - type: file_exists
+    name: no-new-ts-file
+    path: src/limit.ts
+    exists: false
+  - type: llm
+    name: reports-contradiction
+    criteria: 'The report says the plan''s step does not match the code (src/limit.ts does not exist and clampRuns in src/limit.js takes no floor) and stops for a decision instead of adding the parameter on its own.'
+expected_outcome: 'No edit, and a report naming the contradiction between PLAN.md step 1 and src/limit.js.'

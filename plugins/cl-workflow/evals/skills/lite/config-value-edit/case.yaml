@@ -1,0 +1,41 @@
+schema_version: "1.1"
+name: skill-lite-config-value-edit
+description: '/cl-workflow:lite makes a one-value change with its lines, check and commit, and starts no subagent or workflow skill (from CedarLoom/cedarloom#119). Needs --scaffold.'
+tags: [cl-workflow, skill-lite]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-workflow:lite Raise the token budget total in .github/token-budget.json from 120,000 to 123,000.
+  max_turns: 15
+  allowed_tools: [Edit, Bash]
+graders:
+  - type: regex
+    name: value-changed
+    target: {source: file, path: .github/token-budget.json}
+    pattern: '"total": *123000'
+  - type: regex
+    name: lite-depth-line
+    target: trace
+    pattern: 'Depth: quick \(lite: [a-z]'
+  - type: regex
+    name: reports-skipped-steps
+    pattern: 'steps skipped: plan, subagents, review'
+    flags: i
+  - type: tool_used
+    name: no-subagent
+    tool: Agent
+    min: 0
+    max: 0
+  - type: tool_used
+    name: no-workflow-skill
+    tool: Skill
+    input_match: cl-workflow:workflow
+    min: 0
+    max: 0
+  - type: tool_used
+    name: commits
+    tool: Bash
+    input_match: git commit
+    min: 1
+expected_outcome: 'The total reads 123000, the trace has `Depth: quick (lite: config value)`, a commit exists, and the report says "steps skipped: plan, subagents, review".'

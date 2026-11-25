@@ -1,0 +1,28 @@
+schema_version: "1.1"
+name: agent-gather-model-inventory
+description: 'The gather agent returns an inventory with file and line per fact (a lookup like the model-role inventory of CedarLoom/cedarloom#134). Needs --scaffold.'
+tags: [cl-workflow, agent-gather]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:gather` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Which files in agents/ set `model: opus` in their frontmatter? Return one line per file with its path and line number, and what you did not check.
+  max_turns: 8
+graders:
+  - type: tool_used
+    name: starts-gather
+    tool: Agent
+    input_match: cl-workflow:gather
+    min: 1
+  - type: regex
+    name: finds-recheck
+    pattern: 'recheck\.md:?\D{0,12}4'
+  - type: regex
+    name: finds-verify
+    pattern: 'verify\.md:?\D{0,12}4'
+  - type: llm
+    name: no-false-match
+    criteria: 'The report lists exactly two matching files, recheck.md and verify.md, and does not list gather.md, plan.md or review.md as matches.'
+expected_outcome: 'agents/recheck.md line 4 and agents/verify.md line 4, nothing else.'

@@ -1,0 +1,24 @@
+schema_version: "1.1"
+name: skill-workflow-dependency-major-standard
+description: 'A dependency major bump is at least standard depth (from OpenReloading/Feeder#184).'
+tags: [cl-workflow, skill-workflow]
+execution:
+  prompt: |
+    Bump the Python dependency cachetools from 7.2.7 to 8.0.1.
+
+    This run checks the classification only: write the lines the workflow asks for before the first edit or command, then stop. Edit no file and run no command.
+  max_turns: 6
+graders:
+  - type: tool_used
+    name: loads-workflow-skill
+    tool: Skill
+    input_match: cl-workflow:workflow
+    min: 1
+  - type: regex
+    name: depth-standard-or-deep
+    pattern: 'Depth: (standard|deep)'
+  - type: regex
+    name: not-quick
+    pattern: 'Depth: quick'
+    match: not_contains
+expected_outcome: 'A `Depth: standard (dependency major ...)` or deeper line; never quick.'

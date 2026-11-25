@@ -1,0 +1,23 @@
+schema_version: "1.1"
+name: agent-verify-research-claim-check
+description: 'The verify agent checks a research answer claim by claim and catches one that its own cited source contradicts (the answer check of standard research, on the title format of CedarLoom/cedarloom#52, whose `!` marks a breaking change).'
+tags: [cl-workflow, agent-verify]
+execution:
+  prompt: |
+    Start the subagent `cl-workflow:verify` with the brief below. When it returns, relay its final message unchanged and stop.
+
+    Brief: Check this research answer before it is used. The decision it feeds: which pull request title format the repository's PR title check enforces.
+    - Claim 1: Conventional Commits 1.0.0 allows a `!` before the colon to mark a breaking change, for example `feat(api)!: drop v1`. Source: https://www.conventionalcommits.org/en/v1.0.0/ Confidence: high.
+    - Claim 2: Conventional Commits 1.0.0 requires the description after the colon to start with a capital letter. Source: https://www.conventionalcommits.org/en/v1.0.0/ Confidence: high.
+  max_turns: 10
+  allowed_tools: [WebFetch]
+graders:
+  - type: tool_used
+    name: starts-verify
+    tool: Agent
+    input_match: cl-workflow:verify
+    min: 1
+  - type: llm
+    name: catches-claim-2
+    criteria: 'Claim 1 holds. Claim 2 is a finding, because the specification sets no capitalization rule for the description; the report cites the specification as evidence and ends with "not passed".'
+expected_outcome: 'Claim 1 holds, claim 2 is a finding, verdict "not passed".'
