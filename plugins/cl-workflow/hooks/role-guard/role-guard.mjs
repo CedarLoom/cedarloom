@@ -485,14 +485,14 @@ const COMMIT_VALUE_LONG = ['author', 'date', 'message', 'file', 'reuse-message',
 
 // git commit --no-verify skips the pre-commit and commit-msg hooks. git takes it as -n, also grouped with other short options
 // before one that takes a value (-an, -nm x), and as any prefix of the long option (gitcli, "Abbreviating long options"),
-// anywhere before a -- that is no option's value.
+// anywhere before a -- or --end-of-options that is no option's value.
 function skipsHooks(args) {
   let i = 0;
   for (; i < args.length && args[i].startsWith('-'); i++) if (GIT_VALUE_OPTS.has(args[i]) || args[i] === '-c' || args[i] === '--config-env') i++;
   if (args[i] !== 'commit') return false;
   for (let j = i + 1; j < args.length; j++) {
     const w = args[j];
-    if (w === '--') return false;
+    if (w === '--' || w === '--end-of-options') return false;
     if (w.startsWith('--')) {
       const name = w.slice(2).split('=')[0];
       if (name && 'no-verify'.startsWith(name)) return true;
