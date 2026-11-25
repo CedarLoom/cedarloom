@@ -25,9 +25,8 @@ Take each project's policy from the reader, never from the JSON file: `node <ski
 | `deleteMergedBranch` | the owner allows deleting a branch whose PR is merged | no deletion |
 | `issuesPerWorker` | pickable issues of the project that one worker takes as its batch | 1 |
 | `keepRunning` | the run stays open for this project and picks up issues labeled later | false |
-| `permissionPrompts` | `block`; `decline` is accepted and acts as `block`; the owner answers the dialog once ([A permission dialog](orca-watch.md#a-permission-dialog)) | `block` |
+| `permissionPrompts` | `block`: the owner answers the dialog once ([A permission dialog](orca-watch.md#a-permission-dialog)) | `block` |
 | `mode` | `supervised` or `automatic` ([modes](modes.md#modes)). The run argument `--mode supervised` lowers it; nothing raises it. | `supervised` |
-| `sandbox.allowedDomains` | the hosts an automatic worker's commands may reach, required when `mode` is `automatic`: what the project's own tools fetch, each a host name, or `*.` before a domain. A GitHub host runs the project supervised ([Automatic start](automatic-start.md)): the coordinator pushes. `*.` on a shared-hosting suffix (`*.github.io`, `*.amazonaws.com`, `*.co.uk`) opens every tenant under it, and the reader resolves no name, so it does not see one that points at a local or metadata address | none |
 | `review.depth`, `review.sensitiveDepth` | the review level of a routine and of a sensitive change (`low`, `medium`, `high`, `xhigh`) | both `high` |
 | `riskyPaths` | paths whose change has high impact: the risk class is at least medium and the change sensitive ([Risk class](decisions.md#risk-class)). | none |
 | `review.sensitivePaths` | paths that make a change sensitive, besides the built-in classes ([review.md](review.md#sensitive-or-routine)) | none |
@@ -35,7 +34,7 @@ Take each project's policy from the reader, never from the JSON file: `node <ski
 | `models.phases.<phase>` | model and effort of a worker's phase subagent (`plan`, `implement`, `test`, `review`, `research`), printed only for the phases the policy names; `inherit` is the worker's own model | the workflow skill's: plan, implement and review `opus`, test `sonnet`, research `fable`, each at `high` |
 | `models.sensitive.<use>` | model and effort for a sensitive change: `plan` and `review`, the worker's Plan and Review phases; `independent`, the coordinator's reviewer; `security`, that reviewer for a change to authentication, permissions, secrets, input validation or firmware safety. Each field the policy leaves out keeps its default; `inherit` as in `models.phases`. | plan, review and independent `fable` at `high`, security `fable` at `xhigh`; an account without `fable` sets each `model` |
 | `issues.labels` | labels an issue must carry besides `startLabel`; the issues live in the project's repository ([SKILL.md](SKILL.md#names)), so the reader drops an `issues.repository` with a warning | no further label |
-| `minPlugin` | the oldest plugin version that may run this policy; on an older plugin the reader exits 1. A policy that sets `mode`, `sandbox`, `riskyPaths`, `merge.autoMergeMax` or `models.sensitive` names the first plugin version with that key here: an older plugin refuses the key | any |
+| `minPlugin` | the oldest plugin version that may run this policy; on an older plugin the reader exits 1. A policy that sets `mode`, `riskyPaths`, `merge.autoMergeMax` or `models.sensitive` names the first plugin version with that key here: an older plugin refuses the key | any |
 
 ## Pick order
 

@@ -9,7 +9,7 @@
   },
   "properties": {
     "$schema": { "type": "string" },
-    "schemaVersion": { "enum": [1, 2] },
+    "schemaVersion": { "enum": [2] },
     "startLabel": { "type": "string", "minLength": 1 },
     "trustedAuthors": { "type": "array", "items": { "type": "string", "minLength": 1 } },
     "workersPerProject": { "type": "integer", "minimum": 1, "maximum": 32 },
@@ -17,16 +17,8 @@
     "stallMinutes": { "type": "integer", "minimum": 1, "maximum": 1440 },
     "issuesPerWorker": { "type": "integer", "minimum": 1, "maximum": 16 },
     "keepRunning": { "type": "boolean" },
-    "permissionPrompts": { "enum": ["block", "decline"] },
+    "permissionPrompts": { "enum": ["block"] },
     "mode": { "enum": ["supervised", "automatic"] },
-    "sandbox": {
-      "type": "object",
-      "additionalProperties": false,
-      "patternProperties": { "^//": {} },
-      "properties": {
-        "allowedDomains": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^(\\*\\.)?([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]([a-z0-9-]*[a-z0-9])?$" } }
-      }
-    },
     "minPlugin": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
     "riskyPaths": { "type": "array", "items": { "type": "string", "pattern": "^(?!\\s)(?!\\.{1,2}(?:/|$))[^/\\\\*\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}\\u00A0\\u1680\\u2000-\\u200A\\u202F\\u205F\\u3000]+(?<!\\s)(?:/(?!\\s)(?!\\.{1,2}(?:/|$))[^/\\\\*\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}\\u00A0\\u1680\\u2000-\\u200A\\u202F\\u205F\\u3000]+(?<!\\s))*/?$" } },
     "issues": {

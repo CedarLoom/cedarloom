@@ -19,7 +19,7 @@ function worktree(name, gitdirLine) {
   return base;
 }
 
-test('worker-settings: fills the worktree, the shared .git, its worktrees folders and the hosts into the template', () => {
+test('worker-settings: fills the worktree and the shared .git into the template', () => {
   for (const [name, line, project = 'main'] of [
     ['wt', (base) => `gitdir: ${base}/main/.git/worktrees/wt\n`],
     ['wt', () => 'gitdir: ../main/.git/worktrees/wt\n'],
@@ -30,36 +30,29 @@ test('worker-settings: fills the worktree, the shared .git, its worktrees folder
   ]) {
     const base = worktree(name, line);
     symlinkSync(join(base, 'main'), join(base, 'alias'));
-    mkdirSync(join(base, 'main/.git/worktrees/other'));
     const file = join(base, 'run/settings/1-x.json');
-    const { status, stderr } = run([join(base, name), join(base, project), file, 'registry.npmjs.org', '*.pythonhosted.org']);
+    const { status, stderr } = run([join(base, name), join(base, project), file]);
     assert.equal(status, 0, stderr);
     const settings = JSON.parse(readFileSync(file, 'utf8'));
     const w = `/${base}/${name}`;
     const folders = `/${base}/main/.git/worktrees`;
+    assert.deepEqual(Object.keys(settings), ['permissions']);
     assert.deepEqual(settings.permissions.allow, [`Edit(${w}/**)`]);
-    assert.deepEqual(settings.permissions.deny.slice(0, 18), [
+    assert.deepEqual(settings.permissions.deny.slice(0, 14), [
       `Edit(${w}/.claude/**)`, `Edit(${w}/.mcp.json)`, `Edit(${w}/.vscode/**)`, `Edit(${w}/.idea/**)`,
       `Edit(${w}/.bashrc)`, `Edit(${w}/.zshrc)`, `Edit(${w}/.gitconfig)`,
       `Edit(${w}/.envrc)`, `Edit(${w}/.npmrc)`, `Edit(${w}/.husky/**)`,
       `Edit(/${base}/main/.git/commondir)`, `Edit(/${base}/main/.git/config.worktree)`,
-      `Edit(${folders}/*/commondir)`, `Edit(${folders}/other/commondir)`, `Edit(${folders}/${name}/commondir)`,
-      `Edit(${folders}/*/config.worktree)`, `Edit(${folders}/other/config.worktree)`, `Edit(${folders}/${name}/config.worktree)`,
+      `Edit(${folders}/*/commondir)`, `Edit(${folders}/*/config.worktree)`,
     ]);
-    // The worker rules that Bash(gh *), Bash(git push *), WebFetch and the .claude deny already match are left out; Edit rules stay ask, so the sandbox leaves .git to git.
-    assert.deepEqual(settings.permissions.deny.slice(-13), [
+    // The worker rules that Bash(gh *), Bash(git push *), WebFetch and the .claude deny already match are left out.
+    assert.deepEqual(settings.permissions.deny.slice(-16), [
       'mcp__*', 'Bash(gh *)', 'Bash(git push *)', 'Read(.env)', 'Read(.env.*)', 'Read(secrets/**)',
       'Bash(rm -r*)', 'Bash(rm -R*)', 'Bash(rm -fr*)', 'Bash(rm -fR*)', 'Bash(rm * -r*)', 'Bash(rm * -R*)', 'Bash(rm *--recursive*)',
+      `Edit(${w}/.github/**)`, 'Edit(//**/.git)', 'Edit(//**/.git/**)',
     ]);
-    assert.deepEqual(settings.permissions.ask, [`Edit(${w}/.github/**)`, 'Edit(//**/.git)', 'Edit(//**/.git/**)']);
-    assert.deepEqual(settings.sandbox.network, { strictAllowlist: true, allowLocalBinding: false, allowedDomains: ['registry.npmjs.org', '*.pythonhosted.org'] });
-    // On macOS the sandbox blocks only creating, removing and renaming the worktree's .git file, not writing it in place.
-    assert.deepEqual(settings.sandbox.filesystem, { disabled: false, denyWrite: [`${base}/${name}/.git`] });
-    for (const key of ['allowAppleEvents', 'allowNestedUserNamespaces', 'enableWeakerNestedSandbox', 'enableWeakerNetworkIsolation']) assert.equal(settings.sandbox[key], false, key);
-    assert.equal(settings.permissions.defaultMode, 'dontAsk');
+    assert.equal(settings.permissions.defaultMode, 'auto');
     assert.equal(settings.permissions.disableBypassPermissionsMode, 'disable');
-    assert.deepEqual(settings.sandbox.credentials.files[0], { path: '~/.ssh', mode: 'deny' });
-    assert.deepEqual(settings.sandbox.credentials.envVars.slice(-3), [{ name: 'ORCA_PAIRING_CODE', mode: 'deny' }, { name: 'ORCA_REMOTE_PAIRING', mode: 'deny' }, { name: 'ORCA_AGENT_SESSION_SPAWN_TOKEN', mode: 'deny' }]);
   }
 });
 
@@ -205,17 +198,13 @@ test('worker-settings: refuses a rule file with a key besides deny or a rule tha
   }
 });
 
-test('worker-settings: writes no file for a path, a host or a worktree it cannot fill in safely', () => {
+test('worker-settings: writes no file for a path, an extra argument or a worktree it cannot fill in safely', () => {
   const base = worktree('wt', (b) => `gitdir: ${b}/main/.git/worktrees/wt\n`);
-  // A folder under worktrees that no rule can name refuses every worktree beside it, so the pattern-named one has a .git of its own.
   const patterned = worktree('w*t', (b) => `gitdir: ${b}/main/.git/worktrees/w*t\n`);
-  mkdirSync(join(patterned, 'main/.git/worktrees/wt'));
-  mkdirSync(join(patterned, 'wt'));
-  writeFileSync(join(patterned, 'wt/.git'), `gitdir: ${patterned}/main/.git/worktrees/wt\n`);
   mkdirSync(join(base, 'main/.git/modules/sub'), { recursive: true });
   mkdirSync(join(base, 'sub'));
   writeFileSync(join(base, 'sub/.git'), `gitdir: ${base}/main/.git/modules/sub\n`);
-  // A worker can rewrite its worktree's .git file to name any folder it can write: one in the worktree, reached through a link the sandbox's temporary folder can hold, the worktree itself, or a folder under another .git's worktrees.
+  // A worker can rewrite its worktree's .git file to name any folder it can write: one in the worktree, reached through a link in a folder it can write, the worktree itself, or a folder under another .git's worktrees.
   symlinkSync(join(base, 'link'), join(base, 'alias'));
   for (const [name, named] of [
     ['own', 'own/inner/.git/worktrees/own'], ['link', 'alias/inner/.git/worktrees/link'], ['self', 'self/worktrees/self'], ['fake', 'elsewhere/.git/worktrees/fake'],
@@ -248,23 +237,20 @@ test('worker-settings: writes no file for a path, a host or a worktree it cannot
   const forged = [...['own', 'link', 'self', 'fake', 'dotdot', 'evil', 'missing', 'afile'].map((name) => join(base, name)), nested];
   for (const [args, error] of [
     ...forged.flatMap((folder) => [
-      [[folder, project, file, 'registry.npmjs.org'], /\.git names no folder under .*main\/\.git\/worktrees: not a linked worktree of that project/],
+      [[folder, project, file], /\.git names no folder under .*main\/\.git\/worktrees: not a linked worktree of that project/],
       [['--supervised', folder, project], /\.git names no folder under .*main\/\.git\/worktrees: not a linked worktree of that project/],
     ]),
-    [[join(base, 'wt'), project, file], /^length at sandbox\.allowedDomains/],
-    [[join(base, 'wt'), project, file, '*'], /^pattern at sandbox\.allowedDomains\[0\]/],
-    [[join(base, 'wt'), project, file, 'localhost'], /^pattern at sandbox\.allowedDomains\[0\]/],
-    [[join(patterned, 'w*t'), join(patterned, 'main'), file, 'registry.npmjs.org'], /is not an absolute path without a pattern character/],
-    [[join(patterned, 'wt'), join(patterned, 'main'), file, 'registry.npmjs.org'], /main\/\.git\/worktrees\/w\*t is not an absolute path without a pattern character/],
-    [['wt', project, file, 'registry.npmjs.org'], /^wt is not an absolute path without a pattern character/],
-    [[join(base, 'wt'), 'main', file, 'registry.npmjs.org'], /^main is not an absolute path/],
-    [[join(base, 'sub'), project, file, 'registry.npmjs.org'], /not a linked worktree of that project/],
-    [[join(base, 'wt'), join(base, 'linkedproj'), file, 'registry.npmjs.org'], /names no folder under .*linkedproj\/\.git\/worktrees: not a linked worktree of that project/],
+    [[join(base, 'wt'), project, file, 'registry.npmjs.org'], /^usage: /],
+    [[join(patterned, 'w*t'), join(patterned, 'main'), file], /is not an absolute path without a pattern character/],
+    [['wt', project, file], /^wt is not an absolute path without a pattern character/],
+    [[join(base, 'wt'), 'main', file], /^main is not an absolute path/],
+    [[join(base, 'sub'), project, file], /not a linked worktree of that project/],
+    [[join(base, 'wt'), join(base, 'linkedproj'), file], /names no folder under .*linkedproj\/\.git\/worktrees: not a linked worktree of that project/],
     // The project path names a linked worktree, whose .git is a file.
-    [[join(base, 'wt'), join(base, 'wt'), file, 'registry.npmjs.org'], /names no folder under .*wt\/\.git\/worktrees: not a linked worktree of that project/],
+    [[join(base, 'wt'), join(base, 'wt'), file], /names no folder under .*wt\/\.git\/worktrees: not a linked worktree of that project/],
     // Resolved from here it is the run folder's file, but the launch would read it in the worktree.
-    [[join(base, 'wt'), project, 'run/settings/1-x.json', 'registry.npmjs.org'], /^run\/settings\/1-x\.json is not an absolute path/],
-    ...inWorktree.map((inside) => [[join(base, 'wt'), project, inside, 'registry.npmjs.org'], /^the settings file must lie outside the worktree/]),
+    [[join(base, 'wt'), project, 'run/settings/1-x.json'], /^run\/settings\/1-x\.json is not an absolute path/],
+    ...inWorktree.map((inside) => [[join(base, 'wt'), project, inside], /^the settings file must lie outside the worktree/]),
   ]) {
     const { status, stderr } = run(args, base);
     assert.equal(status, 1, args.join(' '));
@@ -274,19 +260,19 @@ test('worker-settings: writes no file for a path, a host or a worktree it cannot
   assert.equal(existsSync(join(base, 'repo/.claude/info')), false);
 });
 
-test('worker-settings --check: passes the file the script wrote, refuses it emptied, unparsable, without its sandbox or with a second one', () => {
+test('worker-settings --check: passes the file the script wrote, refuses it emptied, unparsable, without its deny rules or with a second permissions key', () => {
   const base = worktree('wt', (b) => `gitdir: ${b}/main/.git/worktrees/wt\n`);
   const file = join(base, 'run/settings/1-x.json');
-  const args = [join(base, 'wt'), join(base, 'main'), file, 'registry.npmjs.org'];
+  const args = [join(base, 'wt'), join(base, 'main'), file];
   assert.equal(run(args, base).status, 0);
   const written = readFileSync(file, 'utf8');
   const passed = run(['--check', ...args], base);
   assert.equal(passed.status, 0, passed.stderr);
-  const withoutSandbox = JSON.parse(written);
-  delete withoutSandbox.sandbox;
+  const withoutDeny = JSON.parse(written);
+  delete withoutDeny.permissions.deny;
   // JSON.parse keeps the last of two equal keys; another parser may keep the first.
-  const sandboxOffFirst = `{"sandbox":{"enabled":false},${written.slice(1)}`;
-  for (const content of ['', written.slice(0, -20), JSON.stringify(withoutSandbox), sandboxOffFirst]) {
+  const emptyFirst = `{"permissions":{},${written.slice(1)}`;
+  for (const content of ['', written.slice(0, -20), JSON.stringify(withoutDeny), emptyFirst]) {
     writeFileSync(file, content);
     const { status, stderr } = run(['--check', ...args], base);
     assert.equal(status, 1, JSON.stringify(content.slice(0, 40)));

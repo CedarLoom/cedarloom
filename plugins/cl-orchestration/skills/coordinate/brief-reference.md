@@ -7,7 +7,7 @@
 - Every other `gh` command names its repository with `-R` or in the API path.
 - A branch is `<type>/<number>-<slug>`, type and slug in lower-case letters, digits and hyphens. A branch name goes into a command only when it is plain as `merge-checks.mjs` requires.
 - Numbers and commit ids come from `gh` and `git` output; names from the state file or the spec the project bot wrote.
-- Per pull request: the state file `pr-<n>.json`, the event automations `<owner/repo>#<n> <event>`, the clones `<bot home>/clones/<repo>-<n>-<counter>`. Never clone into a temporary folder: sandboxed commands may write there.
+- Per pull request: the state file `pr-<n>.json`, the event automations `<owner/repo>#<n> <event>`, the clones `<bot home>/clones/<repo>-<n>-<counter>`.
 
 ## Roles
 

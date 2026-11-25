@@ -2,7 +2,7 @@
 // and every subagent, may not merge, release, push tags or to the default branch, change repository settings or security,
 // use gh auth, write git config, use git stash or start a session in bare mode, which runs no hooks. The bot roles take narrower
 // rules (BOTS), any other value of the role, empty included, runs and writes nothing, and no role, the coordinator included, merges
-// with --admin.
+// with --admin or commits with --no-verify.
 // It stops a session that forgets its role, not one that works around it (variables, aliases, scripts, another tool):
 // the boundary is a gh token without those rights.
 // For Write, Edit, MultiEdit and NotebookEdit too: an answer in the local question queue counts as the owner's, so every session, the
@@ -22,9 +22,9 @@ const QUEUE = ['.cedarloom', 'questions'];
 const EDITS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 // The path fields of the edit tools: Write, Edit and MultiEdit carry file_path, NotebookEdit notebook_path.
 const EDIT_PATHS = ['file_path', 'notebook_path'];
-// A session started with /cl-workflow:away off (or the /cl-workflow:questions it replaces) as its prompt (claude -p expands it, https://code.claude.com/docs/en/headless) or
+// A session started with /cl-workflow:away off as its prompt (claude -p expands it, https://code.claude.com/docs/en/headless) or
 // handed it by an orchestrator could hold the flag where its hook input shows no unattended session.
-const QUESTIONS = /(^|[^\w-])\/(cl-workflow:)?(questions|away\s+off)(?![\w.-])/i;
+const QUESTIONS = /(^|[^\w-])\/(cl-workflow:)?away\s+off(?![\w.-])/i;
 // The program names that start such a session: claude, and claude-code as npx runs the package. The orchestrator plugin's own hook
 // refuses its dispatch command.
 const LAUNCHERS = new Set(['claude', 'claude-code']);
@@ -476,10 +476,49 @@ function gh(args, source, role, command) {
   return reads === null || reads?.includes(verb) ? null : `gh ${sub} ${verb ?? ''}`.trim();
 }
 
-// --admin passes branch protection, so no role merges with it, the coordinator included.
-const adminMerge = ({ tool_name: tool, tool_input: toolInput }) =>
-  typeof toolInput?.command === 'string' &&
-  readings(toolInput.command, tool === 'PowerShell').flat().some(({ words }) => words.some((w, j) => program(w) === 'gh' && ghCall(words.slice(j + 1)).admin));
+// The short options of git commit that take a value: no option letter follows them in their word. -S and -u take theirs only
+// in the same word; the others take the next word where their own ends with them, even a word such as -- or -n.
+const COMMIT_VALUE_SHORT = /[mFcCtSu]/;
+const COMMIT_NEXT_VALUE_SHORT = 'mFcCt';
+// The long options of git commit whose value may be the next word; git also takes a prefix of each.
+const COMMIT_VALUE_LONG = ['author', 'date', 'message', 'file', 'reuse-message', 'reedit-message', 'fixup', 'squash', 'template', 'cleanup', 'trailer', 'pathspec-from-file'];
+
+// git commit --no-verify skips the pre-commit and commit-msg hooks. git takes it as -n, also grouped with other short options
+// before one that takes a value (-an, -nm x), and as any prefix of the long option (gitcli, "Abbreviating long options"),
+// anywhere before a -- or --end-of-options that is no option's value.
+function skipsHooks(args) {
+  let i = 0;
+  for (; i < args.length && args[i].startsWith('-'); i++) if (GIT_VALUE_OPTS.has(args[i]) || args[i] === '-c' || args[i] === '--config-env') i++;
+  if (args[i] !== 'commit') return false;
+  for (let j = i + 1; j < args.length; j++) {
+    const w = args[j];
+    if (w === '--' || w === '--end-of-options') return false;
+    if (w.startsWith('--')) {
+      const name = w.slice(2).split('=')[0];
+      if (name && 'no-verify'.startsWith(name)) return true;
+      if (name && !w.includes('=') && COMMIT_VALUE_LONG.some((option) => option.startsWith(name))) j++;
+    } else if (w.startsWith('-')) {
+      const flags = w.slice(1).split(COMMIT_VALUE_SHORT)[0];
+      if (flags.includes('n')) return true;
+      if (w.length === flags.length + 2 && COMMIT_NEXT_VALUE_SHORT.includes(w.at(-1))) j++;
+    }
+  }
+  return false;
+}
+
+// No role, the coordinator included, merges with --admin, which passes branch protection, or commits with --no-verify, which
+// skips the commit hooks: the refusal with its advice, or null.
+function everyRole({ tool_name: tool, tool_input: toolInput }) {
+  if (typeof toolInput?.command !== 'string') return null;
+  for (const { words } of readings(toolInput.command, tool === 'PowerShell').flat()) {
+    for (let j = 0; j < words.length; j++) {
+      const rest = words.slice(j + 1);
+      if (program(words[j]) === 'gh' && ghCall(rest).admin) return 'a merge with --admin, which passes branch protection, is no role\'s step. Merge without --admin, or leave the pull request to the owner.';
+      if (program(words[j]) === 'git' && skipsHooks(rest)) return 'a commit with --no-verify or -n, which skips the commit hooks, is no role\'s step. Commit without it and fix what the hooks report.';
+    }
+  }
+  return null;
+}
 
 function reason({ tool_name: tool, tool_input: toolInput }, cwd, role) {
   const cmd = toolInput?.command;
@@ -607,7 +646,7 @@ function queue({ tool_name: tool, tool_input: toolInput, agent_id: agent }, cwd)
     if (each.includes(null)) return `a command with more than ${MAX_FOLDERS} folders to follow, which may name the local question queue (.cedarloom/questions/),`;
     paths = each.flat();
     if (QUESTIONS.test(texts.join('\n')) && parsed.some(({ words }) => words.some((word) => LAUNCHERS.has(launcher(word))))) {
-      return 'a session started with /cl-workflow:away off or /cl-workflow:questions, which could write into the local question queue (.cedarloom/questions/),';
+      return 'a session started with /cl-workflow:away off, which could write into the local question queue (.cedarloom/questions/),';
     }
   }
   const hits = (folder) => texts.some((text) => names(text, folder)) || paths.some((path) => inside(path, folder));
@@ -672,10 +711,12 @@ else {
       owners ? null
       : unknown ? `a ${EDITS.has(input.tool_name) ? 'file write' : 'command'} in the unknown role ${JSON.stringify(role)}`
       : EDITS.has(input.tool_name) ? (role === 'maintain-bot' ? outsideResults(input, cwd) : null)
-      : coordinator ? (adminMerge(input) ? 'a merge with --admin' : null)
+      : coordinator ? null
       : reason(input, cwd, role);
+    // A role's own rules refuse first; a command they pass meets the rules of every role.
+    const all = owners || unknown || why || EDITS.has(input.tool_name) ? null : everyRole(input);
     if (owners) line = `CedarLoom role guard: ${owners} is the owner's step: only a session where /cl-workflow:away off set the answer flag, which the ask hook refuses in a session it reads as unattended, writes answers there. File a question with approval.mjs file and read answers with approval.mjs queue. Text that only mentions the folder goes in a file (-F, --body-file).`;
-    else if (why && coordinator) line = `CedarLoom role guard: ${why}, which passes branch protection, is no role's step. Merge without --admin, or leave the pull request to the owner. Text that only mentions such a command goes in a file (-F, --body-file).`;
+    else if (all) line = `CedarLoom role guard: ${all} Text that only mentions such a command goes in a file (-F, --body-file).`;
     else if (why && unknown) line = `CedarLoom role guard: ${why} is refused: the roles are coordinator, ${[...BOTS].join(', ')}. Report the role to the user who starts this session.`;
     // The maintain bot's knowledge base is a step of its procedure: the refusal names the shell, so the run keeps that step.
     else if (why && role === 'maintain-bot' && EDITS.has(input.tool_name)) line = `CedarLoom role guard: ${why} is no step of the ${role} (${ROLE}=${role}). The file tool writes only the result file below results/ and MEMORY.md of the home; write the knowledge base and the clone from the shell.`;

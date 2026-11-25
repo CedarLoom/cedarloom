@@ -6,7 +6,6 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { startChecks } from '../skills/coordinate/start-checks.mjs';
-import { initRepo } from './git-repo.mjs';
 
 const SCRIPT = fileURLToPath(new URL('../skills/coordinate/start-checks.mjs', import.meta.url));
 
@@ -18,17 +17,16 @@ function setup(files = {}) {
     writeFileSync(join(dir, path), typeof value === 'string' ? value : JSON.stringify(value));
   }
   for (const folder of ['project', 'wt', 'home/.claude']) mkdirSync(join(dir, folder), { recursive: true });
-  const options = { project: join(dir, 'project'), worktree: join(dir, 'wt'), configDir: join(dir, 'home/.claude'), claudeJson: join(dir, 'home/.claude.json'), managedDir: join(dir, 'managed'), home: join(dir, 'home'), platform: 'linux', domains: ['registry.npmjs.org'], env: {} };
+  const options = { project: join(dir, 'project'), worktree: join(dir, 'wt'), configDir: join(dir, 'home/.claude'), claudeJson: join(dir, 'home/.claude.json'), managedDir: join(dir, 'managed'), home: join(dir, 'home'), env: {} };
   return { dir, options, run: (more = {}) => startChecks({ ...options, ...more }) };
 }
 const hook = (command) => ({ hooks: { PostToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command }] }] } });
 
-test('start-checks: settings with no command and no entry that defeats a bound pass, naming the other allow rules and domains', () => {
-  const s = setup({ 'home/.claude/settings.json': { permissions: { allow: ['Bash(ls *)'] }, sandbox: { network: { allowedDomains: ['pypi.org'] }, filesystem: { allowWrite: [] } } } });
+test('start-checks: settings with no command and no entry that defeats a bound pass, naming the other allow rules', () => {
+  const s = setup({ 'home/.claude/settings.json': { permissions: { allow: ['Bash(ls *)', 'WebFetch(domain:raw.githubusercontent.com)'] } } });
   assert.deepEqual(s.run(), {
     failed: [], read: [], unresolved: [],
-    allowRules: [{ source: join(s.dir, 'home/.claude/settings.json'), rule: 'Bash(ls *)' }],
-    allowedDomains: [{ source: join(s.dir, 'home/.claude/settings.json'), domain: 'pypi.org' }],
+    allowRules: [{ source: join(s.dir, 'home/.claude/settings.json'), rule: 'Bash(ls *)' }, { source: join(s.dir, 'home/.claude/settings.json'), rule: 'WebFetch(domain:raw.githubusercontent.com)' }],
   });
 });
 
@@ -76,39 +74,17 @@ test('start-checks: other commands, of an enabled plugin and of the user, are li
   ]);
 });
 
-test('start-checks: each entry that defeats a bound fails check 4', () => {
-  const s = setup({
-    'home/.claude/settings.json': {
-      permissions: { allow: ['WebFetch(domain:raw.githubusercontent.com)'], additionalDirectories: ['~/notes'] },
-      sandbox: {
-        excludedCommands: ['docker'], allowAppleEvents: true, enabledPlatforms: ['macos'], bwrapPath: '/opt/bwrap',
-        network: { allowUnixSockets: ['/var/run/docker.sock'], allowLocalBinding: true, httpProxyPort: 8080, allowedDomains: ['*.github.com', 'github.com:443', '*.com', 'pypi.org'] },
-        filesystem: { allowRead: [join('/', 'etc')], allowWrite: ['../shared'] },
-      },
-    },
-  });
-  assert.deepEqual(s.run({ domains: ['github.com'] }).failed.map((f) => f.entry), [
-    'sandbox.allowAppleEvents',
-    'sandbox.network.allowLocalBinding',
-    'sandbox.excludedCommands',
-    'sandbox.network.allowUnixSockets',
-    'sandbox.network.httpProxyPort',
-    'sandbox.bwrapPath',
-    'sandbox.enabledPlatforms leaves out this platform',
-    'sandbox.filesystem.allowRead outside the worktree: /etc',
-    'sandbox.filesystem.allowWrite outside the worktree: ../shared',
+test('start-checks: an additionalDirectories entry outside the worktree fails check 4', () => {
+  const s = setup({ 'home/.claude/settings.json': { permissions: { additionalDirectories: ['~/notes', '../shared'] } } });
+  assert.deepEqual(s.run().failed.map((f) => f.entry), [
     'permissions.additionalDirectories outside the worktree: ~/notes',
-    'a GitHub host in sandbox.network.allowedDomains: *.github.com',
-    'a GitHub host in sandbox.network.allowedDomains: github.com:443',
-    'a GitHub host in sandbox.network.allowedDomains: *.com',
-    'a GitHub host in a WebFetch allow rule: WebFetch(domain:raw.githubusercontent.com)',
-    'a GitHub host: github.com',
+    'permissions.additionalDirectories outside the worktree: ../shared',
   ]);
 });
 
 test('start-checks: an entry inside the worktree, or relative in the committed settings, passes check 4', () => {
   const s = setup({
-    'project/.claude/settings.json': { sandbox: { filesystem: { allowWrite: ['build'] } } },
+    'project/.claude/settings.json': { permissions: { additionalDirectories: ['build'] } },
   });
   // The settings' own absolute form, //, for a folder in the worktree.
   mkdirSync(join(s.dir, 'home/.claude'), { recursive: true });
@@ -123,16 +99,7 @@ test('start-checks: an entry inside the worktree, or relative in the committed s
 
 test('start-checks: the command line exits 0 on a pass, 2 with commands to read, 1 on a failure or an unreadable file', () => {
   const s = setup();
-  // The policy comes from origin's default branch.
-  const origin = join(s.dir, 'origin');
-  mkdirSync(origin);
-  const git = initRepo(origin);
-  mkdirSync(join(origin, 'docs/agents'), { recursive: true });
-  writeFileSync(join(origin, 'docs/agents/orchestration.json'), '{ "mode": "automatic", "sandbox": { "allowedDomains": ["registry.npmjs.org"] } }\n');
-  git('add', '-A');
-  git('commit', '-qm', 'policy');
-  const project = join(s.dir, 'checkout');
-  git('clone', '-q', origin, project);
+  const project = s.options.project;
   const settings = join(s.dir, 'home/.claude/settings.json');
   mkdirSync(dirname(settings), { recursive: true });
   const run = () => spawnSync(process.execPath, [SCRIPT, '--project', project, '--config-dir', join(s.dir, 'home/.claude'), '--managed', join(s.dir, 'managed')], { encoding: 'utf8' });
@@ -141,7 +108,7 @@ test('start-checks: the command line exits 0 on a pass, 2 with commands to read,
   const listed = run();
   assert.equal(listed.status, 2);
   assert.deepEqual(JSON.parse(listed.stdout).read, [{ source: `${settings} apiKeyHelper`, command: '/usr/local/bin/key-helper' }]);
-  writeFileSync(settings, JSON.stringify({ sandbox: { excludedCommands: ['git'] } }));
+  writeFileSync(settings, JSON.stringify({ permissions: { additionalDirectories: ['/etc'] } }));
   assert.equal(run().status, 1);
   writeFileSync(settings, JSON.stringify({ enabledPlugins: { 'fmt@market': true } }));
   const unresolved = run();
@@ -173,7 +140,7 @@ test('start-checks: a plugin source the script cannot resolve is unresolved, and
 test("start-checks: the worktree's settings and .mcp.json are read as the main checkout's", () => {
   const s = setup({
     'wt/.claude/settings.json': hook('npx prettier --write .'),
-    'wt/.claude/settings.local.json': { sandbox: { excludedCommands: ['docker'] } },
+    'wt/.claude/settings.local.json': { permissions: { additionalDirectories: ['/opt/x'] } },
     'wt/.mcp.json': { mcpServers: { srv: { command: 'node', args: ['./server.js'] } } },
     'managed/managed-mcp.json': { mcpServers: { corp: { command: 'npx', args: ['corp-mcp'] } } },
   });
@@ -181,7 +148,7 @@ test("start-checks: the worktree's settings and .mcp.json are read as the main c
     [3, 'wt/.claude/settings.json', "runs a tool that loads the repository's code or configuration: npx prettier --write ."],
     [3, 'managed/managed-mcp.json', "runs a tool that loads the repository's code or configuration: npx corp-mcp"],
     [3, 'wt/.mcp.json', 'runs a file inside the repository: node ./server.js'],
-    [4, 'wt/.claude/settings.local.json', 'sandbox.excludedCommands'],
+    [4, 'wt/.claude/settings.local.json', 'permissions.additionalDirectories outside the worktree: /opt/x'],
   ]);
 });
 
@@ -192,28 +159,13 @@ test('start-checks: an entry that a link at any depth leads out of the worktree 
   symlinkSync(join(s.dir, 'nowhere'), join(s.options.worktree, 'dangling'));
   const wt = s.options.worktree;
   mkdirSync(join(s.dir, 'project/.claude'));
-  writeFileSync(join(s.dir, 'project/.claude/settings.json'), JSON.stringify({ sandbox: { filesystem: { allowWrite: ['out/cache', 'build', `${wt}/out/missing`, `${wt}/out/**`, `${wt}/dangling`, `${wt}/new/dir`] } } }));
+  writeFileSync(join(s.dir, 'project/.claude/settings.json'), JSON.stringify({ permissions: { additionalDirectories: ['out/cache', 'build', `${wt}/out/missing`, `${wt}/out/**`, `${wt}/dangling`, `${wt}/new/dir`] } }));
   assert.deepEqual(s.run().failed.map((f) => f.entry.replaceAll(wt, '<wt>')), [
-    'sandbox.filesystem.allowWrite outside the worktree: out/cache',
-    'sandbox.filesystem.allowWrite outside the worktree: <wt>/out/missing',
-    'sandbox.filesystem.allowWrite outside the worktree: <wt>/out/**',
-    'sandbox.filesystem.allowWrite outside the worktree: <wt>/dangling',
+    'permissions.additionalDirectories outside the worktree: out/cache',
+    'permissions.additionalDirectories outside the worktree: <wt>/out/missing',
+    'permissions.additionalDirectories outside the worktree: <wt>/out/**',
+    'permissions.additionalDirectories outside the worktree: <wt>/dangling',
   ]);
-});
-
-test('start-checks: a network entry of another form than a host name is unresolved, never passed', () => {
-  const odd = ['github.com.', ' github.com', 'https://github.com', 'github.com/', 'user@github.com', '\uff47ithub.com', '140.82.112.3', '[::1]'];
-  const s = setup({ 'home/.claude/settings.json': { sandbox: { network: { allowedDomains: [...odd, 'pypi.org:443'] } }, permissions: { allow: ['WebFetch(domain: github.com)', 'WebFetch', 'Bash(ls)'] } } });
-  const result = s.run({ domains: ['api.github.com.'] });
-  assert.deepEqual(result.failed, []);
-  assert.deepEqual(result.unresolved.map((u) => u.reason), [
-    ...odd.map((d) => `no plain host name: ${d}`),
-    'no plain host name: WebFetch(domain: github.com)',
-    'a WebFetch allow rule of another form than WebFetch(domain:<host>): WebFetch',
-    'no plain host name: api.github.com.',
-  ]);
-  assert.deepEqual(result.allowedDomains.map((d) => d.domain), ['pypi.org:443']);
-  assert.deepEqual(result.allowRules.map((r) => r.rule), ['Bash(ls)']);
 });
 
 test('start-checks: an environment of a server or of the settings is tested and listed with the command', () => {
@@ -235,12 +187,12 @@ test('start-checks: an environment of a server or of the settings is tested and 
 test('start-checks: a value of a shape the script cannot read is unresolved or listed, never passed', () => {
   const s = setup({
     'home/.claude/settings.json': [],
-    'project/.claude/settings.json': { sandbox: 'on', enabledPlugins: ['x@m'], ...hook(['/opt/fmt', '.']) },
+    'project/.claude/settings.json': { permissions: 'on', enabledPlugins: ['x@m'], ...hook(['/opt/fmt', '.']) },
   });
   const result = s.run();
   assert.deepEqual(result.unresolved.map((u) => `${u.source.slice(s.dir.length + 1)}: ${u.reason}`), [
     'home/.claude/settings.json: holds no JSON object',
-    'project/.claude/settings.json: sandbox is no object',
+    'project/.claude/settings.json: permissions is no object',
     'project/.claude/settings.json: enabledPlugins is no object',
   ]);
   assert.deepEqual(result.failed.map((f) => f.entry), ['runs a file inside the repository: ["/opt/fmt","."]']);
@@ -306,7 +258,7 @@ test('start-checks: a plugin turned off only in a settings file the worktree ses
 test('start-checks: a settings key the script does not know to run no command is unresolved, and each command setting is read', () => {
   const s = setup({
     'managed/managed-settings.json': { policyHelper: { path: '/opt/corp/policy' }, extraKnownMarketplaces: {} },
-    'home/.claude/settings.json': { model: 'opus', processWrapper: '/opt/corp/launch', sandbox: { futurePath: '/opt/x', network: { futureProxy: 1 }, filesystem: { allowWrite: [], futureList: [] } } },
+    'home/.claude/settings.json': { model: 'opus', processWrapper: '/opt/corp/launch' },
     'wt/.claude/settings.json': { subagentStatusLine: { type: 'command', command: 'node scripts/status.js' }, futureHelper: 'sh run.sh' },
   });
   const r = s.run(), [managed, user, committed] = ['managed/managed-settings.json', 'home/.claude/settings.json', 'wt/.claude/settings.json'].map((file) => join(s.dir, file));
@@ -314,12 +266,28 @@ test('start-checks: a settings key the script does not know to run no command is
   assert.deepEqual(r.read, [{ source: `${user} processWrapper`, command: '/opt/corp/launch' }]);
   assert.deepEqual(r.unresolved, [
     { source: managed, reason: 'extraKnownMarketplaces is no key the script knows to run no command' },
-    { source: user, reason: 'sandbox.futurePath is no key the script knows to run no command' },
-    { source: user, reason: 'sandbox.network.futureProxy is no key the script knows to run no command' },
-    { source: user, reason: 'sandbox.filesystem.futureList is no key the script knows to run no command' },
     { source: committed, reason: 'futureHelper is no key the script knows to run no command' },
     { source: managed, reason: 'policyHelper holds no command the script reads' },
   ]);
+});
+
+test('start-checks: settings that keep the worker out of auto mode, turn off hooks, set the role or turn on the sandbox fail check 4', () => {
+  const s = setup({
+    'managed/managed-settings.json': { permissions: { disableAutoMode: 'disable' }, allowManagedHooksOnly: true },
+    'home/.claude/settings.json': { disableAllHooks: true, sandbox: { enabled: true } },
+    'project/.claude/settings.local.json': { env: { CEDARLOOM_ROLE: 'coordinator' }, sandbox: {} },
+    'wt/.claude/settings.json': { disableAllHooks: false, sandbox: { enabled: false }, permissions: { disableAutoMode: false } },
+  });
+  const r = s.run();
+  assert.deepEqual(r.failed.filter((f) => f.check === 4).map((f) => [f.source.slice(s.dir.length + 1), f.entry]), [
+    ['managed/managed-settings.json', 'permissions.disableAutoMode keeps the worker out of auto mode: "disable"'],
+    ['managed/managed-settings.json', 'allowManagedHooksOnly can turn off the role guard'],
+    ['home/.claude/settings.json', 'disableAllHooks turns off the role guard'],
+    ['home/.claude/settings.json', 'sandbox: CedarLoom ignores the Claude Code sandbox and does not support it; set sandbox.enabled to false or remove the key'],
+    ['project/.claude/settings.local.json', 'env sets CEDARLOOM_ROLE, which the worker must not inherit'],
+    ['project/.claude/settings.local.json', 'sandbox: CedarLoom ignores the Claude Code sandbox and does not support it; set sandbox.enabled to false or remove the key'],
+  ]);
+  assert.deepEqual(r.unresolved, []);
 });
 
 test('start-checks: an Edit, MultiEdit, Write or NotebookEdit allow rule outside the worktree is unresolved, one inside it is listed', () => {
@@ -431,29 +399,40 @@ test('start-checks: a hook of another type than command is listed to read, in th
   const http = { type: 'http', url: 'https://example.com/hook' }, prompt = { type: 'prompt', prompt: 'Is src/a.js safe?' };
   const s = setup({ 'wt/.claude/settings.json': { hooks: { PostToolUse: [{ matcher: 'Edit', hooks: [http, { type: 'command', command: '/opt/bin/audit' }] }], Stop: [{ hooks: [prompt] }] } } });
   const committed = join(s.dir, 'wt/.claude/settings.json');
-  assert.deepEqual(s.run(), { failed: [], read: [{ source: committed, command: '{"type":"http","url":"https://example.com/hook"}' }, { source: committed, command: '{"type":"prompt","prompt":"Is src/a.js safe?"}' }, { source: committed, command: '/opt/bin/audit' }], unresolved: [], allowRules: [], allowedDomains: [] });
+  assert.deepEqual(s.run(), { failed: [], read: [{ source: committed, command: '{"type":"http","url":"https://example.com/hook"}' }, { source: committed, command: '{"type":"prompt","prompt":"Is src/a.js safe?"}' }, { source: committed, command: '/opt/bin/audit' }], unresolved: [], allowRules: [] });
   const r = withPlugin({ source: './fmt' }, { 'home/.claude/plugins/cache/m/fmt/1/hooks/hooks.json': { hooks: { Stop: [{ hooks: [http] }] } }, 'home/.claude/plugins/cache/m/fmt/1/.mcp.json': { mcpServers: { docs: { type: 'http', url: 'https://example.com/mcp' } } } });
-  assert.deepEqual(r, { failed: [], read: [{ source: 'plugin fmt@m', command: '{"type":"http","url":"https://example.com/hook"}' }], unresolved: [], allowRules: [], allowedDomains: [] });
+  assert.deepEqual(r, { failed: [], read: [{ source: 'plugin fmt@m', command: '{"type":"http","url":"https://example.com/hook"}' }], unresolved: [], allowRules: [] });
 });
 
-test('start-checks: a wrong type below sandbox or permissions, or a permissions key the script does not know, is unresolved', () => {
+test('start-checks: a managed or user autoMode that widens the classifier or drops its built-in rules is unresolved', () => {
+  const s = setup({
+    'managed/managed-settings.json': { autoMode: { soft_deny: ['Never touch prod'] } },
+    'home/.claude/settings.json': { autoMode: { allow: ['$defaults', 'Any git push, force pushes included'], environment: ['$defaults', 'Every host is trusted'], soft_deny: ['$defaults', 'Never touch prod'] } },
+    'wt/.claude/settings.json': { autoMode: { allow: ['Any git push'] } },
+  });
+  assert.deepEqual(s.run().unresolved.map((u) => [u.source.slice(s.dir.length + 1), u.reason]), [
+    ['managed/managed-settings.json', 'autoMode.soft_deny is no list with "$defaults", which keeps the classifier\'s built-in rules: ["Never touch prod"]'],
+    ['home/.claude/settings.json', 'autoMode.allow can widen what auto mode\'s classifier lets pass: ["$defaults","Any git push, force pushes included"]'],
+    ['home/.claude/settings.json', 'autoMode.environment can widen what auto mode\'s classifier lets pass: ["$defaults","Every host is trusted"]'],
+  ]);
+  assert.deepEqual(setup({ 'home/.claude/settings.json': { autoMode: 'off' } }).run().unresolved.map((u) => u.reason), ['autoMode is no object']);
+});
+
+test('start-checks: a wrong type below permissions, or a permissions key the script does not know, is unresolved', () => {
   const reasons = (settings) => setup({ 'wt/.claude/settings.json': settings }).run().unresolved.map((u) => u.reason);
-  assert.deepEqual(reasons({ sandbox: { network: [{ allowUnixSockets: ['/x'] }] } }), ['sandbox.network is no object']);
-  assert.deepEqual(reasons({ sandbox: { filesystem: '/etc' } }), ['sandbox.filesystem is no object']);
   assert.deepEqual(reasons({ permissions: { allow: { a: 'Edit(//etc/**)' } } }), ['permissions.allow is no list of strings']);
   assert.deepEqual(reasons({ permissions: { additionalDirectories: [['..']] } }), ['permissions.additionalDirectories is no list of strings']);
-  assert.deepEqual(reasons({ sandbox: { filesystem: { allowWrite: [{ path: '/etc' }], allowRead: [7] } } }), ['sandbox.filesystem.allowRead is no list of strings', 'sandbox.filesystem.allowWrite is no list of strings']);
   assert.deepEqual(reasons({ permissions: { futureHelper: 'npx x' } }), ['permissions.futureHelper is no key the script knows to run no command']);
-  assert.deepEqual(reasons({ permissions: { allow: ['Read'], deny: ['Bash(curl *)'], ask: [], defaultMode: 'acceptEdits', disableBypassPermissionsMode: 'disable', disableAutoMode: 'disable', additionalDirectories: ['docs'] }, sandbox: { network: {}, filesystem: { allowRead: ['docs'], allowWrite: ['build'] } } }), []);
+  assert.deepEqual(reasons({ permissions: { allow: ['Read'], deny: ['Bash(curl *)'], ask: [], defaultMode: 'acceptEdits', disableBypassPermissionsMode: 'disable', disableAutoMode: 'disable', additionalDirectories: ['docs'] } }), []);
 });
 
 test('start-checks: a glob in the last part that can match a link out of the worktree fails check 4', () => {
   const s = setup({ 'wt/build/a.txt': 'a', 'wt/deep/in/a.txt': 'a' });
   for (const folder of ['wt/build', 'wt/deep/in']) symlinkSync(join(s.dir, 'home'), join(s.dir, folder, 'link'));
   const wt = join(s.dir, 'wt');
-  writeFileSync(join(s.dir, 'home/.claude/settings.json'), JSON.stringify({ sandbox: { filesystem: { allowWrite: [`${wt}/build/lin*`, `${wt}/deep/**`, `${wt}/deep/*`, `${wt}/src/*`] } } }));
+  writeFileSync(join(s.dir, 'home/.claude/settings.json'), JSON.stringify({ permissions: { additionalDirectories: [`${wt}/build/lin*`, `${wt}/deep/**`, `${wt}/deep/*`, `${wt}/src/*`] } }));
   // deep/* matches no link, as the link lies one folder below; src does not exist.
-  assert.deepEqual(s.run().failed.map((f) => f.entry.replaceAll(s.dir, '<dir>')), ['sandbox.filesystem.allowWrite outside the worktree: <dir>/wt/build/lin*', 'sandbox.filesystem.allowWrite outside the worktree: <dir>/wt/deep/**']);
+  assert.deepEqual(s.run().failed.map((f) => f.entry.replaceAll(s.dir, '<dir>')), ['permissions.additionalDirectories outside the worktree: <dir>/wt/build/lin*', 'permissions.additionalDirectories outside the worktree: <dir>/wt/deep/**']);
 });
 
 test('start-checks: a file or value of another type than the script reads is unresolved, never passed', () => {
@@ -491,10 +470,10 @@ test('start-checks: a .. after a link or a glob before one fails check 4', () =>
   symlinkSync(join(s.dir, 'shared'), join(s.options.worktree, 'out'));
   const wt = s.options.worktree;
   mkdirSync(join(s.dir, 'project/.claude'));
-  writeFileSync(join(s.dir, 'project/.claude/settings.json'), JSON.stringify({ sandbox: { filesystem: { allowWrite: [`${wt}/*/deep`, '*/deep', 'out/deep/../../x', 'build/**'] } } }));
+  writeFileSync(join(s.dir, 'project/.claude/settings.json'), JSON.stringify({ permissions: { additionalDirectories: [`${wt}/*/deep`, '*/deep', 'out/deep/../../x', 'build/**'] } }));
   assert.deepEqual(s.run().failed.map((f) => f.entry.replaceAll(wt, '<wt>')), [
-    'sandbox.filesystem.allowWrite outside the worktree: <wt>/*/deep',
-    'sandbox.filesystem.allowWrite outside the worktree: */deep',
-    'sandbox.filesystem.allowWrite outside the worktree: out/deep/../../x',
+    'permissions.additionalDirectories outside the worktree: <wt>/*/deep',
+    'permissions.additionalDirectories outside the worktree: */deep',
+    'permissions.additionalDirectories outside the worktree: out/deep/../../x',
   ]);
 });
