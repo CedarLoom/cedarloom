@@ -24,7 +24,7 @@ const pr = (extra = {}) => ({ number: 9, headRefName: 'feat/5-x', headRefOid: HE
 const OWNER_ANSWER = { number: 3, labels: [], body: '', url: 'u', author: { login: 'owner' }, comments: [{ author: { login: 'owner' }, authorAssociation: 'OWNER', body: 'Owner answer (2026-11-20): Yes.', createdAt: ago(5) }] };
 
 // The GitHub of acme/app: the tip's runs, the open needs-human issues and the open pull requests; skip leaves one read unanswered.
-// recent: the open issues updated in the last 7 days, where an answer through the questions skill took cl:needs-human off.
+// recent: the open issues updated in the last 7 days, where an answer through the question queue took cl:needs-human off.
 function github({ runs = [run('success')], asked = [], recent = [], prs = [], skip } = {}) {
   const answers = [
     [['repo', 'view', 'acme/app', '--json', 'defaultBranchRef'], { defaultBranchRef: { name: 'main' } }],
@@ -100,7 +100,7 @@ test('catch-up 2: a red tip without a report for that tip starts a run', () => {
 
 test('catch-up 3: each owner answer not acted on starts a run, whether or not its label is off; a local one too', () => {
   const ANSWERED = { start: true, condition: 3, reason: '#3 has an answer', probe: false };
-  // A plain comment keeps cl:needs-human; the questions skill takes it off at once.
+  // A plain comment keeps cl:needs-human; the question queue takes it off at once.
   github({ asked: [OWNER_ANSWER] });
   assert.deepEqual(check(stateWith()), ANSWERED);
   github({ recent: [OWNER_ANSWER] });

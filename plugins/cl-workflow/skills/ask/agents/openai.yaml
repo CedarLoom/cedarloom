@@ -1,5 +1,0 @@
-interface:
-  display_name: "Ask"
-  short_description: "Replaced by away"
-policy:
-  allow_implicit_invocation: false

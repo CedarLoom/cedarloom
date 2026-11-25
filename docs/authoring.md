@@ -36,6 +36,10 @@ A file that was over its cap when the budgets began is listed in `AT_SIZE` in th
 - `disable-model-invocation: true` for a skill only the user starts: one with side effects or a moment the user picks (a setup, a release, a mode switch). Claude Code leaves it out of the model's listing; for Codex the lint requires `policy.allow_implicit_invocation: false` in the skill's OpenAI YAML.
 - `user-invocable: false` for background knowledge the model loads when it applies but nobody types as a command: the skill leaves the `/` menu and stays in the model's listing.
 
+## Current form only
+
+CedarLoom supports only its current form: no backward compatibility, no retired skills, aliases, redirects, shims or migration notes. A renamed or removed skill, command, option or path is gone in the same change, with every reference to it.
+
 ## Writing
 
 - No restating: each fact lives in the one file that owns it, and other files link to it. No recap of headings, code, labels or another file.

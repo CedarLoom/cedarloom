@@ -22,9 +22,9 @@ const QUEUE = ['.cedarloom', 'questions'];
 const EDITS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 // The path fields of the edit tools: Write, Edit and MultiEdit carry file_path, NotebookEdit notebook_path.
 const EDIT_PATHS = ['file_path', 'notebook_path'];
-// A session started with /cl-workflow:away off (or the /cl-workflow:questions it replaces) as its prompt (claude -p expands it, https://code.claude.com/docs/en/headless) or
+// A session started with /cl-workflow:away off as its prompt (claude -p expands it, https://code.claude.com/docs/en/headless) or
 // handed it by an orchestrator could hold the flag where its hook input shows no unattended session.
-const QUESTIONS = /(^|[^\w-])\/(cl-workflow:)?(questions|away\s+off)(?![\w.-])/i;
+const QUESTIONS = /(^|[^\w-])\/(cl-workflow:)?away\s+off(?![\w.-])/i;
 // The program names that start such a session: claude, and claude-code as npx runs the package. The orchestrator plugin's own hook
 // refuses its dispatch command.
 const LAUNCHERS = new Set(['claude', 'claude-code']);
@@ -607,7 +607,7 @@ function queue({ tool_name: tool, tool_input: toolInput, agent_id: agent }, cwd)
     if (each.includes(null)) return `a command with more than ${MAX_FOLDERS} folders to follow, which may name the local question queue (.cedarloom/questions/),`;
     paths = each.flat();
     if (QUESTIONS.test(texts.join('\n')) && parsed.some(({ words }) => words.some((word) => LAUNCHERS.has(launcher(word))))) {
-      return 'a session started with /cl-workflow:away off or /cl-workflow:questions, which could write into the local question queue (.cedarloom/questions/),';
+      return 'a session started with /cl-workflow:away off, which could write into the local question queue (.cedarloom/questions/),';
     }
   }
   const hits = (folder) => texts.some((text) => names(text, folder)) || paths.some((path) => inside(path, folder));

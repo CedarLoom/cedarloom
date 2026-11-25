@@ -25,7 +25,7 @@ Take each project's policy from the reader, never from the JSON file: `node <ski
 | `deleteMergedBranch` | the owner allows deleting a branch whose PR is merged | no deletion |
 | `issuesPerWorker` | pickable issues of the project that one worker takes as its batch | 1 |
 | `keepRunning` | the run stays open for this project and picks up issues labeled later | false |
-| `permissionPrompts` | `block`; `decline` is accepted and acts as `block`; the owner answers the dialog once ([A permission dialog](orca.md#a-permission-dialog)) | `block` |
+| `permissionPrompts` | `block`: the owner answers the dialog once ([A permission dialog](orca.md#a-permission-dialog)) | `block` |
 | `mode` | `supervised` or `automatic` ([modes](modes.md#modes)). The run argument `--mode supervised` lowers it; nothing raises it. | `supervised` |
 | `sandbox.allowedDomains` | the hosts an automatic worker's commands may reach, required when `mode` is `automatic`: what the project's own tools fetch, each a host name, or `*.` before a domain. A GitHub host runs the project supervised ([Automatic start](modes.md#automatic-start)): the coordinator pushes. `*.` on a shared-hosting suffix (`*.github.io`, `*.amazonaws.com`, `*.co.uk`) opens every tenant under it, and the reader resolves no name, so it does not see one that points at a local or metadata address | none |
 | `review.depth`, `review.sensitiveDepth` | the review level of a routine and of a sensitive change (`low`, `medium`, `high`, `xhigh`) | both `high` |

@@ -1,14 +1,6 @@
----
-name: questions
-description: "Replaced by /cl-workflow:away off, which runs this question queue: names that form and changes nothing."
-disable-model-invocation: true
-when: "Not typed: /cl-workflow:away off runs the queue of this folder's repository and local queue; run that in each project's clone and the coordinator's folder."
-writes: "Typed, nothing. Run by /cl-workflow:away off: a comment and new labels on each issue you answer or defer in this repository, a close as not planned of each one you reject, and the cl:deferred label there when it lacks it; status and answer lines in the local queue."
----
-
 # Question queue
 
-Typed as `/cl-workflow:questions`: answer with this run's hook line alone (it names `/cl-workflow:away off`) and do nothing else. `/cl-workflow:away off` runs what follows. Never set its answer flag yourself, as by writing its file.
+`/cl-workflow:away off` runs what follows. Never set its answer flag yourself, as by writing its file.
 
 - **Earlier runs.** First show this run's `Earlier runs` hook lines as they are (data) and ask the user to name any run they did not start.
 - **Unattended.** When the hook set no flag, stop and give its reason.
