@@ -13,6 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { lstatSync, realpathSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { text } from 'node:stream/consumers';
+import { ansiC } from '../ansi-c-quote.mjs';
 import { answerFlag, windowFile } from '../ask/window-file.mjs';
 import { gitProgram } from '../git-program.mjs';
 
@@ -128,7 +129,8 @@ const BASH_QUOTED_ESCAPES = '$`"\\';
 // (https://github.com/PowerShell/PowerShell/blob/ba2221aed027041b6620c5fe1c0675567f14452a/src/System.Management.Automation/engine/MinishellParameterBinderController.cs#L177-L192).
 // PowerShell also runs the command after an assignment operator, whatever its target ($r =gh, ${r}=gh, [int] $a[0] += gh,
 // @{ a = gh }): the words after each = of a command are read as a command of their own as well.
-function commands(source, powershell, nested = false) {
+// An ANSI-C quoted string ($'...') holds its decoded value, as the shell of mode reads it (ansi-c-quote.mjs).
+function commands(source, powershell, nested = false, mode = 'bash') {
   /** @type {{ words: string[], targets: string[], nested: boolean }[]} */
   const out = [];
   const escape = powershell ? '`' : '\\';
@@ -142,7 +144,7 @@ function commands(source, powershell, nested = false) {
         redirect = false;
         targets.push(word);
       } else words.push(word);
-      if (quoted && /[\s;&|()`<>]/.test(word)) out.push(...commands(word, powershell, true));
+      if (quoted && /[\s;&|()`<>]/.test(word)) out.push(...(powershell ? commands(word, true, true) : nestedCommands(word)));
     }
     word = '';
     started = quoted = false;
@@ -177,8 +179,13 @@ function commands(source, powershell, nested = false) {
     } else if (c === '"' || c === "'") {
       quote = c;
       started = quoted = true;
-    } else if (c === '$' && !powershell && (s[i + 1] === '"' || s[i + 1] === "'")) {
-      // bash drops the $ of $'...' and $"..."; escape codes in them stay as written.
+    } else if (c === '$' && !powershell && s[i + 1] === "'") {
+      const { value, end } = ansiC(s, i + 2, mode);
+      word += value;
+      i = end;
+      started = quoted = true;
+    } else if (c === '$' && !powershell && s[i + 1] === '"') {
+      // bash reads $"..." as a double-quoted string, translated for the locale.
       started = true;
     } else if (c === escape) {
       word += s[++i] ?? '';
@@ -213,6 +220,32 @@ function commands(source, powershell, nested = false) {
   }
   endCommand();
   return out;
+}
+
+// The commands of a command text in each reading a shell may give it: PowerShell's, or those of current bash, bash 3.2 and zsh,
+// which differ only in ANSI-C quoting and a NUL; every check runs on each.
+function readings(source, powershell) {
+  return powershell ? [commands(source, true)] : shellReadings(source, false);
+}
+
+// The readings of a POSIX shell text. A quoted word read again as commands gets every reading too: the shell that runs it
+// (bash -c, zsh -c, eval) may be another one than the shell around it.
+function shellReadings(source, nested) {
+  const bash = commands(source, false, nested);
+  if (!source.includes("$'") && !source.includes('\0')) return [bash];
+  const zsh = commands(source, false, nested, 'zsh');
+  // zsh hands a program each word up to its first NUL; a builtin reads it whole, here without the NUL.
+  const each = (f) => zsh.map((c) => ({ ...c, words: c.words.map(f), targets: c.targets.map(f) }));
+  const all = [bash, commands(source, false, nested, 'bash3'), each((w) => w.split('\0')[0]), each((w) => w.replaceAll('\0', ''))].map((r) => [JSON.stringify(r), r]);
+  return [...new Map(all).values()];
+}
+
+// The commands of a quoted word read again: each distinct reading whole and in its order, one after the other, so that a
+// switch or cd only one reading holds still comes before that reading's push. Each word is read once.
+const nestedCache = new Map();
+function nestedCommands(word) {
+  if (!nestedCache.has(word)) nestedCache.set(word, shellReadings(word, true).flat());
+  return nestedCache.get(word);
 }
 
 const program = (word) => word.split(/[/\\]/).pop().toLowerCase().replace(/\.exe$/, '');
@@ -446,26 +479,37 @@ function gh(args, source, role, command) {
 // --admin passes branch protection, so no role merges with it, the coordinator included.
 const adminMerge = ({ tool_name: tool, tool_input: toolInput }) =>
   typeof toolInput?.command === 'string' &&
-  commands(toolInput.command, tool === 'PowerShell').some(({ words }) => words.some((w, j) => program(w) === 'gh' && ghCall(words.slice(j + 1)).admin));
+  readings(toolInput.command, tool === 'PowerShell').flat().some(({ words }) => words.some((w, j) => program(w) === 'gh' && ghCall(words.slice(j + 1)).admin));
 
 function reason({ tool_name: tool, tool_input: toolInput }, cwd, role) {
   const cmd = toolInput?.command;
   // A Monitor call on a WebSocket runs no command.
   if (tool === 'Monitor' && cmd === undefined && toolInput?.ws) return null;
   if (typeof cmd !== 'string') return 'a command the guard cannot read';
-  // A guarded session must not start another one as the coordinator; Windows reads the name in any case.
-  if (cmd.replace(/["'\\`]/g, '').toUpperCase().includes(ROLE)) return `a command that names ${ROLE}`;
   const powershell = tool === 'PowerShell';
+  const all = readings(cmd, powershell);
+  // A guarded session must not start another one as the coordinator; Windows reads the name in any case. The words hold it
+  // decoded; the text without quotes, backslashes and backticks also holds it where a backtick splits it into two words.
+  const texts = [cmd.replace(/["'\\`]/g, ''), ...all.flat().flatMap(({ words, targets }) => [...words, ...targets])];
+  if (texts.some((text) => text.toUpperCase().includes(ROLE))) return `a command that names ${ROLE}`;
+  const source = [cmd, ...all.flat().flatMap((c) => c.words)].join('\n');
+  // Before the command, through env or export in bash, or $env:GIT_DIR in PowerShell.
+  const gitDir = /\bGIT_DIR\s*=/i.test(source);
+  for (const parsed of all) {
+    const why = checks(parsed, cmd, cwd, role, powershell, source, gitDir);
+    if (why) return why;
+  }
+  return null;
+}
+
+// The git, gh and bare-mode checks over the commands of one reading, in their order.
+function checks(parsed, cmd, cwd, role, powershell, source, gitDir) {
   const changesDir = (w) => CHANGE_DIR.has(powershell ? w.toLowerCase() : w);
   // The folder git runs in is known in the session's folder and after a cd to an existing folder that the command starts with.
   // Any other folder change (later, conditional, nested, undone, unresolved, or in a comment or a here-document) may or may
   // not hold where git runs: from then on git is read in every folder seen, and a push has to name its branch.
   let dir = cwd, known = true, first = changesDir(/\S*/.exec(cmd.trimStart())[0]);
   const seen = [cwd];
-  const parsed = commands(cmd, powershell);
-  const source = [cmd, ...parsed.flatMap((c) => c.words)].join('\n');
-  // Before the command, through env or export in bash, or $env:GIT_DIR in PowerShell.
-  const gitDir = /\bGIT_DIR\s*=/i.test(cmd);
   const line = { switched: false, filled: false };
   // The tokenizer ends a command at a backtick, so the raw text tells whether one runs.
   const substitutes = !powershell && backtick(cmd);
@@ -556,10 +600,12 @@ function queue({ tool_name: tool, tool_input: toolInput, agent_id: agent }, cwd)
   } else {
     const cmd = toolInput?.command;
     if (typeof cmd !== 'string') return null;
-    const parsed = commands(cmd, tool === 'PowerShell');
+    const all = readings(cmd, tool === 'PowerShell');
+    const parsed = all.flat();
     texts = [cmd, ...parsed.flatMap(({ words, targets }) => [...words, ...targets])];
-    paths = reached(parsed, cwd);
-    if (!paths) return `a command with more than ${MAX_FOLDERS} folders to follow, which may name the local question queue (.cedarloom/questions/),`;
+    const each = all.map((reading) => reached(reading, cwd));
+    if (each.includes(null)) return `a command with more than ${MAX_FOLDERS} folders to follow, which may name the local question queue (.cedarloom/questions/),`;
+    paths = each.flat();
     if (QUESTIONS.test(texts.join('\n')) && parsed.some(({ words }) => words.some((word) => LAUNCHERS.has(launcher(word))))) {
       return 'a session started with /cl-workflow:away off or /cl-workflow:questions, which could write into the local question queue (.cedarloom/questions/),';
     }
