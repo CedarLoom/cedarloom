@@ -51,8 +51,8 @@ const GOOD = ['SUCCESS', 'SKIPPED', 'NEUTRAL'];
 // { name, state } of each check of a statusCheckRollup, state 'green', 'red' or 'pending': check runs carry status and conclusion, commit statuses a state.
 // The rollup lists every run of a check; as gh pr checks does, only the newest of each (by name and workflow, or a status's context) counts.
 export function checkStates(rollup) {
-  // A run that has not started has no start time, or gh's zero time: it is newer than every run that started.
-  const startOf = (c) => { const at = Date.parse(c.startedAt); return at > 0 ? at : Infinity; };
+  // gh prints a missing time as the zero time. A skipped run has an end but no start; a run that has not started has neither and is newer than every other.
+  const startOf = (c) => [c.startedAt, c.completedAt].map(Date.parse).find((at) => at > 0) ?? Infinity;
   const newest = new Map();
   for (const c of rollup ?? []) {
     const key = c.context ?? `${c.name}\n${c.workflowName}`;
@@ -217,15 +217,16 @@ function locked({ stateFile, method, runId, run, now, sleep }) {
   const refused = premerge(home, pr, subject, body);
   if (refused) return stop(refused);
 
-  // The bot or the owner may have written the state during the checks: a hold or another accepted head written since wins.
-  const fresh = readState(stateFile);
-  if (fresh?.held) return stop(`held: ${fresh.held}`);
-  if (fresh?.handled?.head !== accepted || fresh?.handled?.action !== s.handled.action) return restart('the state changed during the checks');
-  // Read last, right before the command: a check can turn red after the bot read it (merge.md, step 2).
+  // Read after the other checks: a check can turn red after the bot read it (merge.md, step 2).
   const checked = JSON.parse(gh('pr', 'view', String(n), '-R', repo, '--json', 'headRefOid,statusCheckRollup'));
   if (checked.headRefOid !== accepted) return restart(`the head is ${checked.headRefOid}, not the accepted ${accepted}`);
   const unchecked = required(verdict.requiredChecks, checked.statusCheckRollup);
   if (unchecked) return unchecked;
+
+  // The bot or the owner may have written the state during the checks: a hold or another accepted head written since wins.
+  const fresh = readState(stateFile);
+  if (fresh?.held) return stop(`held: ${fresh.held}`);
+  if (fresh?.handled?.head !== accepted || fresh?.handled?.action !== s.handled.action) return restart('the state changed during the checks');
   const commanded = { ...fresh, mergeCommandAt: now().toISOString() };
   writeState(stateFile, commanded);
   // Pinned to the accepted head; never --admin, which passes branch protection, nor --auto, which would merge a later push.

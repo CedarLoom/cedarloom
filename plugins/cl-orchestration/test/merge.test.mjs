@@ -58,7 +58,11 @@ else if (a === 'pr' && b === 'view' && args[args.indexOf('--json') + 1].includes
   if (w.merge === 'unreadable') { process.stderr.write('HTTP 502\\n'); process.exit(1); }
   say(merged ? { state: 'MERGED', mergeCommit: { oid: '${MERGE_COMMIT}' }, mergedAt: '2026-11-20T12:00:30Z', headRefOid: w.mergedHead ?? pr.headRefOid, autoMergeRequest: null }
     : { state: 'OPEN', mergeCommit: null, mergedAt: null, headRefOid: w.mergedHead ?? pr.headRefOid, autoMergeRequest: w.merge === 'auto' ? { enabledAt: '2026-11-20T12:00:01Z' } : null });
-} else if (a === 'pr' && b === 'view') say(w.prs[c]);
+} else if (a === 'pr' && b === 'view') {
+  // world.hold: the owner holds the pull request while its checks are read.
+  if (w.hold && args.includes('headRefOid,statusCheckRollup')) fs.writeFileSync(w.hold, JSON.stringify({ ...JSON.parse(fs.readFileSync(w.hold, 'utf8')), held: 'owner asked to wait' }));
+  say(w.prs[c]);
+}
 else if (a === 'pr' && b === 'merge' && !args.includes('--disable-auto')) {
   if (w.clobber) fs.writeFileSync(w.clobber, '{');
   if (w.merge === 'fail') { process.stderr.write('GraphQL: Head branch was modified\\n'); process.exit(1); }
@@ -84,7 +88,7 @@ function bot({ n = 1, oid = HEAD, branch = 'feat/1-x', action = 'merge', world =
   writeFileSync(join(state, `pr-${n}-subject.txt`), subject);
   if (body !== null) writeFileSync(join(state, `pr-${n}-body.md`), body);
   for (const [name, text] of Object.entries(files)) writeFileSync(join(home, name), text);
-  writeFileSync(join(gh, 'world.json'), JSON.stringify({ tip: TIP, runs: GREEN, otherRuns: [], compare: [], threads: [], merge: 'merged', ...world, clobber: world.clobber ? file : null, prs: { [n]: openPr(n, oid, branch), ...world.prs } }));
+  writeFileSync(join(gh, 'world.json'), JSON.stringify({ tip: TIP, runs: GREEN, otherRuns: [], compare: [], threads: [], merge: 'merged', ...world, clobber: world.clobber ? file : null, hold: world.hold ? file : null, prs: { [n]: openPr(n, oid, branch), ...world.prs } }));
   let t = NOW.getTime();
   const call = (method = 'squash') => {
     process.env.FAKE_GH = gh;
@@ -256,22 +260,38 @@ test('merge: a new head, another verdict or an open review thread restarts the j
   assert.deepEqual(merges(threads.calls()), []);
 });
 
-test('merge: a required check that failed, has no run or still runs on the head holds the merge, and only the newest run of each check counts', () => {
-  const checked = (rollup) => bot({ world: { prs: { 1: { ...openPr(1, HEAD, 'feat/1-x'), statusCheckRollup: rollup } } } });
-  const held = [
-    [[ci('COMPLETED', 'SUCCESS', minutesAgo(50)), ci('COMPLETED', 'FAILURE')], { outcome: 'stop', reason: 'required check(s) failed on the head: ci' }],
-    [[ci('COMPLETED', 'SUCCESS', minutesAgo(30), 'lint')], { outcome: 'stop', reason: 'required check(s) have no run on the head: ci' }],
-    [[ci('COMPLETED', 'FAILURE', minutesAgo(50)), ci('IN_PROGRESS', '')], { outcome: 'wait', reason: 'required check(s) still run on the head: ci' }],
-    // A queued run again, which gh lists with the zero time.
-    [[ci('COMPLETED', 'SUCCESS'), ci('QUEUED', '', '0001-01-01T00:00:00Z')], { outcome: 'wait', reason: 'required check(s) still run on the head: ci' }],
-  ];
-  for (const [rollup, answer] of held) {
+// A bot whose pull request's checks are rollup.
+const checked = (rollup) => bot({ world: { prs: { 1: { ...openPr(1, HEAD, 'feat/1-x'), statusCheckRollup: rollup } } } });
+const holds = (cases) => {
+  for (const [rollup, answer] of cases) {
     const b = checked(rollup);
     assert.deepEqual(b.call(), answer);
     assert.deepEqual(merges(b.calls()), []);
     assert.equal(b.read('pr-1.json').mergeCommandAt, undefined);
   }
-  // A failed run that ran again and passed, beside a failed check the policy does not require.
+};
+
+test('merge: a required check whose newest run failed or that has no run on the head stops, and so does a hold written while the checks are read', () => {
+  const failed = { outcome: 'stop', reason: 'required check(s) failed on the head: ci' };
+  holds([
+    [[ci('COMPLETED', 'SUCCESS', minutesAgo(50)), ci('COMPLETED', 'FAILURE')], failed],
+    // A skipped run, which has an end but no start, then a run again that failed.
+    [[{ ...ci('COMPLETED', 'SKIPPED', '0001-01-01T00:00:00Z'), completedAt: minutesAgo(50) }, ci('COMPLETED', 'FAILURE')], failed],
+    [[ci('COMPLETED', 'SUCCESS', minutesAgo(30), 'lint')], { outcome: 'stop', reason: 'required check(s) have no run on the head: ci' }],
+  ]);
+  const hold = bot({ world: { hold: true } });
+  assert.deepEqual(hold.call(), { outcome: 'stop', reason: 'held: owner asked to wait' });
+  assert.deepEqual(merges(hold.calls()), []);
+});
+
+test('merge: a required check that runs or is queued again on the head waits, and one that ran again and passed merges', () => {
+  const running = { outcome: 'wait', reason: 'required check(s) still run on the head: ci' };
+  holds([
+    [[ci('COMPLETED', 'FAILURE', minutesAgo(50)), ci('IN_PROGRESS', '')], running],
+    // A queued run again, which gh lists with the zero time.
+    [[ci('COMPLETED', 'SUCCESS'), ci('QUEUED', '', '0001-01-01T00:00:00Z')], running],
+  ]);
+  // Beside a failed check the policy does not require.
   assert.equal(checked([ci('COMPLETED', 'FAILURE', minutesAgo(50)), ci('COMPLETED', 'SUCCESS'), ci('COMPLETED', 'FAILURE', minutesAgo(30), 'lint')]).call().outcome, 'merged');
 });
 
