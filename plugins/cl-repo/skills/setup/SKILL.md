@@ -2,7 +2,7 @@
 name: setup
 description: "Sets up or updates a repository's agent setup for Claude Code and Codex: the CedarLoom rules block, the coordinator policy file, the devcontainer configuration and where the agent runs, the project parts of AGENTS.md, the coordinator's bots, other project configuration to remove. Use when the user asks to set up, onboard, update, or audit a project's agent setup."
 disable-model-invocation: true
-writes: "After you approve its plan: the CedarLoom block (repository rules, where commands run) in `AGENTS.md`, or in `CLAUDE.local.md` for a local setup; `AGENTS.md` (commands, first-class targets, footgun docs, pointers) and `CLAUDE.md` with only `@AGENTS.md`, both committed, where `AGENTS.md` is new or holds the block (into a committed `AGENTS.md` without the block, only the parts you pick, and `CLAUDE.md` stays as it is); where the cl-orchestration plugin is installed and they are absent, the coordinator's `docs/agents/orchestration.json` and an empty `docs/agents/worker-rules.md`, committed; the CedarLoom labels the repository lacks; `.github/ISSUE_TEMPLATE/work.md` where the repository has no issue templates; with the coordinator's bots, a committed `docs/agents/bots.md`, the files in each bot's home, its clone and automations (you press Create bot for each bot); the dev container configuration; short footgun docs under `docs/agents/`; and the removals you confirm when the skill lists other agent configuration: skills, plugin and marketplace entries, MCP servers, hooks, other agent rules files and tool folders."
+writes: "After you approve its plan: the CedarLoom block (repository rules, where commands run) in `AGENTS.md`, or in `CLAUDE.local.md` for a local setup; `AGENTS.md` (commands, first-class targets, footgun docs, pointers) and `CLAUDE.md` with only `@AGENTS.md`, both committed, where `AGENTS.md` is new or holds the block (into a committed `AGENTS.md` without the block, only the parts you pick, and `CLAUDE.md` stays as it is); where the cl-orchestration plugin is installed and they are absent, the coordinator's `cedarloom.json` and an empty `docs/agents/worker-rules.md`, committed; the CedarLoom labels the repository lacks; `.github/ISSUE_TEMPLATE/work.md` where the repository has no issue templates; with the coordinator's bots, a committed `docs/agents/bots.md`, the files in each bot's home, its clone and automations (you press Create bot for each bot); the dev container configuration; short footgun docs under `docs/agents/`; and the removals you confirm when the skill lists other agent configuration: skills, plugin and marketplace entries, MCP servers, hooks, other agent rules files and tool folders."
 ---
 
 # Setting up projects
@@ -63,14 +63,14 @@ A repository that commits an `AGENTS.md` without the block: merge nothing into i
 
 ## 5. Coordinator policy
 
-The coordinator (`cl-orchestration:coordinate`) starts and merges nothing in a project without `docs/agents/orchestration.json` on its default branch. Where the cl-orchestration plugin is installed and the file is absent, propose it as a plan item with these answers (ask, recommending the first value named), and an empty `docs/agents/worker-rules.md` (extra rules for the coordinator's workers) when that is absent too. Both are committed in a shared and in a local setup, and from then on both are the owner's to edit: never propose a change to an existing one.
+The coordinator (`cl-orchestration:coordinate`) starts and merges nothing in a project without `cedarloom.json` at the root of its default branch. Where the cl-orchestration plugin is installed and the file is absent, propose it as a plan item with these answers (ask, recommending the first value named), and an empty `docs/agents/worker-rules.md` (extra rules for the coordinator's workers) when that is absent too. Both are committed in a shared and in a local setup, and from then on both are the owner's to edit: never propose a change to an existing one.
 
 - `startLabel`: the label that lets the coordinator start an issue, `cl:ready-for-agent` unless the user names another.
 - `merge.allowed`: `false`, the user merges; `true` lets the coordinator merge a reviewed pull request. With `true`, `merge.requiredChecks` lists check names that run on pull requests, taken from a recent one (`gh pr checks <n> --json name --jq '.[].name'`), never a job that runs only on pushes to the default branch, and only those the user keeps.
 - `closeIssue`: `true`, a worker's pull request closes its issue when merged, by anyone, and the coordinator closes one left open; `false` leaves that to the user.
 - `trustedAuthors`: none, or the review bots the user names whose comments workers may follow.
 
-Write `{"schemaVersion": 2}` with these fields, two-space indented and with a final newline, and leave every other field to its default: the Policy section of `cl-orchestration:coordinate` (the cl-orchestration plugin, when installed) lists each field and its default.
+Write `{"$schema": "https://cedarloom.github.io/cedarloom/schema/cedarloom.json", "schemaVersion": 3}` with these fields, two-space indented and with a final newline, and leave every other field to its default: the Policy section of `cl-orchestration:coordinate` (the cl-orchestration plugin, when installed) lists each field and its default.
 
 The label set, with the policy's `startLabel` (an existing file's, else the answer above when one was asked) in place of `cl:ready-for-agent`. `<owner/repo>` below is the repository `git remote get-url origin` names, so a fork's clone never reaches its upstream. Read only lists the repository's labels (`gh label list -R <owner/repo> --limit 1000 --json name`); each missing one is a plan item, and Apply creates the approved ones with `gh label create <name> -R <owner/repo> --description "<meaning>"` (GitHub takes 100 characters or fewer: [create a label](https://docs.github.com/rest/issues/labels#create-a-label)), naming one it could not create in the report with that command:
 - `cl:plan`: CedarLoom may read and plan the issue and ask on it; it does not start work.
@@ -85,7 +85,7 @@ Where the repository has no `.github/ISSUE_TEMPLATE` folder and its owner has no
 
 ## 6. Bots (ask)
 
-The bots that run the coordinator's work in this repository (a project bot per repository, and the builder, reviewer and maintain bots every repository shares) come with the cl-orchestration plugin. Where it is installed, ask whether to set them up, recommending yes where `docs/agents/orchestration.json` exists or is proposed. Yes: take the Setup steps of `<coordinate skill folder>/setup-bots.md` in Read only, Plan and Apply. Its plan items include the committed `docs/agents/bots.md`. Setup creates no bot: the user creates each one. Otherwise skip the step, naming why.
+The bots that run the coordinator's work in this repository (a project bot per repository, and the builder, reviewer and maintain bots every repository shares) come with the cl-orchestration plugin. Where it is installed, ask whether to set them up, recommending yes where `cedarloom.json` exists or is proposed. Yes: take the Setup steps of `<coordinate skill folder>/setup-bots.md` in Read only, Plan and Apply. Its plan items include the committed `docs/agents/bots.md`. Setup creates no bot: the user creates each one. Otherwise skip the step, naming why.
 
 ## 7. Other configuration (ask)
 
@@ -107,7 +107,7 @@ After the apply step, give the diff (`git diff` against the default branch plus 
 - Statements in `AGENTS.md` that the run checked (commands, test status, build output, reproducibility) match what the checks showed.
 - Each link in a touched `AGENTS.md` resolves. An `AGENTS.md` that holds the block has Commands, the block, Every change considers and Pointers in that order, and `CLAUDE.md` is exactly `@AGENTS.md`. A committed `AGENTS.md` without the block: its diff holds only the parts the user picked, and `CLAUDE.md` is unchanged.
 - The text between the block's markers is the one [project-rules.md](project-rules.md) gives for the chosen answer, and the block appears once in the file. A local `CLAUDE.local.md` is ignored by git.
-- A new `docs/agents/orchestration.json` is valid JSON and holds `schemaVersion` 2 and only the fields above, with the values the user approved.
+- A new `cedarloom.json` is valid JSON and holds `$schema`, `schemaVersion` 3 and only the fields above, with the values the user approved.
 - A new `docs/agents/bots.md` holds no local path, and each bot home file is valid JSON or the text `setup-bots.md` gives.
 - A folder `AGENTS.md` or `CLAUDE.md` added inside a docs or site source folder is excluded from that build (for example `exclude_docs` in MkDocs).
 - Each removal left no folder or lock entry.

@@ -10,7 +10,7 @@ execution:
 
     Dry run of one wake-up: run no command and change no file; decide from the facts below and the files they name.
 
-    - The run is under way in supervised mode; `project` is example-org/widget, default branch `main`. Its policy is `project/docs/agents/orchestration.json` as committed (the reader prints it with the defaults filled in).
+    - The run is under way in supervised mode; `project` is example-org/widget, default branch `main`. Its policy is `project/cedarloom.json` as committed (the reader prints it with the defaults filled in).
     - The handoff file's `## Open` holds: `Approval example-org/widget#40: merge, example-org/widget#31, head 3f786850e387550fdab836ed7e6dc881de23001b`.
     - Pull request example-org/widget#31 is reviewed, marked ready, its check `ci` is green, its risk class is high, and its current head is still 3f786850e387550fdab836ed7e6dc881de23001b.
     - At this wake-up, `gh issue view 40 -R example-org/widget --json labels,comments,author,body,url` went to `.cedarloom/runs/r1/issue-40.json`, and `approval.mjs answer` on that file exited 0 and printed `{"option":"(a)","text":"","at":"2026-11-24T09:12:00Z"}`. The approval's text is `.cedarloom/runs/r1/approval-31-merge.md`.

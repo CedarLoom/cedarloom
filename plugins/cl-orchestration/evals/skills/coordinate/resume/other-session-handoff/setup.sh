@@ -18,9 +18,9 @@ cat > project/AGENTS.md <<'MD'
 
 widget is a small Node.js library. Tests: `node --test`. A worker's worktree is removed with Orca's `worktree rm`; the project starts no dev containers.
 MD
-cat > project/docs/agents/orchestration.json <<'JSON'
+cat > project/cedarloom.json <<'JSON'
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "startLabel": "cl:ready-for-agent",
   "workersPerProject": 2,
   "hostWorkerLimit": 3,
@@ -53,7 +53,7 @@ Models: opus = claude-opus-4-8
 The steps of the Resume section of orca-resume.md, run id run-3.
 
 ## Decisions
-- Issue 12: standard depth, low risk, by docs/agents/orchestration.json.
+- Issue 12: standard depth, low risk, by cedarloom.json.
 
 ## Open
 - Issue 12: worker d-12 on branch fix/12-login-timeout, no report yet.

@@ -12,7 +12,7 @@ execution:
 
     - Project `project`, repository example-org/widget. At the run's start, the policy reader printed `"workersPerProject": 2`, `"hostWorkerLimit": 2`, `"issuesPerWorker": 1`, `"mode": "supervised"`, and the run started workers for issues 12 and 14.
     - Issue 14's pull request merged and its worker was cleaned up. The worker of issue 12 is still active. No follow-up waits.
-    - Meanwhile the owner merged a change to `docs/agents/orchestration.json` on `main`. Run now, the reader would print `"workersPerProject": 1`, `"hostWorkerLimit": 2`, `"issuesPerWorker": 1`, `"mode": "supervised"`.
+    - Meanwhile the owner merged a change to `cedarloom.json` on `main`. Run now, the reader would print `"workersPerProject": 1`, `"hostWorkerLimit": 2`, `"issuesPerWorker": 1`, `"mode": "supervised"`.
     - The precheck prints `#15` and `#16`; both are clear, standard depth and low risk.
 
     Write exactly these three lines:

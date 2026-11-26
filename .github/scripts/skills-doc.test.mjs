@@ -52,7 +52,7 @@ test('--check fails on a page that differs from its sources', () => {
   const tmp = realpathSync(mkdtempSync(join(tmpdir(), 'skills-doc-')));
   const dir = join(tmp, 'repo');
   try {
-    for (const p of ['.github/scripts', 'plugins', 'docs/skills.md']) cpSync(join(root, p), join(dir, p), { recursive: true });
+    for (const p of ['.github/scripts', 'plugins', 'docs/skills.md', 'site/static/schema/cedarloom.json']) cpSync(join(root, p), join(dir, p), { recursive: true });
     symlinkSync(dir, join(tmp, 'link'), 'dir');
     const page = join(dir, 'docs/skills.md');
     writeFileSync(page, readFileSync(page, 'utf8').replace('| Skill |', '| Skills |'));
@@ -62,6 +62,12 @@ test('--check fails on a page that differs from its sources', () => {
     }
     writeFileSync(page, readFileSync(join(root, 'docs/skills.md'), 'utf8'));
     execFileSync(process.execPath, [join(tmp, 'link/.github/scripts/skills-doc.mjs'), '--check']);
+    // The site's schema copy is checked against the plugin's schema, and written from it.
+    const schema = join(dir, 'site/static/schema/cedarloom.json');
+    writeFileSync(schema, '{}\n');
+    assert.throws(() => execFileSync(process.execPath, [join(dir, '.github/scripts/skills-doc.mjs'), '--check'], { stdio: 'pipe' }), (e) => e.status === 1 && /site\/static\/schema\/cedarloom\.json differs/.test(e.stdout));
+    execFileSync(process.execPath, [join(dir, '.github/scripts/skills-doc.mjs')]);
+    assert.equal(readFileSync(schema, 'utf8'), readFileSync(join(root, 'plugins/cl-orchestration/skills/coordinate/cedarloom.schema.json'), 'utf8'));
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

@@ -23,7 +23,7 @@ graders:
     pattern: 'CLAUDE\.md'
   - type: regex
     name: plans-policy-file
-    pattern: 'docs/agents/orchestration\.json'
+    pattern: 'cedarloom\.json'
   - type: regex
     name: plans-label-needs-human
     pattern: 'cl:needs-human'
@@ -38,7 +38,7 @@ graders:
     criteria: 'The plan proposes creating the labels cl:plan, cl:needs-human, cl:in-progress, cl:deferred, cl:follow-up and cl:triage, and does not propose creating cl:ready-for-agent, which already exists.'
   - type: llm
     name: plan-complete
-    criteria: 'The plan lists a new committed AGENTS.md holding the CedarLoom block, a CLAUDE.md that is exactly `@AGENTS.md`, a new docs/agents/orchestration.json with `"schemaVersion": 2`, and asks to apply all, a subset or cancel, instead of applying.'
+    criteria: 'The plan lists a new committed AGENTS.md holding the CedarLoom block, a CLAUDE.md that is exactly `@AGENTS.md`, a new cedarloom.json with `"schemaVersion": 3`, and asks to apply all, a subset or cancel, instead of applying.'
   - type: file_exists
     name: writes-nothing
     path: '**'
@@ -49,4 +49,4 @@ graders:
     input_match: 'gh label create'
     min: 0
     max: 0
-expected_outcome: 'A plan with AGENTS.md (block), CLAUDE.md (`@AGENTS.md`), docs/agents/orchestration.json, docs/agents/worker-rules.md, the issue template and the six missing labels; no file written.'
+expected_outcome: 'A plan with AGENTS.md (block), CLAUDE.md (`@AGENTS.md`), cedarloom.json, docs/agents/worker-rules.md, the issue template and the six missing labels; no file written.'

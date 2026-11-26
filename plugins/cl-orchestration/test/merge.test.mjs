@@ -25,7 +25,7 @@ const head = (branch, files, from = 'main') => {
   git('commit', '-qm', branch);
   return git('rev-parse', 'HEAD').toString().trim();
 };
-head('policy', { 'docs/agents/orchestration.json': '{ "merge": { "allowed": true, "mode": "disjoint" } }' });
+head('policy', { 'cedarloom.json': '{ "merge": { "allowed": true, "mode": "disjoint" } }' });
 git('checkout', '-q', 'main');
 git('merge', '-q', '--ff-only', 'policy');
 const HEAD = head('feat/1-x', { 'src/x.txt': 'x\n' });

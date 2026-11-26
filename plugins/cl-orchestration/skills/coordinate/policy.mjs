@@ -4,8 +4,8 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { devNull } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-const FILE = 'docs/agents/orchestration.json';
-// Pull requests on these paths are left for the owner, and a policy adds to the list and cannot shorten it: what CI runs and who reviews (.github, CODEOWNERS), the coordinator's own rules and what agents are told (docs/agents), and orca.yaml, whose scripts run on the host.
+const FILE = 'cedarloom.json';
+// Pull requests on these paths are left for the owner, and a policy adds to the list and cannot shorten it: what CI runs and who reviews (.github, CODEOWNERS), the coordinator's own rules and what agents are told (cedarloom.json, docs/agents), and orca.yaml, whose scripts run on the host.
 const OWNER_ONLY = ['.github', 'CODEOWNERS', 'docs/CODEOWNERS', FILE, 'docs/agents/worker-rules.md', 'docs/agents', 'orca.yaml'];
 // A path with one of these names as a segment is the owner's at any depth: agents load nested instruction files and a .claude folder below the root, and editor, hook and container settings run commands on the host.
 const OWNER_ONLY_NAMES = ['.claude', '.mcp.json', 'AGENTS.md', 'CLAUDE.md', '.claude-plugin', '.codex', '.cursor', '.vscode', '.husky', '.githooks', '.pre-commit-config.yaml', '.devcontainer', '.devcontainer.json'];
@@ -41,7 +41,7 @@ export const sh = (cwd, cmd, args, timeout = 120_000, env = {}) => execFileSync(
 
 const kind = (v) => (v === null ? 'null' : Array.isArray(v) ? 'array' : Number.isInteger(v) ? 'integer' : typeof v);
 
-const KEYWORDS = ['$schema', 'title', 'type', 'enum', 'minLength', 'pattern', 'minimum', 'maximum', 'minItems', 'items', 'properties', 'additionalProperties', 'patternProperties'];
+const KEYWORDS = ['$schema', '$id', 'title', 'type', 'enum', 'minLength', 'pattern', 'minimum', 'maximum', 'minItems', 'items', 'properties', 'additionalProperties', 'patternProperties'];
 // A schema edit that uses a keyword check() does not implement must fail every check, never pass files the schema refuses.
 function supported(s, at = 'the schema') {
   const bad = Object.keys(s).find((k) => !KEYWORDS.includes(k))
@@ -93,7 +93,7 @@ function check(s, v, path, out) {
 export function validate(doc) {
   if (kind(doc) !== 'object') return [{ rule: 'not-object', path: '', message: 'must be a JSON object' }];
   const errors = [];
-  check(supported(inlined(shipped('./orchestration.schema.json'))), doc, '', errors);
+  check(supported(inlined(shipped('./cedarloom.schema.json'))), doc, '', errors);
   return errors.map((e) => (e.rule !== 'unknown-key' ? e : e.path === 'issues.repository' ? REFUSED_REPOSITORY : e.path === 'sandbox' ? REFUSED_SANDBOX : e));
 }
 

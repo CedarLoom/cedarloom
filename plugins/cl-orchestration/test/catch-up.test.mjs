@@ -49,7 +49,7 @@ const gitWith = (policy) => (cwd, cmd, args, timeout) => {
   const plain = args.filter((a, i) => a !== '-c' && args[i - 1] !== '-c');
   if (plain[0] === 'ls-remote') return `${'c'.repeat(40)}\tHEAD\n`;
   if (plain[0] === 'remote') return 'https://github.com/acme/app.git\n';
-  if (plain[0] === 'ls-tree' && policy) return 'docs/agents/orchestration.json\n';
+  if (plain[0] === 'ls-tree' && policy) return 'cedarloom.json\n';
   if (plain[0] === 'show' && policy) return policy;
   return '';
 };

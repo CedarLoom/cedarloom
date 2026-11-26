@@ -1,5 +1,6 @@
 {
-  "schemaVersion": 2,
+  "$schema": "https://cedarloom.github.io/cedarloom/schema/cedarloom.json",
+  "schemaVersion": 3,
   "minPlugin": "0.1.0",
   "startLabel": "cl:ready-for-agent",
   "merge": {

@@ -21,9 +21,9 @@ widget: a small HTTP client library for Node.js.
 - Tests: `node --test`.
 - Pull request titles and commit subjects follow Conventional Commits.
 MD
-cat > project/docs/agents/orchestration.json <<'JSON'
+cat > project/cedarloom.json <<'JSON'
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "startLabel": "cl:ready-for-agent",
   "merge": {
     "allowed": true,

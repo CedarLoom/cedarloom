@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "CedarLoom orchestrator policy (docs/agents/orchestration.json)",
+  "$id": "https://cedarloom.github.io/cedarloom/schema/cedarloom.json",
+  "title": "CedarLoom repository settings (cedarloom.json at the repository root)",
   "type": "object",
   "additionalProperties": false,
   "patternProperties": { "^//": {} },
@@ -9,7 +10,7 @@
   },
   "properties": {
     "$schema": { "type": "string" },
-    "schemaVersion": { "enum": [2] },
+    "schemaVersion": { "enum": [3] },
     "startLabel": { "type": "string", "minLength": 1 },
     "trustedAuthors": { "type": "array", "items": { "type": "string", "minLength": 1 } },
     "workersPerProject": { "type": "integer", "minimum": 1, "maximum": 32 },

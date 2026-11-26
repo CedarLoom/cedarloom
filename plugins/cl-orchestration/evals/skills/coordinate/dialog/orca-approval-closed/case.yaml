@@ -8,7 +8,7 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
-    This is a dry run: run no command and change no file. Decide from these facts and the skill's text; the project's policy is `project/docs/agents/orchestration.json`. Orca's executable is `orca`.
+    This is a dry run: run no command and change no file. Decide from these facts and the skill's text; the project's policy is `project/cedarloom.json`. Orca's executable is `orca`.
 
     Run run-7 is open in supervised mode. Worker `d-12` is a supervised Claude Code worker on issue 12, started in auto mode. Auto mode paused after 3 blocks in a row, and its terminal shows this dialog:
 

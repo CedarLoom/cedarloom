@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { effective, read, sh, validate } from '../skills/coordinate/policy.mjs';
 import { initRepo } from './git-repo.mjs';
 
-const BUILT_IN = ['.github', 'CODEOWNERS', 'docs/CODEOWNERS', 'docs/agents/orchestration.json', 'docs/agents/worker-rules.md', 'docs/agents', 'orca.yaml'];
+const BUILT_IN = ['.github', 'CODEOWNERS', 'docs/CODEOWNERS', 'cedarloom.json', 'docs/agents/worker-rules.md', 'docs/agents', 'orca.yaml'];
 const DEFAULTS = {
   startLabel: null,
   trustedAuthors: [],
@@ -39,7 +39,7 @@ const HEAD = 'c0ffee0000000000000000000000000000000001';
 const bare = (fake, calls = []) => (dir, cmd, args) => { calls.push([cmd, ...args].join(' ')); return fake(dir, cmd, args.filter((a, i) => a !== '-c' && args[i - 1] !== '-c')); };
 const remote = (file, calls = []) => bare((dir, cmd, args) => {
   if (args[0] === 'ls-remote') return `${HEAD}\tHEAD\n`;
-  if (args[0] === 'ls-tree') return file == null ? '' : 'docs/agents/orchestration.json\n';
+  if (args[0] === 'ls-tree') return file == null ? '' : 'cedarloom.json\n';
   return args[0] === 'show' ? file : '';
 }, calls);
 
@@ -48,20 +48,20 @@ test('policy: sh kills a command that outlives its timeout, also one that ignore
   assert.throws(() => sh(tmpdir(), process.execPath, ['-e', ignoring], 1000), { code: 'ETIMEDOUT', signal: 'SIGKILL' });
 });
 
-test('policy: a file without schemaVersion, or of version 2, keeps its fields and gets every default', () => {
+test('policy: a file without schemaVersion, or of version 3, keeps its fields and gets every default', () => {
   assert.deepEqual(effective({}, '0.1.0'), { policy: DEFAULTS, errors: [], warnings: [] });
-  const file = { schemaVersion: 2, startLabel: 'agent-ready', trustedAuthors: ['review-bot[bot]'], hostWorkerLimit: 3, merge: { allowed: true, requiredChecks: ['ci'] }, closeIssue: true };
+  const file = { schemaVersion: 3, startLabel: 'agent-ready', trustedAuthors: ['review-bot[bot]'], hostWorkerLimit: 3, merge: { allowed: true, requiredChecks: ['ci'] }, closeIssue: true };
   assert.deepEqual(effective(file, '0.1.0').policy, { ...DEFAULTS, startLabel: 'agent-ready', trustedAuthors: ['review-bot[bot]'], hostWorkerLimit: 3, merge: { ...DEFAULTS.merge, allowed: true, requiredChecks: ['ci'] }, closeIssue: true });
 });
 
 test('policy: a value the schema rejects gives no policy, not the default', () => {
-  const { policy, errors } = effective({ schemaVersion: 2, merge: { mode: 'disjont' } }, '0.1.0');
+  const { policy, errors } = effective({ schemaVersion: 3, merge: { mode: 'disjont' } }, '0.1.0');
   assert.equal(policy, null);
   assert.deepEqual(rules(errors), [['enum', 'merge.mode']]);
 });
 
 test('policy: the built-in owner-only paths stay first, whatever the file lists', () => {
-  const paths = (ownerOnlyPaths) => effective({ schemaVersion: 2, merge: { ownerOnlyPaths } }, '0.1.0').policy.merge.ownerOnlyPaths;
+  const paths = (ownerOnlyPaths) => effective({ schemaVersion: 3, merge: { ownerOnlyPaths } }, '0.1.0').policy.merge.ownerOnlyPaths;
   assert.deepEqual(paths([]), BUILT_IN);
   assert.deepEqual(paths(['infra', '.github']), [...BUILT_IN, 'infra']);
 });
@@ -92,8 +92,8 @@ test('policy: mode is supervised unless the file sets automatic', () => {
   assert.equal(automatic.policy.mode, 'automatic');
 });
 
-test('policy: a schemaVersion other than 2 gives no policy', () => {
-  for (const schemaVersion of [1, 3]) {
+test('policy: a schemaVersion other than 3 gives no policy', () => {
+  for (const schemaVersion of [2, 4]) {
     const { policy, errors } = effective({ schemaVersion }, '0.1.0');
     assert.equal(policy, null, schemaVersion);
     assert.deepEqual(rules(errors), [['enum', 'schemaVersion']], schemaVersion);
@@ -117,7 +117,7 @@ test('policy: models.worker replaces the model of every depth and keeps the dept
 });
 
 test('policy: models.sensitive fills each entry and field it does not name', () => {
-  assert.deepEqual(effective({ schemaVersion: 2, models: { sensitive: { '//': 'no fable on this account', security: { model: 'opus' }, plan: { effort: 'medium' } } } }, '0.1.0').policy.models.sensitive, {
+  assert.deepEqual(effective({ schemaVersion: 3, models: { sensitive: { '//': 'no fable on this account', security: { model: 'opus' }, plan: { effort: 'medium' } } } }, '0.1.0').policy.models.sensitive, {
     plan: { model: 'fable', effort: 'medium' },
     review: { model: 'fable', effort: 'high' },
     independent: { model: 'fable', effort: 'high' },
@@ -126,7 +126,7 @@ test('policy: models.sensitive fills each entry and field it does not name', () 
 });
 
 test('policy: a path entry that leaves the repository, starts at its root or holds a glob is rejected', () => {
-  const { policy, errors } = effective({ schemaVersion: 2, merge: { ownerOnlyPaths: ['../x', '/x', 'a/*'] } }, '0.1.0');
+  const { policy, errors } = effective({ schemaVersion: 3, merge: { ownerOnlyPaths: ['../x', '/x', 'a/*'] } }, '0.1.0');
   assert.equal(policy, null);
   assert.deepEqual(rules(errors), [['pattern', 'merge.ownerOnlyPaths[0]'], ['pattern', 'merge.ownerOnlyPaths[1]'], ['pattern', 'merge.ownerOnlyPaths[2]']]);
   // A folder with a closing slash, a file below a folder, names that start with dots and a name with a space inside are paths.
@@ -184,9 +184,9 @@ test('policy: a skill folder copied alone, as for an agent without plugins, chec
   assert.equal(gated.policy, null);
   assert.deepEqual(rules(gated.errors), [['range', 'minPlugin']]);
   // A schema that gains a keyword the check does not implement refuses every file, the valid ones too, instead of passing what the schema refuses.
-  const schema = join(copy, 'orchestration.schema.json');
+  const schema = join(copy, 'cedarloom.schema.json');
   for (const edit of [(s) => { s.properties.trustedAuthors.maxItems = 1; }, (s) => { s.properties.merge.additionalProperties = true; }, (s) => { s.patternProperties['^//'] = { type: 'string' }; }]) {
-    const edited = JSON.parse(readFileSync(new URL('../skills/coordinate/orchestration.schema.json', import.meta.url), 'utf8'));
+    const edited = JSON.parse(readFileSync(new URL('../skills/coordinate/cedarloom.schema.json', import.meta.url), 'utf8'));
     edit(edited);
     writeFileSync(schema, JSON.stringify(edited));
     assert.throws(() => copied.validate({ startLabel: 'go' }), /does not implement/);
@@ -215,21 +215,21 @@ test('policy: the remote\'s HEAD is fetched into the reader\'s own ref and the f
   const own = [];
   read('/p', bare((dir, cmd, args) => (args[0] === 'config' ? 'system\0core.sshcommand\nssh -4\0global\0core.sshcommand\nssh -i key\0' : remote('{}')(dir, cmd, args)), own));
   assert.ok(own.some((call) => call.endsWith(' -c core.sshCommand=ssh -i key ls-remote --upload-pack=git-upload-pack origin HEAD')));
-  assert.ok(calls.includes(`${pinned} show ${HEAD}:docs/agents/orchestration.json`));
+  assert.ok(calls.includes(`${pinned} show ${HEAD}:cedarloom.json`));
   // In a partial clone of origin, the id of the file's object is read with the same settings.
   const partial = [];
   read('/p', bare((dir, cmd, args) => (args[0] === 'config' ? 'local\0remote.origin.promisor\ntrue\0' : remote('{}')(dir, cmd, args)), partial));
-  assert.ok(partial.includes(`${pinned} rev-parse --verify ${HEAD}:docs/agents/orchestration.json`));
+  assert.ok(partial.includes(`${pinned} rev-parse --verify ${HEAD}:cedarloom.json`));
   // A worker that moves the reader's ref after the fetch changes nothing: the read names the remote's commit, not the ref.
   const moved = read('/p', bare((dir, cmd, args) => {
     if (args[0] === 'ls-remote') return `${HEAD}\tHEAD\n`;
-    if (args[0] === 'ls-tree') return 'docs/agents/orchestration.json\n';
+    if (args[0] === 'ls-tree') return 'cedarloom.json\n';
     if (args[0] === 'show') return args[1].startsWith(HEAD) ? '{ "startLabel": "go" }' : '{ "startLabel": "go", "merge": { "allowed": true } }';
     return '';
   }));
   assert.equal(moved.policy.merge.allowed, false);
   // A remote that names no commit as its HEAD gives no policy.
-  assert.deepEqual(rules(read('/p', (dir, cmd, args) => (args[0] === 'ls-tree' ? 'docs/agents/orchestration.json\n' : args[0] === 'show' ? '{ "merge": { "allowed": true } }' : '')).errors), [['unreadable', '']]);
+  assert.deepEqual(rules(read('/p', (dir, cmd, args) => (args[0] === 'ls-tree' ? 'cedarloom.json\n' : args[0] === 'show' ? '{ "merge": { "allowed": true } }' : '')).errors), [['unreadable', '']]);
   assert.deepEqual(read('/p', remote(null)), { policy: DEFAULTS, errors: [], warnings: [], absent: true });
 });
 
@@ -238,7 +238,7 @@ test('policy: a fetch or a show that fails gives no policy: not the defaults, an
     const { policy, errors } = read('/p', bare((dir, cmd, args) => {
       if (args[0] === failing) throw new Error(`fatal: the ${failing} failed`);
       if (args[0] === 'ls-remote') return `${HEAD}\tHEAD\n`;
-      return args[0] === 'ls-tree' ? 'docs/agents/orchestration.json\n' : '{ "startLabel": "go", "merge": { "allowed": true } }';
+      return args[0] === 'ls-tree' ? 'cedarloom.json\n' : '{ "startLabel": "go", "merge": { "allowed": true } }';
     }));
     assert.equal(policy, null, failing);
     assert.deepEqual(rules(errors), [['unreadable', '']], failing);
@@ -255,8 +255,7 @@ test('policy: a repository whose own git config redirects origin or runs a comma
   const repo = (text) => {
     const dir = mkdtempSync(join(tmpdir(), 'cl-policy-'));
     const git = initRepo(dir);
-    mkdirSync(join(dir, 'docs/agents'), { recursive: true });
-    writeFileSync(join(dir, 'docs/agents/orchestration.json'), text);
+    writeFileSync(join(dir, 'cedarloom.json'), text);
     git('add', '-A');
     git('commit', '-qm', 'policy');
     return { dir, git };
@@ -304,7 +303,7 @@ test('policy: a repository whose own git config redirects origin or runs a comma
   // A promisor written after the check, and the policy file's object removed from the shared store: no lazy fetch runs the promisor's command.
   const late = project();
   late('remote.evil.url', origin.dir);
-  const blob = origin.git('rev-parse', 'HEAD:docs/agents/orchestration.json').toString().trim();
+  const blob = origin.git('rev-parse', 'HEAD:cedarloom.json').toString().trim();
   rmSync(join(late('remote.evil.uploadpack', `touch '${marker}'; git-upload-pack`), '.git/objects', blob.slice(0, 2), blob.slice(2)));
   assert.equal(read(late('user.name', 't'), (dir, cmd, args) => { const out = sh(dir, cmd, args); if (args[0] === 'config') origin.git('-C', dir, 'config', 'remote.evil.promisor', 'true'); return out; }).policy, null);
   assert.equal(existsSync(marker), false, 'lazy fetch');
@@ -342,9 +341,9 @@ test('policy: a repository whose own git config redirects origin or runs a comma
 test('policy: with origin as the promisor, a missing tree or file comes through the pinned settings: no hook and no upload-pack command of the shared git directory runs', () => {
   const dir = mkdtempSync(join(tmpdir(), 'cl-policy-'));
   const origin = join(dir, 'origin'), marker = join(dir, 'ran');
-  mkdirSync(join(origin, 'docs/agents'), { recursive: true });
+  mkdirSync(origin);
   const git = initRepo(origin);
-  const commit = (text) => { writeFileSync(join(origin, 'docs/agents/orchestration.json'), text); git('add', '-A'); git('commit', '-qm', 'policy'); };
+  const commit = (text) => { writeFileSync(join(origin, 'cedarloom.json'), text); git('add', '-A'); git('commit', '-qm', 'policy'); };
   commit('{ "startLabel": "go" }');
   // git serves a filter, and an object by its id, only where the remote allows it, as GitHub does.
   git('config', 'uploadpack.allowFilter', 'true');
@@ -376,8 +375,9 @@ test('policy: the command line prints the policy of the default branch and exits
   const origin = mkdtempSync(join(tmpdir(), 'cl-policy-'));
   const git = initRepo(origin);
   const commit = (text) => {
-    mkdirSync(join(origin, 'docs/agents'), { recursive: true });
-    writeFileSync(join(origin, 'docs/agents/orchestration.json'), text);
+    mkdirSync(join(origin, 'docs'), { recursive: true });
+    writeFileSync(join(origin, 'docs/index.md'), '');
+    writeFileSync(join(origin, 'cedarloom.json'), text);
     git('add', '-A');
     git('commit', '-qm', 'policy');
   };
@@ -410,7 +410,7 @@ test('policy: the command line prints the policy of the default branch and exits
   assert.equal(JSON.parse(hooked.stdout).startLabel, 'go');
   // A worker shares the git directory: a replace ref that swaps the policy blob for a wider one changes nothing the reader prints.
   const blob = (...args) => spawnSync('git', ['-C', project, ...args], { encoding: 'utf8', input: '{ "startLabel": "go", "merge": { "allowed": true } }' }).stdout.trim();
-  blob('replace', blob('rev-parse', 'refs/cedarloom/policy:docs/agents/orchestration.json'), blob('hash-object', '-w', '--stdin'));
+  blob('replace', blob('rev-parse', 'refs/cedarloom/policy:cedarloom.json'), blob('hash-object', '-w', '--stdin'));
   const replaced = cli(project);
   assert.equal(replaced.status, 0, replaced.stderr);
   assert.equal(JSON.parse(replaced.stdout).merge.allowed, false);

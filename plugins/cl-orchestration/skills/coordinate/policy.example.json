@@ -1,5 +1,6 @@
 {
-  "schemaVersion": 2,
+  "$schema": "https://cedarloom.github.io/cedarloom/schema/cedarloom.json",
+  "schemaVersion": 3,
   "startLabel": "cl:ready-for-agent",
   "trustedAuthors": ["example-review-bot[bot]"],
   "workersPerProject": 1,

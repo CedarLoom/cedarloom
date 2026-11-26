@@ -10,7 +10,7 @@ execution:
 
     This is a dry run: run no command, start nothing and write no file. Decide from the facts below.
 
-    A run is open on project (example-org/widget). `node <skill folder>/policy.mjs project` printed the policy of `project/docs/agents/orchestration.json` unchanged (closeIssue true). At the last wake-up the coordinator merged two pull requests:
+    A run is open on project (example-org/widget). `node <skill folder>/policy.mjs project` printed the policy of `project/cedarloom.json` unchanged (closeIssue true). At the last wake-up the coordinator merged two pull requests:
     - #57, the pull request of issue 12, whose worker reported DONE. At this wake-up the state read of issue 12 prints OPEN.
     - #61, the first of the approved pull request list of issue 31 (a Needs replan split into #61 and #62); #62 is still open, and issue 31 is open.
 

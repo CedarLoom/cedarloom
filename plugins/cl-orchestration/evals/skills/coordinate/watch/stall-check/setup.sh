@@ -18,9 +18,9 @@ cat > project/AGENTS.md <<'MD'
 
 widget is a small Node.js library. Tests: `node --test`. A worker's worktree is removed with Orca's `worktree rm`; the project starts no dev containers.
 MD
-cat > project/docs/agents/orchestration.json <<'JSON'
+cat > project/cedarloom.json <<'JSON'
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "startLabel": "cl:ready-for-agent",
   "workersPerProject": 2,
   "hostWorkerLimit": 3,

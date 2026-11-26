@@ -18,9 +18,9 @@ widget is a small Node.js library. Tests: `npm test`. Lint: `npm run lint`.
 AGENTS
 git -C project remote add origin https://github.com/example-org/widget.git
 mkdir -p project/docs/agents
-cat > project/docs/agents/orchestration.json <<'POLICY'
+cat > project/cedarloom.json <<'POLICY'
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "startLabel": "cl:ready-for-agent",
   "trustedAuthors": ["example-review-bot[bot]"],
   "workersPerProject": 1,

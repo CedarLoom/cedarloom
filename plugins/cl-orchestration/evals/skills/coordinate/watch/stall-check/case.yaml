@@ -8,7 +8,7 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
-    This is a dry run: run no command and change no file. Decide from these facts and the skill's text; the project's policy is `project/docs/agents/orchestration.json`. Orca's executable is `orca`.
+    This is a dry run: run no command and change no file. Decide from these facts and the skill's text; the project's policy is `project/cedarloom.json`. Orca's executable is `orca`.
 
     Run run-7 is open in supervised mode. It is 14:30 UTC, a timer wake-up with no mail, and no escalation is unhandled. `orca orchestration worker-list --run run-7 --full --json` shows two supervised Claude Code workers, both with state `ready`, outcome `in_progress` and `requiresAction` false:
     - `d-12`, issue 12: acknowledged at 13:40, last commit on its branch at 14:16, last message at 14:19 (a status note), no pull request.
