@@ -277,6 +277,8 @@ test('merge: a required check whose newest run failed or that has no run on the 
     [[ci('COMPLETED', 'SUCCESS', minutesAgo(50)), ci('COMPLETED', 'FAILURE')], failed],
     // A skipped run, which has an end but no start, then a run again that failed.
     [[{ ...ci('COMPLETED', 'SKIPPED', '0001-01-01T00:00:00Z'), completedAt: minutesAgo(50) }, ci('COMPLETED', 'FAILURE')], failed],
+    // Two runs that started in the same second.
+    [[ci('COMPLETED', 'SUCCESS'), ci('COMPLETED', 'FAILURE')], failed],
     [[ci('COMPLETED', 'SUCCESS', minutesAgo(30), 'lint')], { outcome: 'stop', reason: 'required check(s) have no run on the head: ci' }],
   ]);
   const hold = bot({ world: { hold: true } });

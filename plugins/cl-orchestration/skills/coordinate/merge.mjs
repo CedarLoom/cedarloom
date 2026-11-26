@@ -53,13 +53,17 @@ const GOOD = ['SUCCESS', 'SKIPPED', 'NEUTRAL'];
 export function checkStates(rollup) {
   // gh prints a missing time as the zero time. A skipped run has an end but no start; a run that has not started has neither and is newer than every other.
   const startOf = (c) => [c.startedAt, c.completedAt].map(Date.parse).find((at) => at > 0) ?? Infinity;
+  const done = (c) => (c.status === undefined ? !['PENDING', 'EXPECTED'].includes(c.state) : c.status === 'COMPLETED');
+  const stateOf = (c) => (!done(c) ? 'pending' : GOOD.includes(c.conclusion ?? c.state) ? 'green' : 'red');
+  const RANK = { green: 0, pending: 1, red: 2 };
   const newest = new Map();
   for (const c of rollup ?? []) {
     const key = c.context ?? `${c.name}\n${c.workflowName}`;
-    if (!newest.has(key) || startOf(newest.get(key)) < startOf(c)) newest.set(key, c);
+    const kept = newest.get(key);
+    // Of runs that started in the same second the list order says nothing: the one furthest from green counts.
+    if (!kept || startOf(kept) < startOf(c) || (startOf(kept) === startOf(c) && RANK[stateOf(kept)] < RANK[stateOf(c)])) newest.set(key, c);
   }
-  const done = (c) => (c.status === undefined ? !['PENDING', 'EXPECTED'].includes(c.state) : c.status === 'COMPLETED');
-  return [...newest.values()].map((c) => ({ name: c.context ?? c.name, state: !done(c) ? 'pending' : GOOD.includes(c.conclusion ?? c.state) ? 'green' : 'red' }));
+  return [...newest.values()].map((c) => ({ name: c.context ?? c.name, state: stateOf(c) }));
 }
 
 // null when every required check is green, else the answer: a red or missing check stops, one that runs waits.
