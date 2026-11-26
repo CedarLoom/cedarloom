@@ -3,12 +3,15 @@ import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import {relative, resolve} from 'node:path';
 import {referencePages, repoLinks} from './repo-links';
+import {repoFacts} from './scripts/repo-facts.mts';
 
-const repo = 'https://github.com/CedarLoom/cedarloom';
+const slug = 'CedarLoom/cedarloom';
+const repo = `https://github.com/${slug}`;
 const baseUrl = '/cedarloom/';
 const root = resolve(__dirname, '..');
 
-const config: Config = {
+// An async config creator, so the build can read the repository facts first.
+export default async (): Promise<Config> => ({
   title: 'CedarLoom',
   tagline: 'A workflow for Claude Code, sized to the risk of each task.',
   favicon: 'cedarloom-icon.svg',
@@ -64,7 +67,8 @@ const config: Config = {
         {to: '/skills', label: 'Skills', position: 'left'},
         {to: '/lifecycle', label: 'Lifecycle', position: 'left'},
         {type: 'docSidebar', sidebarId: 'reference', label: 'Reference', position: 'left'},
-        {href: repo, label: 'GitHub', position: 'right'},
+        // read once per build, the browser makes no request to GitHub
+        {type: 'custom-repo', repo: slug, facts: await repoFacts(slug), position: 'right'},
       ],
     },
     footer: {
@@ -91,6 +95,4 @@ const config: Config = {
     },
     prism: {theme: prismThemes.github, darkTheme: prismThemes.dracula},
   } satisfies Preset.ThemeConfig,
-};
-
-export default config;
+});

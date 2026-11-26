@@ -58,6 +58,14 @@ body {
 .navbar {
   border-bottom: 1px solid var(--cl-line);
   background: color-mix(in srgb, var(--ifm-background-color) 88%, transparent);
+}
+
+/* The blur sits on a layer of its own: on .navbar it would become the containing block of the fixed mobile menu. */
+.navbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   backdrop-filter: blur(8px);
 }
 
@@ -67,6 +75,97 @@ body {
 
 .navbar__link {
   font-weight: 550;
+}
+
+/* The repository link (src/components/RepoWidget.tsx) is an outlined button: icon, name, release, stars and forks. */
+/* It is a navbar item: Infima hides those below 997 px, where the menu shows it. */
+@media (min-width: 997px) {
+  .navbar__items .repo-widget {
+    display: flex;
+    min-height: 44px;
+  }
+}
+
+.repo-widget {
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  /* room for a release tag that carries a plugin name */
+  max-width: 19rem;
+  padding: 4px 12px;
+  border: 1px solid var(--cl-line);
+  border-radius: var(--ifm-global-radius);
+  background: var(--cl-surface);
+  color: var(--ifm-font-color-base);
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.repo-widget:hover {
+  border-color: var(--ifm-color-primary);
+  color: var(--ifm-font-color-base);
+  text-decoration: none;
+}
+
+.navbar-sidebar .repo-widget {
+  margin: 8px 0;
+}
+
+.repo-widget svg {
+  display: block;
+  fill: currentColor;
+}
+
+.repo-widget__icon svg {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.repo-widget__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.repo-widget__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--ifm-font-weight-semibold);
+}
+
+.repo-widget__facts {
+  display: flex;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--cl-ink-2);
+  font-size: 12px;
+  /* the menu link style of the mobile menu is bolder */
+  font-weight: var(--ifm-font-weight-normal);
+  white-space: nowrap;
+}
+
+.repo-widget__facts li {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.repo-widget__facts svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+/* Spoken label of a fact: the icon is hidden from assistive technology, the count alone says nothing. */
+.repo-widget__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .footer {
