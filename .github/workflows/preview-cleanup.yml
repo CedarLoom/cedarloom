@@ -21,6 +21,10 @@ jobs:
     if: github.repository == 'CedarLoom/cedarloom' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Shared by the jobs that write the pull request description, so their read-write cycles never overlap.
+    concurrency:
+      group: PR-description-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
     permissions:
       contents: write
       pull-requests: write
@@ -40,8 +44,19 @@ jobs:
             404) echo 'exists=false' >> "$GITHUB_OUTPUT" ;;
             *) echo "::error::GitHub API returned HTTP ${status}"; exit 1 ;;
           esac
+      # A rerun after a failed description write finds no preview but still the block to mark removed.
+      - name: Find the preview block
+        id: block
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if printf '%s\n' "$BODY" | grep -q '^<!-- preview -->'; then
+            echo 'exists=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'exists=false' >> "$GITHUB_OUTPUT"
+          fi
       # The preview action pushes to gh-pages from this checkout with its own token.
-      - if: steps.find.outputs.exists == 'true'
+      - if: steps.find.outputs.exists == 'true' || steps.block.outputs.exists == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.ref }}
@@ -51,12 +66,12 @@ jobs:
         with:
           action: remove
           comment: false
-      - if: steps.find.outputs.exists == 'true'
+      - if: steps.find.outputs.exists == 'true' || steps.block.outputs.exists == 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22.23.4
       - name: Mark the preview removed in the pull request description
-        if: steps.find.outputs.exists == 'true'
+        if: steps.find.outputs.exists == 'true' || steps.block.outputs.exists == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}

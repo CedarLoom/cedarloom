@@ -49,6 +49,13 @@ test('a whole example block quoted in a fence is text', () => {
   assert.equal(tb(`## Docs\n${example}`, 'r'), `## Docs\n${example}\n${TB('r')}\n`);
 });
 
+test('a fence open to the end is closed before the appended block, which the next run replaces', () => {
+  const first = tb('Intro\n````js\nexample\n', 'r1');
+  assert.equal(first, `Intro\n\`\`\`\`js\nexample\n\`\`\`\`\n\n${TB('r1')}\n`);
+  assert.equal(tb(first, 'r2'), first.replace('r1', 'r2'));
+  assert.equal(tb('Intro\n~~~', 'r'), `Intro\n~~~\n~~~\n\n${TB('r')}\n`);
+});
+
 test('the preview block goes after a token budget block at the end', () => {
   const body = `## Why\nx\n\n${TB('r')}\n`;
   assert.equal(pv(body, 'link'), `${body}\n${PV('link')}\n`);

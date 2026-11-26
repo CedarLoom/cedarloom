@@ -18,11 +18,18 @@ const TRIES = 3;
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// Fenced code blocks are blanked, line ends kept, so searches keep the body's offsets and skip quoted markers. An unclosed fence runs to the end, as in CommonMark.
+// A fenced code block; group 3 is its closing fence, missing when the fence runs to the end, as in CommonMark.
+const FENCE = /^ {0,3}((`|~)\2{2,})[^\r\n]*(?:\r?\n|(?![\s\S]))[\s\S]*?(?:(^ {0,3}\1\2*[ \t]*\r?$)|(?![\s\S]))/gm;
+
+// Fenced code blocks are blanked, line ends kept, so searches keep the body's offsets and skip quoted markers.
 function unfenced(body) {
-  return body.replace(/^ {0,3}((`|~)\2{2,})[^\r\n]*\r?\n[\s\S]*?(?:^ {0,3}\1\2*[ \t]*\r?$|(?![\s\S]))/gm, (fence) =>
-    fence.replace(/[^\r\n]/g, ' '),
-  );
+  return body.replace(FENCE, (fence) => fence.replace(/[^\r\n]/g, ' '));
+}
+
+// The opening fence of a code block that runs to the end of the body, if any.
+function openFence(body) {
+  const last = [...body.matchAll(FENCE)].at(-1);
+  return last && last[3] === undefined ? last[1] : undefined;
 }
 
 // The block starts with the marker and the note on whole lines: a description may name a marker in its text.
@@ -42,7 +49,10 @@ export function withBlock(body, name, content) {
   if (old) return body.slice(0, old.index) + block + body.slice(old.index + old[0].length);
   const at = bottom(body, text, name);
   if (at < body.length) return body.slice(0, at) + block + eol + eol + body.slice(at);
-  return body === '' ? block + eol : body + (body.endsWith(eol + eol) ? '' : body.endsWith(eol) ? eol : eol + eol) + block + eol;
+  // A block appended inside an open fence would be code: the fence is closed first.
+  const fence = openFence(body);
+  const end = fence ? body + (body.endsWith(eol) ? '' : eol) + fence + eol : body;
+  return end === '' ? block + eol : end + (end.endsWith(eol + eol) ? '' : end.endsWith(eol) ? eol : eol + eol) + block + eol;
 }
 
 // A missing block goes at the end of the description, before the blocks that end it and follow it in ORDER.
