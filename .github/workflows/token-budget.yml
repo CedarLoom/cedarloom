@@ -69,9 +69,9 @@ jobs:
           echo "::error::the token budget check failed: above the budget in .github/token-budget.json, or an error (see the job summary)"
           exit 1
 
-  # A block in the description, not a comment. The script reads the description back and writes again when another
-  # workflow (the preview) or a bot replaced it in between. Pull requests from forks and from Dependabot get a read-only
-  # token. Runs above the budget too, so the report shows why the check failed.
+  # A block at the bottom of the description, not a comment. The script reads the description back and writes again when
+  # a review bot replaced it in between. Pull requests from forks and from Dependabot get a read-only token. Runs above
+  # the budget too, so the report shows why the check failed.
   report:
     if: >-
       !cancelled() && github.repository == 'CedarLoom/cedarloom'
@@ -79,10 +79,6 @@ jobs:
     needs: token-budget
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Shared by the jobs that write the pull request description, so their read-write cycles never overlap.
-    concurrency:
-      group: PR-description-${{ github.event.pull_request.number }}
-      cancel-in-progress: false
     permissions:
       contents: read
       pull-requests: write
@@ -104,4 +100,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-        run: node .github/scripts/pr-description-block.mjs "$GITHUB_REPOSITORY" "$PR" token-budget "$RUNNER_TEMP/report.md"
+        run: node .github/scripts/token-budget-block.mjs "$GITHUB_REPOSITORY" "$PR" "$RUNNER_TEMP/report.md"

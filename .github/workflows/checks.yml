@@ -74,7 +74,7 @@ jobs:
         run: node --test .github/scripts/version-pins.test.mjs && node .github/scripts/version-pins.mjs --check
       # The budget in .github/token-budget.json binds here, a required check; token-budget.yml only reports the change.
       - name: Token budget
-        run: node --test .github/scripts/pr-description-block.test.mjs && node plugins/*/skills/debloat/token-budget.mjs check --budget-only
+        run: node --test .github/scripts/token-budget-block.test.mjs && node plugins/*/skills/debloat/token-budget.mjs check --budget-only
 
   # Each plugin as Claude Code reads it: manifest and skill front matter (strict), the marketplace file, the mod tests, an install of each plugin. Claude Code is pinned by `.github/claude-code/package-lock.json` at the minimum in the README's Requirements, which `engines` in each `.claude-plugin/plugin.json` declares; bump it by hand.
   plugin-checks:
