@@ -84,7 +84,7 @@ test('worker-settings --supervised: writes the worker rules without a host path 
   assert.match(unexcluded.stderr, /does not list \/\.claude\/settings\.local\.json/);
   assert.equal(run(args, base).status, 0);
   assert.equal(readFileSync(exclude, 'utf8'), '/.claude/settings.local.json\n');
-  // The last one is an earlier version's rule file: the deny list without disableBypassPermissionsMode.
+  // The last one is the deny list without disableBypassPermissionsMode.
   for (const content of ['{"permissions":{}}\n', '', `${JSON.stringify({ permissions: { deny: permissions.deny } }, null, 2)}\n`]) {
     writeFileSync(file, content);
     const { status, stderr } = run(['--check', ...args], base);
