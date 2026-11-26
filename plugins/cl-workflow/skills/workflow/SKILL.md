@@ -38,7 +38,7 @@ Every depth:
    - Docs pass: [docs.md](docs.md). Research: [research.md](research.md).
    - A typed entry skill (`/cl-workflow:<name>`, `$cl-workflow:<name>` in Codex, or `/<name>` in a project) fixes the kind and, where it names one, a depth floor; step 1 still writes its lines, and its rules may raise the depth.
    - Branches, commits and pull requests follow the project's own convention (`AGENTS.md`, a contributing guide, the history). Where it names none, commit subjects and pull request titles follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/): a squash merge makes the title the commit subject.
-   - A pull request body fills each section, in order, of the project's `pull_request_template.md` (any documented location or case), else the owner's `.github` default, else [pull-request-template.md](pull-request-template.md): `gh pr create --template <file>` or `--body-file`. Issues fill their kind's issue form: one `### <field label>` section per field, in order.
+   - A pull request body fills each section, in order, of the project's `pull_request_template.md` or `PULL_REQUEST_TEMPLATE/` (any documented location or case), else the owner's `.github` default, else [pull-request-template.md](pull-request-template.md): `gh pr create --body-file <file>`. Issues fill their kind's template (a form: one `### <field label>` per field, in order).
    - Two or more independent items that each need more than a few files or searches: one subagent per item in parallel, then one merged report. Smaller items run in this session.
 
    The playbooks hold the detail; these are the steps, in order:
