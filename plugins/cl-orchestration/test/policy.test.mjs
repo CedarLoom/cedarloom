@@ -15,7 +15,7 @@ const DEFAULTS = {
   workersPerProject: 1,
   hostWorkerLimit: 2,
   stallMinutes: 20,
-  merge: { allowed: false, requiredChecks: [], mode: 'strict', autoMergeMax: 'medium', additivePaths: [], ownerOnlyPaths: BUILT_IN, ownerOnlyNames: ['.claude', '.mcp.json', 'AGENTS.md', 'CLAUDE.md', '.claude-plugin', '.codex', '.cursor', '.vscode', '.husky', '.githooks', '.pre-commit-config.yaml', '.devcontainer', '.devcontainer.json'] },
+  merge: { allowed: false, requiredChecks: [], mode: 'strict', autoMergeMax: 'medium', additivePaths: [], ownerOnlyPaths: BUILT_IN, ownerOnlyNames: ['.cedarloom', '.claude', '.mcp.json', 'AGENTS.md', 'CLAUDE.md', '.claude-plugin', '.codex', '.cursor', '.vscode', '.husky', '.githooks', '.pre-commit-config.yaml', '.devcontainer', '.devcontainer.json'] },
   closeIssue: false,
   deleteMergedBranch: false,
   issuesPerWorker: 1,
