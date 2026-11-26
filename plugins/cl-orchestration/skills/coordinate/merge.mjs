@@ -1,5 +1,5 @@
 // Usage: node merge.mjs <state file> --run <run id> [--method squash|merge|rebase]. The only place a project bot runs gh pr merge. The bot first takes the judgment steps of Merge (merge.md, steps 1 to 5.2) and records the head and verdict it accepted in the state file's handled; this script then merges that pull request or says why not, in one JSON line { outcome, reason }:
-// merged; wait (the lock is busy, the watch of the default branch runs, or another pull request waits for its checks after an update: a later sweep retries); redMain (the default branch is red and the answered report names another pull request or none); restart (the head, the verdict, the trial base or the threads changed: the judgment steps run again); stop (the owner's, exit 1 when an error stopped it, exit 2 for a bad argument).
+// merged; wait (the lock is busy, the watch of the default branch runs, another pull request waits for its checks after an update, or a check of merge.requiredChecks still runs on the head: a later sweep retries); redMain (the default branch is red and the answered report names another pull request or none); restart (the head, the verdict, the trial base or the threads changed: the judgment steps run again); stop (the owner's, also for a required check that failed or has no run on the head; exit 1 when an error stopped it, exit 2 for a bad argument).
 // <state file> is <bot home>/state/pr-<n>.json (state.mjs). The squash or merge commit's subject and body come from pr-<n>-subject.txt and pr-<n>-body.md beside it (step 5.1). <bot home>/pre-merge.json, if present, names a command that gets the pull request's text on stdin and must exit 0: { "command": [<program>, <args>...] }.
 import { readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
@@ -46,6 +46,35 @@ const isRed = (r) => r.status === 'completed' && !GREEN.includes(r.conclusion);
 const replaces = (x, r) => r.conclusion === 'cancelled' && x.workflowDatabaseId === r.workflowDatabaseId && x.createdAt > r.createdAt;
 // The red runs among the runs of one commit, of every event: each red run counts, whatever came after it; a cancelled one is replaced by a newer run of its workflow (steps 6.6 and 6.7).
 export const redRuns = (onCommit) => onCommit.filter((r) => isRed(r) && !onCommit.some((x) => replaces(x, r)));
+
+const GOOD = ['SUCCESS', 'SKIPPED', 'NEUTRAL'];
+// { name, state } of each check of a statusCheckRollup, state 'green', 'red' or 'pending': check runs carry status and conclusion, commit statuses a state.
+// The rollup lists every run of a check; as gh pr checks does, only the newest of each (by name and workflow, or a status's context) counts.
+export function checkStates(rollup) {
+  // gh prints a missing time as the zero time. A skipped run has an end but no start; a run that has not started has neither and is newer than every other.
+  const startOf = (c) => [c.startedAt, c.completedAt].map(Date.parse).find((at) => at > 0) ?? Infinity;
+  const done = (c) => (c.status === undefined ? !['PENDING', 'EXPECTED'].includes(c.state) : c.status === 'COMPLETED');
+  const stateOf = (c) => (!done(c) ? 'pending' : GOOD.includes(c.conclusion ?? c.state) ? 'green' : 'red');
+  const RANK = { green: 0, pending: 1, red: 2 };
+  const newest = new Map();
+  for (const c of rollup ?? []) {
+    const key = c.context ?? `${c.name}\n${c.workflowName}`;
+    const kept = newest.get(key);
+    // Of runs that started in the same second the list order says nothing: the one furthest from green counts.
+    if (!kept || startOf(kept) < startOf(c) || (startOf(kept) === startOf(c) && RANK[stateOf(kept)] < RANK[stateOf(c)])) newest.set(key, c);
+  }
+  return [...newest.values()].map((c) => ({ name: c.context ?? c.name, state: stateOf(c) }));
+}
+
+// null when every required check is green, else the answer: a red or missing check stops, one that runs waits.
+function required(names, rollup) {
+  const states = checkStates(rollup);
+  const having = (state) => names.filter((name) => states.some((c) => c.name === name && c.state === state));
+  const red = having('red'), missing = names.filter((name) => !states.some((c) => c.name === name)), running = having('pending');
+  if (red.length) return stop(`required check(s) failed on the head: ${red.join(', ')}`);
+  if (missing.length) return stop(`required check(s) have no run on the head: ${missing.join(', ')}`);
+  return running.length ? wait(`required check(s) still run on the head: ${running.join(', ')}`) : null;
+}
 
 // A check that has not finished, or no check yet: the runs of a pushed update appear some time after the push.
 const pending = (rollup) => !rollup?.length || rollup.some((c) => (c.status !== undefined && c.status !== 'COMPLETED') || ['PENDING', 'EXPECTED'].includes(c.state));
@@ -191,6 +220,12 @@ function locked({ stateFile, method, runId, run, now, sleep }) {
   }
   const refused = premerge(home, pr, subject, body);
   if (refused) return stop(refused);
+
+  // Read after the other checks: a check can turn red after the bot read it (merge.md, step 2).
+  const checked = JSON.parse(gh('pr', 'view', String(n), '-R', repo, '--json', 'headRefOid,statusCheckRollup'));
+  if (checked.headRefOid !== accepted) return restart(`the head is ${checked.headRefOid}, not the accepted ${accepted}`);
+  const unchecked = required(verdict.requiredChecks, checked.statusCheckRollup);
+  if (unchecked) return unchecked;
 
   // The bot or the owner may have written the state during the checks: a hold or another accepted head written since wins.
   const fresh = readState(stateFile);

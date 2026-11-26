@@ -1,4 +1,4 @@
-// Usage: node merge-checks.mjs <project path> <scratch path> <default branch> <reviewed head> <head> <risk class>. Decides steps 1 to 3 of Merge (merge.md) for one pull request head in its scratch clone and prints { next, allowed, ownerOnly, unsafePaths, sensitive, risky, risk, pin, upToDate, shared } as JSON, exit 0.
+// Usage: node merge-checks.mjs <project path> <scratch path> <default branch> <reviewed head> <head> <risk class>. Decides steps 1 to 3 of Merge (merge.md) for one pull request head in its scratch clone and prints { next, allowed, requiredChecks, ownerOnly, unsafePaths, sensitive, risky, risk, pin, upToDate, shared } as JSON, exit 0. requiredChecks is the policy's merge.requiredChecks, which merge.mjs requires green on the head.
 // Exit 2 with one line on stderr is no verdict (a refused policy, a failed git command, a bad argument, a scratch path that is no clone of its own, a head with several merge bases): nothing merges. It runs no fetch of the default branch, so fetch in the clone first: a clone whose default branch differs from the remote's gets no verdict. It changes no working file and no ref but the policy reader's refs/cedarloom/policy in the clone.
 import { realpathSync } from 'node:fs';
 import { errorLine, escaped, isMain, json, read, sh } from './policy.mjs';
@@ -101,9 +101,9 @@ function verdict(project, scratch, branch, reviewed, head, stated) {
   const pinned = pin(reviewed, head, lines, facts);
   const upToDate = facts.ancestor(base, head);
   const shared = both(files, policy.merge.mode === 'disjoint' ? changed(`${head}...${base}`) : []);
-  const owners = ownerOnly(policy, files), unsafePaths = unsafe(files), { allowed, autoMergeMax } = policy.merge;
+  const owners = ownerOnly(policy, files), unsafePaths = unsafe(files), { allowed, autoMergeMax, requiredChecks } = policy.merge;
   const riskyFiles = risky(policy, files), risk = riskClass(stated, riskyFiles);
-  return { next: next({ ownerOnlyFiles: owners, unsafePaths, risk, autoMergeMax, pin: pinned, allowed, upToDate, mode: policy.merge.mode, shared, additive: policy.merge.additivePaths }), allowed, ownerOnly: owners, unsafePaths, sensitive: sensitive(policy, files), risky: riskyFiles, risk, pin: pinned, upToDate, shared };
+  return { next: next({ ownerOnlyFiles: owners, unsafePaths, risk, autoMergeMax, pin: pinned, allowed, upToDate, mode: policy.merge.mode, shared, additive: policy.merge.additivePaths }), allowed, requiredChecks, ownerOnly: owners, unsafePaths, sensitive: sensitive(policy, files), risky: riskyFiles, risk, pin: pinned, upToDate, shared };
 }
 
 if (isMain(import.meta.url)) {

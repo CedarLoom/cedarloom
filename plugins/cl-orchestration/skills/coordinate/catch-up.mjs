@@ -14,7 +14,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { answer, readQueue } from './approval.mjs';
-import { redRuns, unconfirmed } from './merge.mjs';
+import { checkStates, redRuns, unconfirmed } from './merge.mjs';
 import { errorLine, json, read, sh } from './policy.mjs';
 import { asks, originRepo, trusts, writers } from './precheck.mjs';
 import { count, inspectLock, isPrFile, LIMITS, logged, RED_MAIN, TIP } from './state.mjs';
@@ -27,21 +27,13 @@ const WATCH_MIN = 10 * MINUTE;
 // An answer on an issue without cl:needs-human that no sweep read within this many days is left to the owner.
 const ANSWER_DAYS = 7;
 const BOT_BRANCH = /^[a-z]+\/([1-9]\d*)-./;
-const GOOD = ['SUCCESS', 'SKIPPED', 'NEUTRAL'];
 
-// 'none', 'red', 'pending' or 'green' of a statusCheckRollup: check runs carry status and conclusion, commit statuses a state.
-// The rollup lists every run of a check; as gh pr checks does, only the newest of each (by name and workflow, or a status's context) counts.
+// 'none', 'red', 'pending' or 'green' of a statusCheckRollup, from the newest run of each check.
 function checks(rollup) {
-  const newest = new Map();
-  for (const c of rollup ?? []) {
-    const key = c.context ?? `${c.name}\n${c.workflowName}`;
-    if (!newest.has(key) || newest.get(key).startedAt < c.startedAt) newest.set(key, c);
-  }
-  const latest = [...newest.values()];
-  if (!latest.length) return 'none';
-  const done = (c) => (c.status === undefined ? !['PENDING', 'EXPECTED'].includes(c.state) : c.status === 'COMPLETED');
-  if (latest.some((c) => done(c) && !GOOD.includes(c.conclusion ?? c.state))) return 'red';
-  return latest.every(done) ? 'green' : 'pending';
+  const states = checkStates(rollup).map((c) => c.state);
+  if (!states.length) return 'none';
+  if (states.includes('red')) return 'red';
+  return states.every((state) => state === 'green') ? 'green' : 'pending';
 }
 
 // { condition, reason } of the first condition that holds, or null. run(cwd, cmd, args) gives stdout or throws; queue() lists the local questions as approval.mjs queue does.

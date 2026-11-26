@@ -25,7 +25,7 @@ const head = (branch, files, from = 'main') => {
   git('commit', '-qm', branch);
   return git('rev-parse', 'HEAD').toString().trim();
 };
-head('policy', { 'cedarloom.json': '{ "merge": { "allowed": true, "mode": "disjoint" } }' });
+head('policy', { 'cedarloom.json': '{ "merge": { "allowed": true, "requiredChecks": ["ci"], "mode": "disjoint" } }' });
 git('checkout', '-q', 'main');
 git('merge', '-q', '--ff-only', 'policy');
 const HEAD = head('feat/1-x', { 'src/x.txt': 'x\n' });
@@ -58,7 +58,11 @@ else if (a === 'pr' && b === 'view' && args[args.indexOf('--json') + 1].includes
   if (w.merge === 'unreadable') { process.stderr.write('HTTP 502\\n'); process.exit(1); }
   say(merged ? { state: 'MERGED', mergeCommit: { oid: '${MERGE_COMMIT}' }, mergedAt: '2026-11-20T12:00:30Z', headRefOid: w.mergedHead ?? pr.headRefOid, autoMergeRequest: null }
     : { state: 'OPEN', mergeCommit: null, mergedAt: null, headRefOid: w.mergedHead ?? pr.headRefOid, autoMergeRequest: w.merge === 'auto' ? { enabledAt: '2026-11-20T12:00:01Z' } : null });
-} else if (a === 'pr' && b === 'view') say(w.prs[c]);
+} else if (a === 'pr' && b === 'view') {
+  // world.hold: the owner holds the pull request while its checks are read.
+  if (w.hold && args.includes('headRefOid,statusCheckRollup')) fs.writeFileSync(w.hold, JSON.stringify({ ...JSON.parse(fs.readFileSync(w.hold, 'utf8')), held: 'owner asked to wait' }));
+  say(w.prs[c]);
+}
 else if (a === 'pr' && b === 'merge' && !args.includes('--disable-auto')) {
   if (w.clobber) fs.writeFileSync(w.clobber, '{');
   if (w.merge === 'fail') { process.stderr.write('GraphQL: Head branch was modified\\n'); process.exit(1); }
@@ -67,7 +71,9 @@ else if (a === 'pr' && b === 'merge' && !args.includes('--disable-auto')) {
 `, { mode: 0o755 });
 process.env.PATH = `${bin}:${process.env.PATH}`;
 
-const openPr = (n, oid, branch) => ({ state: 'OPEN', headRefOid: oid, baseRefName: 'main', isCrossRepository: false, title: 'feat: add x', body: `Closes #${n}.`, headRefName: branch, headRepositoryOwner: { login: 'acme' }, commits: [{ messageHeadline: 'feat: add x', messageBody: 'Adds x.' }] });
+// A run of the check ci, which the policy requires, or of another check by name; it started 30 minutes ago unless startedAt says otherwise.
+const ci = (status, conclusion, startedAt = minutesAgo(30), name = 'ci') => ({ __typename: 'CheckRun', name, workflowName: 'CI', status, conclusion, startedAt });
+const openPr = (n, oid, branch) => ({ state: 'OPEN', headRefOid: oid, baseRefName: 'main', isCrossRepository: false, title: 'feat: add x', body: `Closes #${n}.`, headRefName: branch, headRepositoryOwner: { login: 'acme' }, commits: [{ messageHeadline: 'feat: add x', messageBody: 'Adds x.' }], statusCheckRollup: [ci('COMPLETED', 'SUCCESS')] });
 const run = (sha, status, conclusion, workflow, createdAt) => ({ databaseId: Date.parse(createdAt) / 1000 + workflow, headSha: sha, status, conclusion, workflowDatabaseId: workflow, createdAt });
 const GREEN = [run(TIP, 'completed', 'success', 10, '2026-11-20T11:49:00Z'), run(BEFORE, 'completed', 'success', 10, '2026-11-20T11:00:00Z')];
 
@@ -82,7 +88,7 @@ function bot({ n = 1, oid = HEAD, branch = 'feat/1-x', action = 'merge', world =
   writeFileSync(join(state, `pr-${n}-subject.txt`), subject);
   if (body !== null) writeFileSync(join(state, `pr-${n}-body.md`), body);
   for (const [name, text] of Object.entries(files)) writeFileSync(join(home, name), text);
-  writeFileSync(join(gh, 'world.json'), JSON.stringify({ tip: TIP, runs: GREEN, otherRuns: [], compare: [], threads: [], merge: 'merged', ...world, clobber: world.clobber ? file : null, prs: { [n]: openPr(n, oid, branch), ...world.prs } }));
+  writeFileSync(join(gh, 'world.json'), JSON.stringify({ tip: TIP, runs: GREEN, otherRuns: [], compare: [], threads: [], merge: 'merged', ...world, clobber: world.clobber ? file : null, hold: world.hold ? file : null, prs: { [n]: openPr(n, oid, branch), ...world.prs } }));
   let t = NOW.getTime();
   const call = (method = 'squash') => {
     process.env.FAKE_GH = gh;
@@ -252,6 +258,43 @@ test('merge: a new head, another verdict or an open review thread restarts the j
   const threads = bot({ world: { threads: [{ id: 'T1', isResolved: false, path: 'src/x.txt', line: 1, comments: { totalCount: 0, nodes: [] } }, { id: 'T2', isResolved: true }] } });
   assert.deepEqual(threads.call(), { outcome: 'restart', reason: '1 review thread(s) are unresolved' });
   assert.deepEqual(merges(threads.calls()), []);
+});
+
+// A bot whose pull request's checks are rollup.
+const checked = (rollup) => bot({ world: { prs: { 1: { ...openPr(1, HEAD, 'feat/1-x'), statusCheckRollup: rollup } } } });
+const holds = (cases) => {
+  for (const [rollup, answer] of cases) {
+    const b = checked(rollup);
+    assert.deepEqual(b.call(), answer);
+    assert.deepEqual(merges(b.calls()), []);
+    assert.equal(b.read('pr-1.json').mergeCommandAt, undefined);
+  }
+};
+
+test('merge: a required check whose newest run failed or that has no run on the head stops, and so does a hold written while the checks are read', () => {
+  const failed = { outcome: 'stop', reason: 'required check(s) failed on the head: ci' };
+  holds([
+    [[ci('COMPLETED', 'SUCCESS', minutesAgo(50)), ci('COMPLETED', 'FAILURE')], failed],
+    // A skipped run, which has an end but no start, then a run again that failed.
+    [[{ ...ci('COMPLETED', 'SKIPPED', '0001-01-01T00:00:00Z'), completedAt: minutesAgo(50) }, ci('COMPLETED', 'FAILURE')], failed],
+    // Two runs that started in the same second.
+    [[ci('COMPLETED', 'SUCCESS'), ci('COMPLETED', 'FAILURE')], failed],
+    [[ci('COMPLETED', 'SUCCESS', minutesAgo(30), 'lint')], { outcome: 'stop', reason: 'required check(s) have no run on the head: ci' }],
+  ]);
+  const hold = bot({ world: { hold: true } });
+  assert.deepEqual(hold.call(), { outcome: 'stop', reason: 'held: owner asked to wait' });
+  assert.deepEqual(merges(hold.calls()), []);
+});
+
+test('merge: a required check that runs or is queued again on the head waits, and one that ran again and passed merges', () => {
+  const running = { outcome: 'wait', reason: 'required check(s) still run on the head: ci' };
+  holds([
+    [[ci('COMPLETED', 'FAILURE', minutesAgo(50)), ci('IN_PROGRESS', '')], running],
+    // A queued run again, which gh lists with the zero time.
+    [[ci('COMPLETED', 'SUCCESS'), ci('QUEUED', '', '0001-01-01T00:00:00Z')], running],
+  ]);
+  // Beside a failed check the policy does not require.
+  assert.equal(checked([ci('COMPLETED', 'FAILURE', minutesAgo(50)), ci('COMPLETED', 'SUCCESS'), ci('COMPLETED', 'FAILURE', minutesAgo(30), 'lint')]).call().outcome, 'merged');
 });
 
 test('merge: a trial verdict merges only while the default branch is the trial base', () => {
