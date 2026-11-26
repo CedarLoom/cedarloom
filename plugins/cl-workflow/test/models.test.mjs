@@ -101,7 +101,7 @@ test('models: a user file sets the fresh-read task', () => {
   assert.deepEqual(resolveMap(at).tasks['fresh-read'], { model: 'fable', effort: 'high', row: 'tasks.fresh-read', file: 'user' });
 });
 
-test('models: the repository file from stdin at the policy ref, so a working-tree edit does not change the lookup', () => {
+test('models: the repository file from stdin at a commit, so a working-tree edit does not change the lookup', () => {
   const at = setup({ repository: { models: { tasks: { review: 'light' } } } });
   const git = (...args) => {
     const done = spawnSync('git', ['-C', at.project, '-c', 'user.name=test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' });
@@ -111,9 +111,9 @@ test('models: the repository file from stdin at the policy ref, so a working-tre
   git('init', '--quiet');
   git('add', 'cedarloom.json');
   git('commit', '--quiet', '-m', 'policy');
-  git('update-ref', 'refs/cedarloom/policy', 'HEAD');
+  const commit = git('rev-parse', 'HEAD').trim();
   writeFileSync(join(at.project, 'cedarloom.json'), JSON.stringify({ models: { tasks: { review: 'lookup' } } }));
-  const input = git('show', 'refs/cedarloom/policy:cedarloom.json');
+  const input = git('show', `${commit}:cedarloom.json`);
   const looked = spawnSync(process.execPath, [script, '--repository', '-', '--json'], { input, cwd: at.project, encoding: 'utf8', env: { ...process.env, ...at.env } });
   assert.equal(looked.status, 0, looked.stderr);
   const { review } = JSON.parse(looked.stdout).tasks;

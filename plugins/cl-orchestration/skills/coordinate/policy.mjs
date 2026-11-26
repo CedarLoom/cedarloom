@@ -1,4 +1,4 @@
-// Usage: node policy.mjs <project path>. Prints the project's effective coordinator policy as JSON; a file the schema rejects, a minPlugin newer than this plugin or an unreadable file prints each error and exits 1, and nothing may start there. Without the file it prints the defaults, exits 0 and says so on stderr.
+// Usage: node policy.mjs <project path>. Prints the project's effective coordinator policy as JSON, with `commit`, the commit of the default branch it read; a file the schema rejects, a minPlugin newer than this plugin or an unreadable file prints each error and exits 1, and nothing may start there. Without the file it prints the defaults, exits 0 and says so on stderr.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
 import { devNull } from 'node:os';
@@ -180,7 +180,7 @@ const pinned = (found) => {
 // git keeps the first remote.origin.uploadpack it reads, and the repository's config comes before -c: only the option overrides it.
 const UPLOAD_PACK = '--upload-pack=git-upload-pack';
 
-// The effective policy of the project in dir. A project without the file gets the defaults, which start and merge nothing, and absent: true.
+// The effective policy of the project in dir and the commit it read. A project without the file gets the defaults, which start and merge nothing, and absent: true.
 export function read(dir, run = sh) {
   let found;
   try { found = settings(run(dir, 'git', ['config', '--show-scope', '-z', '--list'])); } catch (e) {
@@ -204,14 +204,14 @@ export function read(dir, run = sh) {
   try {
     // ls-tree decides whether the file exists, so a show that fails is never read as "no file", which would mean the defaults. --full-tree: the path counts from the repository root, as in the show, also when dir is a folder below it.
     // The three local reads carry the pins as well: with origin as a promisor, a git that ignores GIT_NO_LAZY_FETCH fetches a missing tree or file from them, and that fetch runs no hook either.
-    if (!run(dir, 'git', [...pins, 'ls-tree', '--full-tree', '--name-only', commit, '--', FILE]).trim()) return { ...effective({}), absent: true };
+    if (!run(dir, 'git', [...pins, 'ls-tree', '--full-tree', '--name-only', commit, '--', FILE]).trim()) return { ...effective({}), commit, absent: true };
     // A blobless clone of origin holds the tree and not the file: the reader asks origin for that one object, with the pinned settings, since no lazy fetch runs here.
     if (partialClone(found)) run(dir, 'git', [...pins, 'fetch', UPLOAD_PACK, '--quiet', '--no-tags', '--no-recurse-submodules', '--no-write-fetch-head', 'origin', run(dir, 'git', [...pins, 'rev-parse', '--verify', `${commit}:${FILE}`]).trim()]);
     text = run(dir, 'git', [...pins, 'show', `${commit}:${FILE}`]);
   } catch { return unreadable(`git could not read ${FILE} from origin's default branch`); }
   let doc;
   try { doc = JSON.parse(text); } catch { return { policy: null, errors: [{ rule: 'bad-json', path: '', message: 'is not valid JSON' }] }; }
-  return effective(doc);
+  return { ...effective(doc), commit };
 }
 
 export const errorLine = (e) => `${e.rule}${e.path ? ` at ${e.path}` : ''}: ${e.message}`;
@@ -224,10 +224,10 @@ export const isMain = (url) => { try { return realpathSync(process.argv[1]) === 
 if (isMain(import.meta.url)) {
   try {
     if (process.argv.length !== 3) throw new Error('usage: node policy.mjs <project path>');
-    const { policy, errors, warnings = [], absent } = read(process.argv[2]);
+    const { policy, errors, warnings = [], absent, commit } = read(process.argv[2]);
     if (absent) console.error(`no ${FILE} on origin's default branch: these defaults start and merge nothing`);
     for (const e of [...warnings, ...errors]) console.error(errorLine(e));
-    if (policy) console.log(JSON.stringify(policy, null, 2));
+    if (policy) console.log(JSON.stringify({ commit, ...policy }, null, 2));
     process.exitCode = policy ? 0 : 1;
   } catch (e) {
     console.error(e.message.split('\n')[0]);

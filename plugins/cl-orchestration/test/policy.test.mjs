@@ -213,7 +213,7 @@ test('policy: the remote\'s HEAD is fetched into the reader\'s own ref and the f
   assert.equal(moved.policy.merge.allowed, false);
   // A remote that names no commit as its HEAD gives no policy.
   assert.deepEqual(rules(read('/p', (dir, cmd, args) => (args[0] === 'ls-tree' ? 'cedarloom.json\n' : args[0] === 'show' ? '{ "merge": { "allowed": true } }' : '')).errors), [['unreadable', '']]);
-  assert.deepEqual(read('/p', remote(null)), { policy: DEFAULTS, errors: [], warnings: [], absent: true });
+  assert.deepEqual(read('/p', remote(null)), { policy: DEFAULTS, errors: [], warnings: [], commit: HEAD, absent: true });
 });
 
 test('policy: a fetch or a show that fails gives no policy: not the defaults, and not the file an older fetch left', () => {
@@ -376,6 +376,14 @@ test('policy: the command line prints the policy of the default branch and exits
   const printed = cli(project);
   assert.equal(printed.status, 0, printed.stderr);
   assert.equal(JSON.parse(printed.stdout).startLabel, 'go');
+  // A worker shares the git directory and moves the reader's ref to a commit of its own: the commit the reader printed still holds origin's file.
+  const { commit: readCommit } = JSON.parse(printed.stdout);
+  const show = (rev) => spawnSync('git', ['-C', project, 'show', `${rev}:cedarloom.json`], { encoding: 'utf8' }).stdout;
+  writeFileSync(join(project, 'cedarloom.json'), '{ "startLabel": "worker" }');
+  spawnSync('git', ['-C', project, '-c', 'user.name=test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', 'commit', '-qam', 'worker']);
+  spawnSync('git', ['-C', project, 'update-ref', 'refs/cedarloom/policy', 'HEAD']);
+  assert.equal(show('refs/cedarloom/policy'), '{ "startLabel": "worker" }');
+  assert.equal(show(readCommit), '{ "startLabel": "go" }');
   // A project path below the repository root reads the same file, not "no file" and with it the defaults.
   const below = cli(join(project, 'docs'));
   assert.equal(below.status, 0, below.stderr);
