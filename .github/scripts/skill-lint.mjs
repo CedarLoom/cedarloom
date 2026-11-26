@@ -8,16 +8,42 @@ import { isMain } from './main.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
+// `key: value` lines, and a `metadata:` line followed by `  key: value` lines, read into `fields.metadata`.
 export function frontMatter(text) {
   const m = /^---\n([\s\S]*?)\n---\n/.exec(text);
   if (!m) return null;
   const fields = {};
+  let metadata = null;
   for (const line of m[1].split('\n')) {
+    const nested = metadata && /^ {2}([a-z][\w-]*):\s*(\S.*)$/.exec(line);
+    if (nested) {
+      metadata[nested[1]] = nested[2];
+      continue;
+    }
     const kv = /^([a-z][\w-]*):\s*(\S.*)?$/.exec(line);
     if (!kv) return null;
-    fields[kv[1]] = kv[2] ?? '';
+    metadata = kv[1] === 'metadata' && kv[2] === undefined ? (fields.metadata = {}) : null;
+    if (!metadata) fields[kv[1]] = kv[2] ?? '';
   }
   return fields;
+}
+
+// The keys Claude Code reads in a skill's front matter (https://code.claude.com/docs/en/skills#frontmatter-reference); Codex
+// reads `name`, `description` and `metadata` and ignores the rest. CedarLoom's own fields go under `metadata`.
+const SKILL_KEYS = ['name', 'description', 'when_to_use', 'argument-hint', 'arguments', 'disable-model-invocation', 'user-invocable', 'allowed-tools', 'disallowed-tools', 'model', 'effort', 'context', 'agent', 'background', 'hooks', 'paths', 'shell', 'metadata', 'license', 'compatibility'];
+// `when` and `writes` feed docs/skills.md; `codex: "false"` marks a skill that runs only in Claude Code.
+const METADATA_KEYS = ['when', 'writes', 'codex'];
+
+function frontMatterKeys(file, fm) {
+  const errors = Object.keys(fm).filter((key) => !SKILL_KEYS.includes(key)).map((key) => `${file}: ${key} is no skill front matter key; put an own field under metadata`);
+  if (fm.metadata === undefined) return errors;
+  // The Agent Skills format maps metadata keys to string values (https://agentskills.io/specification).
+  if (typeof fm.metadata !== 'object') return [...errors, `${file}: metadata must be a map of indented "key: value" lines`];
+  for (const [key, value] of Object.entries(fm.metadata)) {
+    if (!METADATA_KEYS.includes(key)) errors.push(`${file}: metadata.${key} is not one of ${METADATA_KEYS.join(', ')}`);
+    if (!/^".*"$/.test(value)) errors.push(`${file}: metadata.${key} must be in double quotes`);
+  }
+  return errors;
 }
 
 function filesIn(dir) {
@@ -43,6 +69,7 @@ export function lintSkill(dir) {
   const text = readFileSync(skillFile, 'utf8');
   const fm = frontMatter(text);
   if (!fm) return [`${skillFile}: front matter missing or not "key: value" lines`];
+  errors.push(...frontMatterKeys(skillFile, fm));
   if (fm.name !== folder) errors.push(`${skillFile}: name "${fm.name}" differs from the folder "${folder}"`);
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(fm.name ?? '')) errors.push(`${skillFile}: name must be lowercase letters, digits and hyphens`);
   if (!/^".*"$/.test(fm.description ?? '')) errors.push(`${skillFile}: description must be in double quotes`);
@@ -73,6 +100,9 @@ export function lintSkill(dir) {
 const MODELS = ['fable', 'opus', 'sonnet', 'haiku', 'inherit'];
 // Plugin agents ignore these keys (https://code.claude.com/docs/en/plugins-reference), and `claude plugin validate` reads no agents/.
 const IGNORED = ['hooks', 'mcpServers', 'permissionMode', 'initialPrompt'];
+// The other keys Claude Code reads in an agent's front matter; it ignores an unknown one without a word
+// (https://code.claude.com/docs/en/sub-agents#frontmatter-reference).
+const AGENT_KEYS = ['name', 'description', 'tools', 'disallowedTools', 'model', 'maxTurns', 'autoCompactWindow', 'skills', 'memory', 'background', 'omitClaudeMd', 'effort', 'isolation', 'color', 'experimental'];
 
 // A front matter value as YAML reads it: a plain scalar, or a complete double- or single-quoted one; else undefined.
 function scalar(raw) {
@@ -101,13 +131,16 @@ export function lintAgent(file) {
   const text = readFileSync(file, 'utf8');
   const block = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1];
   const keys = block?.match(/^[A-Za-z][\w-]*(?=:)/gm) ?? [];
-  const ignored = IGNORED.filter((key) => keys.includes(key)).map((key) => `${file}: ${key} is ignored in a plugin agent`);
+  const keyErrors = [
+    ...IGNORED.filter((key) => keys.includes(key)).map((key) => `${file}: ${key} is ignored in a plugin agent`),
+    ...keys.filter((key) => !IGNORED.includes(key) && !AGENT_KEYS.includes(key)).map((key) => `${file}: ${key} is no agent front matter key`),
+  ];
   const fm = agentFields(block);
-  if (!fm) return [...ignored, `${file}: front matter missing, or not "key: value" lines with a plain or complete quoted value`];
+  if (!fm) return [...keyErrors, `${file}: front matter missing, or not "key: value" lines with a plain or complete quoted value`];
   const missing = ['name', 'description'].filter((key) => !fm[key]).map((key) => `${file}: ${key} missing`);
   const long = fm.description?.length > 1024 ? [`${file}: description longer than 1024 characters`] : [];
   const model = fm.model === undefined || MODELS.includes(fm.model) ? [] : [`${file}: model "${fm.model}" is not one of ${MODELS.join(', ')}`];
-  return [...ignored, ...missing, ...long, ...model];
+  return [...keyErrors, ...missing, ...long, ...model];
 }
 
 // Word budgets for the body after front matter, soft (a warning) and hard (an error), in docs/authoring.md. The first class

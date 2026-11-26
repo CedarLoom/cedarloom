@@ -1,8 +1,9 @@
 ---
 name: workflow
 description: "Picks the workflow and depth for a task: a software change, a docs pass, research, or a batch of tasks on one branch, each at quick, standard or deep depth, with the checks and reviews each needs. Use before the first edit in a repository, before issue or pull request work, and before research with two or more items."
-writes: "The depth line `Depth: <depth> (<reason>)` and the risk line `Risk: <class> (<reason>)` before the first edit; through its playbooks commits and a pull request in the project's convention."
 user-invocable: false
+metadata:
+  writes: "The depth line `Depth: <depth> (<reason>)` and the risk line `Risk: <class> (<reason>)` before the first edit; through its playbooks commits and a pull request in the project's convention."
 ---
 
 # Workflow

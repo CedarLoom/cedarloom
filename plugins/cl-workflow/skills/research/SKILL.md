@@ -3,8 +3,9 @@ name: research
 description: "Runs one task as research through the workflow skill, at the depth its rules pick."
 disable-model-invocation: true
 argument-hint: "<task>"
-when: "On request, for a question or a list of items you want researched without the agent guessing the task's kind."
-writes: "The depth line before the first command; notes outside the repository, or a named note file in it for a result a later task builds on."
+metadata:
+  when: "On request, for a question or a list of items you want researched without the agent guessing the task's kind."
+  writes: "The depth line before the first command; notes outside the repository, or a named note file in it for a result a later task builds on."
 ---
 <!-- Generated from definitions/research.json by generator/generate.mjs: edit the definition, not this file. -->
 

@@ -13,21 +13,22 @@ const END = '<!-- /generated:skills -->';
 const row = (cells) => `| ${cells.join(' | ')} |`;
 const unquote = (v) => (v ?? '').replace(/^"(.*)"$/, '$1');
 
-// One skill's row fields; the "when" comes from the field of that name, else from the description after its first sentence.
+// One skill's row fields; the "when" comes from `metadata.when`, else from the description after its first sentence.
 export function skillEntry(text, plugin) {
   const fm = frontMatter(text);
   const name = fm?.name;
-  const writes = unquote(fm?.writes);
-  if (!name || !fm.description || !writes) throw new Error(`${name ?? 'a skill'}: front matter needs name, description and writes`);
+  const metadata = fm?.metadata ?? {};
+  const writes = unquote(metadata.writes);
+  if (!name || !fm.description || !writes) throw new Error(`${name ?? 'a skill'}: front matter needs name, description and metadata.writes`);
   // The first sentence ends at the first period followed by white space or the end.
   const description = unquote(fm.description), end = /\.(?:\s+|$)/.exec(description);
   if (!end) throw new Error(`${name}: the description needs a sentence that ends with a period`);
   const purpose = description.slice(0, end.index + 1), rest = description.slice(end.index + end[0].length);
-  const when = unquote(fm.when) || rest;
-  if (!when) throw new Error(`${name}: needs a when field or a second sentence in the description`);
+  const when = unquote(metadata.when) || rest;
+  if (!when) throw new Error(`${name}: needs metadata.when or a second sentence in the description`);
   const user = fm['disable-model-invocation'] === 'true';
-  // `codex: false` marks a skill that runs only in Claude Code.
-  const codex = fm.codex === 'false' ? '' : ` (Codex \`$${plugin}:${name}\`)`;
+  // `metadata.codex: "false"` marks a skill that runs only in Claude Code.
+  const codex = unquote(metadata.codex) === 'false' ? '' : ` (Codex \`$${plugin}:${name}\`)`;
   // `user-invocable: false` hides the skill from the / menu: only the agent starts it.
   const start = user ? `you: \`/${plugin}:${name}\`${codex}` : fm['user-invocable'] === 'false' ? 'the agent' : `the agent, or you with \`/${plugin}:${name}\``;
   return { name, plugin, purpose, start, when, writes };

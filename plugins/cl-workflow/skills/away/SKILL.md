@@ -3,8 +3,9 @@ name: away
 description: "Works alone in this Claude Code session: refuses the question tool and plan mode until off or for a span. Off comes back and asks up to 5 queued owner questions."
 disable-model-invocation: true
 argument-hint: "[30|30m|2h|until HH:MM|off]"
-when: "On request: when you leave the terminal, and with off when you are back. Off asks the queue of this folder's repository and local queue: run it in each project's clone and the coordinator's folder."
-writes: "One file per Claude Code process in the plugin's data folder (ask/<process id>.json: the away span's end, or the answer flag off sets). Off also writes a comment and new labels on each issue you answer or defer in this repository, a close as not planned of each one you reject, and the cl:deferred label there when it lacks it; status and answer lines in the local queue."
+metadata:
+  when: "On request: when you leave the terminal, and with off when you are back. Off asks the queue of this folder's repository and local queue: run it in each project's clone and the coordinator's folder."
+  writes: "One file per Claude Code process in the plugin's data folder (ask/<process id>.json: the away span's end, or the answer flag off sets). Off also writes a comment and new labels on each issue you answer or defer in this repository, a close as not planned of each one you reject, and the cl:deferred label there when it lacks it; status and answer lines in the local queue."
 ---
 
 # Away

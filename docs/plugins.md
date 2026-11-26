@@ -125,7 +125,7 @@ A typed entry such as `/cl-workflow:dev` is generated from one JSON definition i
 | `schemaVersion` | `2` |
 | `name` | kebab-case, not ending in `-run`: the command `/<prefix>:<name>` |
 | `description` | at most 250 characters, ending in a period |
-| `when`, `writes` | optional strings for the skill's front matter and [Skills](skills.md) |
+| `when`, `writes` | optional strings for the skill's `metadata` and [Skills](skills.md) |
 | `work` | `software`, `docs` or `research`: the playbook |
 | `depth` | `quick`, `standard` or `deep` as a floor, or `classify` for the depth rules alone |
 | `script` | `true` writes a workflow script too; it needs `work` `software` and `depth` `deep` |

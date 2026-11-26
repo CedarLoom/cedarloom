@@ -138,8 +138,10 @@ function outputs(def, prefix) {
     `description: ${JSON.stringify(def.description)}`,
     'disable-model-invocation: true',
     'argument-hint: "<task>"',
-    ...(def.when === undefined ? [] : [`when: ${JSON.stringify(def.when)}`]),
-    ...(def.writes === undefined ? [] : [`writes: ${JSON.stringify(def.writes)}`]),
+    // CedarLoom's own fields go under `metadata`: the skill front matter takes only keys its hosts define.
+    ...(def.when === undefined && def.writes === undefined ? [] : ['metadata:']),
+    ...(def.when === undefined ? [] : [`  when: ${JSON.stringify(def.when)}`]),
+    ...(def.writes === undefined ? [] : [`  writes: ${JSON.stringify(def.writes)}`]),
   ];
   const kind = KIND[def.work];
   const lines = def.work === 'software' ? 'the `Depth:` and `Risk:` lines' : 'the `Depth:` line';

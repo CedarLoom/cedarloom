@@ -40,6 +40,14 @@ test('a skill nobody can start fails', () => {
   assert.deepEqual(lintSkill(skill('a', { fm: 'name: a\ndescription: "x"\nuser-invocable: false' })), []);
 });
 test('broken front matter fails', () => assert.match(lintSkill(skill('a', { fm: 'just text' })).join(), /front matter/));
+test('own front matter fields go under metadata as quoted strings of the known keys', () => {
+  const lint = (fields) => lintSkill(skill('a', { fm: `name: a\ndescription: "x"\n${fields}` })).join();
+  assert.equal(lint('metadata:\n  when: "On request."\n  writes: "Nothing."\n  codex: "false"'), '');
+  assert.match(lint('writes: "Nothing."'), /writes is no skill front matter key/);
+  assert.match(lint('metadata:\n  owner: "x"'), /metadata\.owner is not one of when, writes, codex/);
+  assert.match(lint('metadata:\n  codex: false'), /metadata\.codex must be in double quotes/);
+  assert.match(lint('metadata: x'), /metadata must be a map/);
+});
 test('issue text handed to a worker needs the author filter', () => {
   const body = 'Send the worker the issue with all its comments.';
   const failing = skill('a', { body });
@@ -81,6 +89,8 @@ test('a plugin agent needs a name and description, a model alias, and no key plu
   assert.match(agent('name: ""\ndescription: "x"'), /name missing/);
   assert.match(agent('name: a\ndescription: "x'), /front matter/);
   assert.match(agent('name: a\ndescription: x: y'), /front matter/);
+  assert.match(agent('name: a\ndescription: "x"\nwrites: "y"'), /writes is no agent front matter key/);
+  assert.equal(agent('name: a\ndescription: "x"\nomitClaudeMd: true'), '');
 });
 test('a Depth line naming the Depth minimum line ahead of the workflow skill fails', () => {
   assert.match(lintSkill(skill('a', { body: '```text\nDepth: <issue depth, else the Depth minimum line of AGENTS.md, else the workflow skill decides>\n```' })).join(), /Depth minimum line ahead/);

@@ -1,6 +1,6 @@
 ---
 name: gather
-description: "Read-only lookup agent of the CedarLoom workflow: file searches, log and CI output, inventories, pull request status; started by a session or phase that needs facts, not for direct use."
+description: "Read-only lookup for the CedarLoom workflow: file searches, logs, CI output, inventories, pull request status. Not for direct use."
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: medium

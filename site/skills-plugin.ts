@@ -14,7 +14,7 @@ export type Skill = {
 
 type Entry = {name: string; plugin: string; purpose: string};
 type SkillsDoc = {sources: () => Entry[]};
-type SkillLint = {frontMatter: (text: string) => Record<string, string>};
+type SkillLint = {frontMatter: (text: string) => Record<string, string | Record<string, string>>};
 
 // Reads the skills with the parser that writes docs/skills.md, so the page and that table name the same skills.
 export default function skillsPlugin(context: LoadContext): Plugin<Skill[]> {

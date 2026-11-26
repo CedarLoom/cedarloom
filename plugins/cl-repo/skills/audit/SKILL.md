@@ -4,8 +4,9 @@ description: "Audits agent instructions, docs or code and reports findings with 
 disable-model-invocation: true
 disallowed-tools: "Edit Write NotebookEdit"
 argument-hint: "<path | instructions | docs | code>"
-when: "On request, before a cleanup or a release, after instruction files or docs grew, or after you wrote or changed a rule file."
-writes: "Nothing: a numbered list of findings in the conversation. Each is a suggestion; you decide what to change."
+metadata:
+  when: "On request, before a cleanup or a release, after instruction files or docs grew, or after you wrote or changed a rule file."
+  writes: "Nothing: a numbered list of findings in the conversation. Each is a suggestion; you decide what to change."
 ---
 
 Target: $ARGUMENTS (Codex: the text after the skill name). A path audits that file or folder. `instructions`, `docs` or `code` audits that kind across the repository. No target: ask.

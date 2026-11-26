@@ -26,6 +26,12 @@ A file that was over its cap when the budgets began is listed in `AT_SIZE` in th
 - One job per skill.
 - Text that must survive a long session goes in the first 5,000 tokens of a skill: after compaction, Claude Code attaches each invoked skill again, cut to that length.
 
+## Front matter
+
+- A skill's front matter holds only the keys of Claude Code's [skill front matter](https://code.claude.com/docs/en/skills#frontmatter-reference); Codex reads `name`, `description` and `metadata`. CedarLoom's own fields go under `metadata` as double-quoted strings: `when` and `writes` for [Skills](skills.md), `codex: "false"` for a skill that runs only in Claude Code.
+- An agent's front matter holds only the keys of the [subagent front matter](https://code.claude.com/docs/en/sub-agents#frontmatter-reference) that plugin agents read.
+- The lint refuses any other key.
+
 ## Descriptions
 
 - Third person ("Reviews a pull request ..."), never "I" or "you": the description goes into the system prompt.

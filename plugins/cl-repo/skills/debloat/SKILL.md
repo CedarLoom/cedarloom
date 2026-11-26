@@ -3,8 +3,9 @@ name: debloat
 description: "Cuts text that carries no information from agent instructions and docs by line range, keeps protected text and measures tokens before and after. In code it removes what the repository's checks prove unused."
 disable-model-invocation: true
 argument-hint: "<path | instructions | docs | code> [token budget]"
-when: "On request, when instruction files or docs are above a token budget or grew without saying more."
-writes: "The approved cuts in the working tree, uncommitted. The protect list and the baseline in .github/token-budget.json. A cut plan in a temporary folder."
+metadata:
+  when: "On request, when instruction files or docs are above a token budget or grew without saying more."
+  writes: "The approved cuts in the working tree, uncommitted. The protect list and the baseline in .github/token-budget.json. A cut plan in a temporary folder."
 ---
 
 Target: $ARGUMENTS (Codex: the text after the skill name), as in [audit](../audit/SKILL.md), with an optional budget in tokens. No target: ask.
