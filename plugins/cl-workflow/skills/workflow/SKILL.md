@@ -8,12 +8,12 @@ user-invocable: false
 # Workflow
 
 Every depth:
-- Before the first edit, state the assumptions you work from and the check that proves each step done (a test, a command, a screenshot); loop until those checks pass, and stop and report on the stuck signals of step 6 of [the implement agent](../../agents/implement.md).
+- Before the first edit, state your assumptions and the check that proves each step done; loop until those checks pass, and stop and report on the stuck signals of step 6 of [the implement agent](../../agents/implement.md).
 - Keep validation at trust boundaries, error handling that prevents data loss, and security checks.
-- A step here or in the playbooks that asks or waits on the user does so in the session only while the user allows terminal questions. Otherwise its questions go with your recommendations into one issue per task in the issue tracker the project names, else the report; take each recommendation that is safe and reversible (an item without one waits), and go on.
-- An installed skill may run a step of this skill or its playbooks in more detail (diagnosis, a test first, prototypes, interface design): these texts set its floor and gates and win where the two differ. Reviews, research notes and pull request text follow these playbooks.
+- A step here or in the playbooks that asks or waits on the user does so in the session only while the user allows terminal questions. Otherwise its questions go with your recommendations into one issue per task in the project's issue tracker, else the report; take each safe, reversible recommendation (an item without one waits) and go on.
+- An installed skill may run a step of this skill or its playbooks in more detail: these texts set its floor and gates and win where the two differ. Reviews, research notes and pull request text follow these playbooks.
 
-1. **Classify.** Kind: software change, docs pass (several documents or product copy checked against the code; a one-file rewrite with no claim about code is a quick software change), research, or a mix (one item per kind). Each item gets one depth, whatever its kind:
+1. **Classify.** Kind: software change, docs pass (several documents or product copy checked against the code; a one-file rewrite with no claim about code is a quick software change), research, or a mix or several requests (one item each). Each item gets one depth:
 
    | Depth | When |
    |---|---|
@@ -22,47 +22,46 @@ Every depth:
    | deep | several behaviors, a new capability, an uncertain approach, or a risky change; always deep: a schema migration, infrastructure as code, a performance change, a refactor across modules or with a changed interface |
 
    - Risky: authentication, permissions, secrets, input validation, production data, deploy or production configuration, an irreversible action.
-   - Which depth, first match: the user's depth for the task; the `Depth:` line of a coordinator's spec; your pick from the table above. A `Depth minimum:` line in `AGENTS.md` raises your pick to that depth, and a risky change raises it to deep.
+   - Which depth, first match: the user's depth; the `Depth:` line of a coordinator's spec; your pick from the table. A `Depth minimum:` line in `AGENTS.md` raises your pick to that depth; a risky change, to deep.
    - A software change also gets its risk class and the `Risk:` line ([risk.md](risk.md)). The class raises your pick too: high to deep, medium to standard.
-   - Several requests in one prompt: a depth for each.
-   - Before the first edit or command, write the depth line `Depth: <depth> (<reason>)`: the change type's name from the [change-type table](#change-types), `research` or `docs pass`, or a few words when none fits, and `risky` when it is (`Depth: deep (new auth flow; risky)`).
-   - Unsure between two depths: take the deeper one.
+   - A software change's visible result (UI, site, CLI output, rendered document) at standard or deep, not risky and risk below `high`, takes the [draft-first](draft.md) route.
+   - Before the first edit or command, write the depth line `Depth: <depth> (<reason>)`: the change type's name ([Change types](#change-types)), `research` or `docs pass`, or a few words when none fits, and `risky` when it is (`Depth: deep (new auth flow; risky)`).
+   - Unsure between two depths: the deeper one.
    - The work grows past its depth: say so, write a new depth line, and run the skipped steps before the next edit.
 
-2. **Settle.** Standard and deep: when goal, scope or result is open, grill the user in rounds (each question with your recommendation, all open ones per round) until goal, scope, acceptance criteria and risks are settled; a settled request skips the grill. Then explore read-only, as the plan phase where [software.md](software.md#phases) runs phases (Claude Code: in plan mode, only while terminal questions are allowed). Without terminal questions: go on with the plan.
+2. **Settle.** Standard and deep: when goal, scope or result is open, grill the user in rounds (each question with your recommendation, all open ones per round) until goal, scope, acceptance criteria and risks are settled; a settled request skips the grill. Then explore read-only, as the plan phase where [software.md](software.md#phases) runs phases (Claude Code: in plan mode, only while terminal questions are allowed).
 
    A plan or spec for this task with an acceptance table (from `/cl-workflow:plan`, a coordinator or the user) settles it: skip this step and the Plan phase and build against that plan. It never lowers the depth or the risk class, and the plan check still runs unless the plan records one.
 3. **Run the playbook.**
-   - Software change at quick depth: this file is the whole playbook (the steps below, [Change types](#change-types), [Verify](#verify)).
+   - Software change at quick depth: this file is the whole playbook.
    - Standard and deep, and any risky change: also [software.md](software.md), deep also [deep.md](deep.md).
    - Docs pass: [docs.md](docs.md). Research: [research.md](research.md).
    - A typed entry skill (`/cl-workflow:<name>`, `$cl-workflow:<name>` in Codex, or `/<name>` in a project) fixes the kind and, where it names one, a depth floor; step 1 still writes its lines, and its rules may raise the depth.
    - Branches, commits and pull requests follow the project's own convention (`AGENTS.md`, a contributing guide, the history). Where it names none, commit subjects and pull request titles follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/): a squash merge makes the title the commit subject.
    - A pull request body fills each section, in order, of the project's `pull_request_template.md` or `PULL_REQUEST_TEMPLATE/` (any documented location or case), else the owner's `.github` default, else [pull-request-template.md](pull-request-template.md): `gh pr create --body-file <file>`. Issues fill their kind's template (a form: one `### <field label>` per field, in order).
-   - Two or more independent items that each need more than a few files or searches: one subagent per item in parallel, then one merged report. Smaller items run in this session.
+   - Two or more independent items, each more than a few files or searches: one subagent per item in parallel, then one merged report.
 
-   The playbooks hold the detail; these are the steps, in order:
+   The steps in order (the playbooks hold the detail):
 
-   | Depth | Software change | Review before pushing | Research |
-   |---|---|---|---|
-   | quick | edit, fast checks after each edit; verify; commit | none | read the code |
-   | standard | settle; plan check; existing tests of the touched code; implement, a new test only where the [test rule](#verify) calls for one, written first; verify, review before pushing | one correctness pass (`/code-review high`) | one pass, checked |
-   | deep | settle, spec with acceptance table; plan check; existing tests; ticket by ticket, a new test first only where the [test rule](#verify) calls for one; verify and run it; review in rounds ([deep.md](deep.md)) | review rounds (`/code-review xhigh`) | one subagent per item, checked |
+   | Depth | Software change | Review before pushing |
+   |---|---|---|
+   | quick | edit, fast checks after each edit; verify; commit | none |
+   | standard | settle; plan check; existing tests of the touched code; implement, tests by the [test rule](#verify); verify, review before pushing | one correctness pass (`/code-review high`) |
+   | deep | settle, spec with acceptance table; plan check; existing tests; ticket by ticket, tests by the [test rule](#verify); verify and run it; review in rounds ([deep.md](deep.md)) | review rounds (`/code-review xhigh`) |
 
 4. **Batch** when the user asks for it or names several tasks for one branch: the tasks run one after another, each at quick depth with no per-task review. Give each task its depth first (step 1): a task that is risky or above quick is not batched and runs at its own depth. Step 5 and the reviews then run once for the whole branch.
 5. **Long checks last.**
    - Fast checks (types, lint, the tests of the touched code) after each edit.
-   - The full suite, end-to-end and browser tests and builds run once, after the last edit, in a subagent that returns only failures and key lines.
-   - Reviews start then and follow the playbook of the depth, including its remediation and re-review rounds.
-   - A long check writes to a log file and is read by its failures and last lines.
+   - The full suite, end-to-end and browser tests and builds run once, after the last edit, in a subagent that writes each to a log file and returns only its failures and last lines.
+   - Reviews start then, by the depth's playbook with its remediation rounds.
    - Read-only lookups and mechanical reading (file searches, log and CI output, inventories, pull request status) run in a subagent on [map](models.md) task `gather` that edits no file (Claude Code: `cl-workflow:gather`), on `lookup` only for a bounded lookup whose whole input stays under 100,000 tokens.
-   - Fixes follow the project's commit convention, and failed checks rerun.
+   - Failed checks rerun after their fix.
    - Waiting for pull request checks: watch them in the background (GitHub: `gh pr checks --watch --interval 30`; a host without a watch command: one until-loop Monitor, 30 seconds or slower), never a leading `sleep`.
 6. **Report done** with each check's command and result, a "steps skipped" line naming the checklist steps not run (or "none") and what was not checked. After a merge or when the next task is unrelated, suggest a new session (`/clear` in Claude Code).
 
 ## Sessions on `fable`
 
-A session that itself runs on `fable` follows these defaults, which the user or the spec can change:
+A session itself on `fable` follows these defaults unless the user or spec changes them:
 - works one ticket and ends with that ticket's handoff (a coordinator's worker: the handoff block of its spec);
 - hands off at a task boundary once its context holds 100,000 to 150,000 tokens;
 - goes on only in a new session started from that handoff, never by resuming this one;
@@ -70,7 +69,7 @@ A session that itself runs on `fable` follows these defaults, which the user or 
 
 ## Change types
 
-The check before done, per change type; the change type names the depth line. Never run a check that changes shared or production systems (`terraform apply`, `kubectl apply`, `helm upgrade`, migrations against shared databases).
+The check before done, per change type (it names the depth line). Never run a check that changes shared or production systems (`terraform apply`, `kubectl apply`, `helm upgrade`, migrations against shared databases).
 
 | Change | Check before done |
 |---|---|
@@ -84,6 +83,7 @@ The check before done, per change type; the change type names the depth line. Ne
 | Refactor | suite unchanged and passing |
 | Dependency major or security advisory | changelog read, full suite, package audit |
 | CI workflow | `actionlint` |
+| New CI check, hook or lint rule | reports only until it flags only what a human would |
 | Feature, performance | performance: benchmark before and after on the same machine |
 | Infrastructure as code | `fmt -check`, `validate`, `plan`; `ansible-lint --check --diff`; `kubeconform`, `kubectl diff`; `helm lint`, `helm template` |
 | Schema migration | expand and contract, migrate a throwaway database |
@@ -98,16 +98,17 @@ A follow-up commit on an open pull request keeps its depth and needs no workflow
 
 ## Verify
 
-- Run the project's own build, types, lint and tests where `AGENTS.md` says, and run what you changed (Claude Code: `/verify`). UI changes also get a browser check next to the UI tests (the `webapp-testing` skill where installed).
-- A failing test: diagnose first (code, test or environment) and fix the cause. Edit a test only when it is wrong or the requirement changed, and say so in the pull request.
+- Run the project's own build, types, lint and tests where `AGENTS.md` says, then run the change as a user meets it (app, CLI, browser with `webapp-testing` where installed, local service) as a project skill or doc says where one does (Claude Code: `/verify`); the pull request body says how, or "not run" and why.
+- A failing test: diagnose first (code, test or environment) and fix the cause. A flaky one gets no rerun, sleep or skip to green; no cause found: delete it, the reason in the commit and an issue. Edit a test only when it is wrong or the requirement changed, and say so in the pull request.
 - Test rule: no tests by default. Add one only when it meets all three:
   - it fails if the change is reverted;
   - it hardcodes its expected values (never computed by production code, locale files or mocks);
   - it runs at the single layer that owns the behavior.
-- A new test is written before the code it covers and seen failing for the reason the change addresses; a test that passes at once proves nothing.
-- One slice at a time: one test, the code that makes it pass, then the next. The slices are the rows of the plan's acceptance table, where there is one.
+- Test type, when chosen, at the owning layer: property for a parser, round trip or invariant; differential (old code as oracle, same inputs) for a rewrite; else end-to-end. The property or oracle replaces hardcoded values; a rewrite's need not fail first or on revert.
+- A new test is written first and seen failing for the reason the change addresses; one that passes at once proves nothing.
+- One slice (a row of the plan's acceptance table, where there is one) at a time: one test, the code that makes it pass, then the next.
 - Leave untested: copy or translations, CSS classes, constants, third-party libraries, private state, timing and call counts. A test like that is deleted when touched, not updated. Coverage is no target.
 - The project's own test rules in `AGENTS.md` win.
-- Browser and build output (`test-results/`, screenshots) is git-ignored or deleted.
+- Screenshots, browser and build output are git-ignored or deleted.
 
-After a compaction, read this skill and the playbook of the current depth again before the next step.
+After a compaction, reread this skill and the current depth's playbook before the next step.
