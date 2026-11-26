@@ -32,8 +32,9 @@ export function repoLinks({root, repo}: {root: string; repo: string}) {
   const walk = (node: Node, file: File) => {
     if ((node.type === 'link' || node.type === 'definition') && node.url) node.url = rewrite(node.url, file);
     // The README's logo picks its file by the system color scheme, not the site's theme toggle, so the site leaves it out.
-    node.children = node.children?.filter((child) => !(child.type === 'html' && child.value?.includes('<picture')));
-    node.children?.forEach((child) => walk(child, file));
+    if (!node.children) return;
+    node.children = node.children.filter((child) => !(child.type === 'html' && child.value?.includes('<picture')));
+    node.children.forEach((child) => walk(child, file));
   };
   return () => (tree: Node, file: File) => walk(tree, file);
 }
