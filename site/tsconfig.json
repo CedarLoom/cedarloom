@@ -3,7 +3,9 @@
   "compilerOptions": {
     "baseUrl": ".",
     "ignoreDeprecations": "6.0",
-    "strict": true
+    "strict": true,
+    // Node runs the scripts with their .mts imports as written
+    "allowImportingTsExtensions": true
   },
   "exclude": [".docusaurus", "build"]
 }
