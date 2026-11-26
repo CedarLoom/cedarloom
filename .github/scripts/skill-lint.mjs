@@ -41,7 +41,7 @@ function frontMatterKeys(file, fm) {
   if (typeof fm.metadata !== 'object') return [...errors, `${file}: metadata must be a map of indented "key: value" lines`];
   for (const [key, value] of Object.entries(fm.metadata)) {
     if (!METADATA_KEYS.includes(key)) errors.push(`${file}: metadata.${key} is not one of ${METADATA_KEYS.join(', ')}`);
-    if (!/^".*"$/.test(value)) errors.push(`${file}: metadata.${key} must be in double quotes`);
+    if (!value.startsWith('"') || scalar(value) === undefined) errors.push(`${file}: metadata.${key} must be one complete double-quoted string`);
   }
   return errors;
 }

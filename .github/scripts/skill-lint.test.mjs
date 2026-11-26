@@ -45,7 +45,8 @@ test('own front matter fields go under metadata as quoted strings of the known k
   assert.equal(lint('metadata:\n  when: "On request."\n  writes: "Nothing."\n  codex: "false"'), '');
   assert.match(lint('writes: "Nothing."'), /writes is no skill front matter key/);
   assert.match(lint('metadata:\n  owner: "x"'), /metadata\.owner is not one of when, writes, codex/);
-  assert.match(lint('metadata:\n  codex: false'), /metadata\.codex must be in double quotes/);
+  assert.match(lint('metadata:\n  codex: false'), /metadata\.codex must be one complete double-quoted string/);
+  assert.match(lint('metadata:\n  writes: "Updates "README.md"."'), /metadata\.writes must be one complete double-quoted string/);
   assert.match(lint('metadata: x'), /metadata must be a map/);
 });
 test('issue text handed to a worker needs the author filter', () => {
