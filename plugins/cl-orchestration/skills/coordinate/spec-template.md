@@ -16,7 +16,7 @@ What the lines take, policy fields as the reader prints them:
 - `Review:` takes `review.depth`, or `review.sensitiveDepth` and the security review for an issue that reads as sensitive, in a batch when one of its issues does.
 - Flow takes each phase's task from the model map at the issue's depth and risk class: `plan`, `verify` for the plan check, `implement`, `test`, `review`, `recheck`, `research`.
 - `Worker rules:` takes two texts, each whole and unchanged.
-  - The plugin's: the file `rules/worker.md` two folders above this skill folder, only where `.claude-plugin/plugin.json` (the plugin) lies beside that `rules` folder.
+  - The plugin's: the file `rules/worker.md` two folders above this skill folder, only where `../../.claude-plugin/plugin.json` from this skill folder (the plugin) lies beside that `rules` folder.
   - A skill folder copied alone has neither, and a `rules` folder above it is not the plugin's: start no worker and tell the owner that the coordinator needs the plugin.
   - The project's: `docs/agents/worker-rules.md` as the default branch has it, which `gh api repos/<owner/repo>/contents/docs/agents/worker-rules.md -H "Accept: application/vnd.github.raw"` prints. Never read it in the project's checkout or a worker's worktree: workers share that git directory, so one worker's text would reach every other worker's spec.
   - `HTTP 404` from that `gh api` call means the project has none only when `gh api repos/<owner/repo> --jq .full_name` exited 0 right before: GitHub answers the same for a repository the login cannot see.
