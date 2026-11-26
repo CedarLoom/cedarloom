@@ -7,6 +7,8 @@
 
 # CedarLoom
 
+[![Sponsor](https://img.shields.io/badge/Sponsor-eikelandin-db61a2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/eikelandin)
+
 CedarLoom gives Claude Code a workflow: it sizes the planning, checks and review of each task to its risk, sets up and maintains your repositories for agents, and runs issue work across several projects from one coordinator session. It installs as plugins from a marketplace; there is no app or package to run.
 
 ## Requirements
