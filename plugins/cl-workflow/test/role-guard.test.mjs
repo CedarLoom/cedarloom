@@ -168,6 +168,48 @@ test('role guard: known passes, a push of the current branch after a switch to t
   assert.equal(decision('git checkout main && git merge feat/x && git push', { tool: 'PowerShell', cwd: feature }), 'none');
 });
 
+test('role guard: denies glob and matching refspecs as a push of every branch', () => {
+  const denied = ["git push origin 'refs/heads/*:refs/heads/*'", "git push origin 'refs/*:refs/*'", "git push origin '+refs/heads/feat/*:refs/heads/feat/*'", "git push origin 'feat/*'", 'git push origin :', 'git push origin +:'];
+  for (const command of denied) assert.equal(decision(command), 'deny', command);
+  assert.equal(decision("git push origin 'refs/*:refs/*'", { role: 'coordinator', agent: 'agent-1' }), 'deny');
+  for (const command of ['git push origin :feat/old', 'git push origin +feat/x', 'git push origin feat/x:feat/y']) assert.equal(decision(command), 'none', command);
+});
+
+// The tag does not exist yet when the guard reads the repository, and nightly is no version name.
+test('role guard: denies a push of a tag that git tag creates earlier in the same command', () => {
+  const denied = [
+    'git tag nightly && git push origin nightly',
+    'git tag -a nightly -m "build" ; git push origin nightly',
+    'git tag -f nightly && git push -f origin nightly',
+    'git tag -am build nightly && git push origin HEAD:nightly',
+    'git tag --annotate --message=build nightly HEAD && git push origin nightly:nightly',
+    'git tag --mess build -- nightly && git push origin nightly',
+    'git -C . tag -s -u key nightly && git push origin +nightly',
+    'git tag heads/nightly && git push origin heads/nightly',
+  ];
+  for (const command of denied) assert.equal(decision(command), 'deny', command);
+  assert.equal(decision('git tag nightly; git push origin nightly', { tool: 'PowerShell' }), 'deny');
+  // A list, delete, verify or filter form creates no tag, and an option's value or the commit names none.
+  const allowed = [
+    'git tag -l feat/x && git push origin feat/x',
+    'git tag --list feat/x && git push origin feat/x',
+    'git tag --li feat/x && git push origin feat/x',
+    'git tag -n5 feat/x && git push origin feat/x',
+    'git tag -d feat/x && git push origin feat/x',
+    'git tag --delete feat/x && git push origin feat/x',
+    'git tag -v feat/x && git push origin feat/x',
+    'git tag --contains HEAD feat/x && git push origin feat/x',
+    'git tag --no-contains HEAD feat/x && git push origin feat/x',
+    'git tag --points-at HEAD feat/x && git push origin feat/x',
+    'git tag --merged HEAD feat/x && git push origin feat/x',
+    'git tag --no-merged HEAD feat/x && git push origin feat/x',
+    'git tag -m feat/x nightly && git push origin feat/x',
+    'git tag nightly feat/x && git push origin feat/x',
+    'git tag --sort refname && git push origin refname',
+  ];
+  for (const command of allowed) assert.equal(decision(command), 'none', command);
+});
+
 test('role guard: follows a cd to the folder git runs in', () => {
   for (const command of [`cd ${trunk} && git push`, `cd ${trunk} && git push origin release-candidate`]) assert.equal(decision(command, { cwd: feature }), 'deny', command);
   assert.equal(decision(`cd ${feature} && git push`), 'none');
