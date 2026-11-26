@@ -3,8 +3,9 @@
 ## Steps
 
 - **Installed skills** that match a step may run it under the gates of [SKILL.md](SKILL.md): a test first where the [test rule](SKILL.md#verify) calls for one, bug diagnosis ([diagnose.md](diagnose.md) is the floor), interface design, prototypes, domain docs. A skill only the user starts is suggested, then wait. None installed: do the step directly.
-- **Review before pushing** standard, deep or risky work.
+- **Review before pushing** standard, deep or risky work (draft first: [draft.md](draft.md)).
   - First a scope line: the branch or diff range and the issue it implements, when one exists.
+  - A review miss (a bug found after merge, a revert) of one kind in two pull requests, visible in their diffs: one line in the repository's `docs/agents/review-checklist.md`, its trigger (files or diff pattern) and what to check.
   - Passes: standard one correctness pass, fixes made once, follow-ups listed in the pull request, else in the done report; deep the rounds in [deep.md](deep.md), plus a security pass when risky; quick none.
   - Claude Code: the built-in `/code-review <level> <range>` with the scope line's range as the target (for example `refs/remotes/origin/<default branch>...HEAD`, since with no target it skips commits already pushed) and the level always written, `high` at standard and `xhigh` at deep unless a spec's `Review:` line names another (without a level the command reuses the one typed last on that machine).
   - Claude Code, risky changes and a change whose `Review:` line asks for it: also `/security-review`.
