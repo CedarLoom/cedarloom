@@ -27,7 +27,7 @@ All bots and workers may act under one GitHub login, so each line holds by these
 | Maintenance pass | a maintain bot run, skipped in a private repository while a maintenance pull request is open; its findings wait for the owner's approval | a change before it |
 | Close an issue, file follow-up issues in a private repository, answer a worker's question from written sources | the project bot | role bots |
 | The state folder, clones and the shared git directory | the project bot; the merge lock `merge.mjs` alone | role bots |
-| Model and effort | the policy's `models` tables are the ceiling; the project bot names them per run | a run above them |
+| Model and effort | the model map ([Policy](SKILL.md#policy)) is the ceiling; the project bot names them per run | a run above them |
 
 ## Owner-only decisions
 

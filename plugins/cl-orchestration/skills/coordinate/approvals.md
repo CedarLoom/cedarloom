@@ -7,7 +7,7 @@ How an owner decision reaches the owner outside the session ([decisions.md](deci
 Copy [approval-template.md](approval-template.md) into the run folder and fill each `<...>`:
 
 - What: the decision in one sentence, starting with its gate and subject: `design` with the issue as `<owner/repo>#<number>` (an issue held before its worker starts, [decisions.md](decisions.md#risk-class)); `merge` or `owner-only` (an owner-only file or a release) with the pull request as `<owner/repo>#<n>`; any other owner decision with one word of your own and its issue or pull request.
-- Runs on: the reader's `models` for the worker at the task's depth and each phase (a sensitive change: plan and review from `models.sensitive`), a phase it omits by the field table ([policy.md](policy.md)), `inherit` as the worker's. Review: `review.*`. Merges: `merge.*`.
+- Runs on: the model map's values for the worker and each phase at the task's depth and risk class ([Policy](SKILL.md#policy)). Review: `review.*`. Merges: `merge.*`.
 - Recommended: starts with the label of the first option row, `(a)`.
 - Answer: what is true where the issue lands. In the local queue: `run /cl-workflow:away off` (in <working folder>, from a session other than the coordinator's). In a repository: `run /cl-workflow:away off` in a clone of it, or `comment on this issue "a" or "b" alone, or "Owner answer (date): a." with "b" in place of "a" and your own text after it` (only these forms are read, [The answer](#the-answer)).
 

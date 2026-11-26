@@ -2,7 +2,7 @@
 name: research
 description: "Research agent of the CedarLoom workflow; started per item when research runs items in parallel, not for direct use."
 tools: Read, Grep, Glob, Bash, Write, Skill, WebFetch, WebSearch
-model: inherit
+model: opus
 effort: high
 ---
 

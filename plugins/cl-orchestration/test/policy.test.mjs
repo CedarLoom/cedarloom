@@ -26,11 +26,6 @@ const DEFAULTS = {
   review: { depth: 'high', sensitiveDepth: 'high', sensitivePaths: [] },
   issues: { labels: [] },
   minPlugin: null,
-  models: {
-    worker: { quick: { model: 'sonnet', effort: 'high' }, standard: { model: 'opus', effort: 'high' }, deep: { model: 'opus', effort: 'high' }, research: { model: 'fable', effort: 'high' } },
-    phases: {},
-    sensitive: { plan: { model: 'fable', effort: 'high' }, review: { model: 'fable', effort: 'high' }, independent: { model: 'fable', effort: 'high' }, security: { model: 'fable', effort: 'xhigh' } },
-  },
 };
 const rules = (errors) => errors.map((e) => [e.rule, e.path]);
 // git as the reader runs it: the remote's default branch holds this policy file, or none (null).
@@ -108,21 +103,8 @@ test('policy: minPlugin newer than the plugin gives no policy, and versions comp
   assert.equal(effective({ minPlugin: '0.9.0' }, '0.10.0').policy.minPlugin, '0.9.0');
 });
 
-test('policy: models.worker replaces the model of every depth and keeps the depth\'s effort; phases hold only what the file names', () => {
-  assert.deepEqual(effective({ models: { '//': 'note', worker: { model: 'fable' }, phases: { '//': 'note', review: { model: 'inherit', effort: 'max' } } } }, '0.1.0').policy.models, {
-    worker: { quick: { model: 'fable', effort: 'high' }, standard: { model: 'fable', effort: 'high' }, deep: { model: 'fable', effort: 'high' }, research: { model: 'fable', effort: 'high' } },
-    phases: { review: { model: 'inherit', effort: 'max' } },
-    sensitive: DEFAULTS.models.sensitive,
-  });
-});
-
-test('policy: models.sensitive fills each entry and field it does not name', () => {
-  assert.deepEqual(effective({ schemaVersion: 3, models: { sensitive: { '//': 'no fable on this account', security: { model: 'opus' }, plan: { effort: 'medium' } } } }, '0.1.0').policy.models.sensitive, {
-    plan: { model: 'fable', effort: 'medium' },
-    review: { model: 'fable', effort: 'high' },
-    independent: { model: 'fable', effort: 'high' },
-    security: { model: 'opus', effort: 'xhigh' },
-  });
+test('policy: the schema takes a models section of roles, tasks, depth and risk rows, and keeps implement and fix inline on opus', () => {
+  assert.deepEqual(validate({ '//': ['a comment', 'in lines'], models: { '//': 'note', roles: { top: { model: 'fable', effort: 'high' } }, tasks: { review: 'top', implement: { model: 'opus', effort: 'medium' } }, depth: { quick: { plan: 'light' } }, risk: { critical: { review: { model: 'fable', effort: 'xhigh' } } } } }), []);
 });
 
 test('policy: a path entry that leaves the repository, starts at its root or holds a glob is rejected', () => {
@@ -143,21 +125,24 @@ const REFUSED = [
   [{ merge: { autoMergeMax: 'high' } }, 'enum', 'merge.autoMergeMax'],
   // The editor refuses what the reader drops.
   [{ issues: { repository: 'owner/tracker' } }, 'refused', 'issues.repository'],
-  [{ models: { phases: { review: { model: 'some-model-20260101' } } } }, 'enum', 'models.phases.review.model'],
+  [{ models: { roles: { deep: { model: 'some-model-20260101', effort: 'high' } } } }, 'enum', 'models.roles.deep.model'],
   [{ review: { depth: 'max' } }, 'enum', 'review.depth'],
   [{ review: { sensitiveDepth: 'max' } }, 'enum', 'review.sensitiveDepth'],
   [{ minPlugin: '0.1' }, 'pattern', 'minPlugin'],
   [{ minPlugin: 'v0.1.0' }, 'pattern', 'minPlugin'],
   [{ issuesPerWorker: 0 }, 'range', 'issuesPerWorker'],
   [{ issuesPerWorker: 17 }, 'range', 'issuesPerWorker'],
-  ...['', '--dangerously-skip-permissions', 'opus; id', 'opus fast', `o${'p'.repeat(128)}`].map((model) => [{ models: { worker: { model } } }, 'pattern', 'models.worker.model']),
   [{ later: true }, 'unknown-key', 'later'],
   [{ mode: 'automatic', sandbox: { allowedDomains: ['registry.npmjs.org'] } }, 'refused', 'sandbox'],
   ...['auto', 'Automatic', 'bypassPermissions', ''].map((mode) => [{ mode }, 'enum', 'mode']),
-  [{ models: { phases: { plan: { modle: 'opus' } } } }, 'unknown-key', 'models.phases.plan.modle'],
-  [{ models: { sensitive: { implement: { model: 'opus' } } } }, 'unknown-key', 'models.sensitive.implement'],
-  [{ models: { sensitive: { independent: { model: 'claude-fable-5-2' } } } }, 'enum', 'models.sensitive.independent.model'],
-  [{ models: { sensitive: { security: { effort: 'ultra' } } } }, 'enum', 'models.sensitive.security.effort'],
+  [{ models: { roles: { deep: { modle: 'opus', model: 'opus', effort: 'high' } } } }, 'unknown-key', 'models.roles.deep.modle'],
+  [{ models: { roles: { deep: { model: 'opus' } } } }, 'required', 'models.roles.deep.effort'],
+  [{ models: { roles: { Deep: { model: 'opus', effort: 'high' } } } }, 'unknown-key', 'models.roles.Deep'],
+  [{ models: { tasks: { deploy: 'deep' } } }, 'unknown-key', 'models.tasks.deploy'],
+  [{ models: { risk: { medium: {} } } }, 'unknown-key', 'models.risk.medium'],
+  [{ models: { tasks: { review: 'Deep' } } }, 'any-of', 'models.tasks.review'],
+  [{ models: { depth: { quick: { implement: { model: 'sonnet', effort: 'high' } } } } }, 'any-of', 'models.depth.quick.implement'],
+  [{ models: { risk: { critical: { fix: { model: 'fable', effort: 'xhigh' } } } } }, 'any-of', 'models.risk.critical.fix'],
   // A key is shown without the characters that could rewrite a terminal line or cut the message.
   [{ 'later\u001B[2K\nmerge': true }, 'unknown-key', 'later?[2K?merge'],
 ];
@@ -166,8 +151,6 @@ test('policy: each refused value is named with its rule and path', () => {
   for (const [doc, rule, path] of REFUSED) {
     assert.deepEqual(rules(validate(doc)), [[rule, path]], JSON.stringify(doc));
   }
-  // The longest name and the characters of a full model name stay allowed.
-  for (const model of ['opus[1m]', 'vendor.family-4-5-v1:0', 'team/model@2026-01-01', 'p'.repeat(128)]) assert.deepEqual(validate({ models: { worker: { model } } }), [], model);
 });
 
 test('policy: permissionPrompts takes block alone', () => {
@@ -185,7 +168,7 @@ test('policy: a skill folder copied alone, as for an agent without plugins, chec
   assert.deepEqual(rules(gated.errors), [['range', 'minPlugin']]);
   // A schema that gains a keyword the check does not implement refuses every file, the valid ones too, instead of passing what the schema refuses.
   const schema = join(copy, 'cedarloom.schema.json');
-  for (const edit of [(s) => { s.properties.trustedAuthors.maxItems = 1; }, (s) => { s.properties.merge.additionalProperties = true; }, (s) => { s.patternProperties['^//'] = { type: 'string' }; }]) {
+  for (const edit of [(s) => { s.properties.trustedAuthors.maxItems = 1; }, (s) => { s.properties.merge.additionalProperties = true; }, (s) => { s.properties.startLabel.const = 'go'; }]) {
     const edited = JSON.parse(readFileSync(new URL('../skills/coordinate/cedarloom.schema.json', import.meta.url), 'utf8'));
     edit(edited);
     writeFileSync(schema, JSON.stringify(edited));
@@ -230,7 +213,7 @@ test('policy: the remote\'s HEAD is fetched into the reader\'s own ref and the f
   assert.equal(moved.policy.merge.allowed, false);
   // A remote that names no commit as its HEAD gives no policy.
   assert.deepEqual(rules(read('/p', (dir, cmd, args) => (args[0] === 'ls-tree' ? 'cedarloom.json\n' : args[0] === 'show' ? '{ "merge": { "allowed": true } }' : '')).errors), [['unreadable', '']]);
-  assert.deepEqual(read('/p', remote(null)), { policy: DEFAULTS, errors: [], warnings: [], absent: true });
+  assert.deepEqual(read('/p', remote(null)), { policy: DEFAULTS, errors: [], warnings: [], commit: HEAD, absent: true });
 });
 
 test('policy: a fetch or a show that fails gives no policy: not the defaults, and not the file an older fetch left', () => {
@@ -393,6 +376,14 @@ test('policy: the command line prints the policy of the default branch and exits
   const printed = cli(project);
   assert.equal(printed.status, 0, printed.stderr);
   assert.equal(JSON.parse(printed.stdout).startLabel, 'go');
+  // A worker shares the git directory and moves the reader's ref to a commit of its own: the commit the reader printed still holds origin's file.
+  const { commit: readCommit } = JSON.parse(printed.stdout);
+  const show = (rev) => spawnSync('git', ['-C', project, 'show', `${rev}:cedarloom.json`], { encoding: 'utf8' }).stdout;
+  writeFileSync(join(project, 'cedarloom.json'), '{ "startLabel": "worker" }');
+  spawnSync('git', ['-C', project, '-c', 'user.name=test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', 'commit', '-qam', 'worker']);
+  spawnSync('git', ['-C', project, 'update-ref', 'refs/cedarloom/policy', 'HEAD']);
+  assert.equal(show('refs/cedarloom/policy'), '{ "startLabel": "worker" }');
+  assert.equal(show(readCommit), '{ "startLabel": "go" }');
   // A project path below the repository root reads the same file, not "no file" and with it the defaults.
   const below = cli(join(project, 'docs'));
   assert.equal(below.status, 0, below.stderr);

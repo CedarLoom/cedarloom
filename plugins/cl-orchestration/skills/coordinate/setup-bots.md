@@ -52,7 +52,7 @@ Owner questions go where `<skill folder>/approvals.md` (Where it goes) says; the
 
 ## Automations
 
-On the project bot, each `--runs-in new --results-to chat --model opus --effort high`, its prompt naming one procedure file:
+On the project bot, each `--runs-in new --results-to chat --model <model> --effort <effort>` with the model map's `coordinate` task for the clone ([Policy](SKILL.md#policy)), its prompt naming one procedure file:
 
 ```text
 ORCA automations create --bot cl-<repo> --name '<owner/repo> pick' --trigger '*/30 * * * *' --precheck "node <skill folder>/precheck.mjs --prompts <project home>/prompts <clone>" --prompt 'Pick sweep: take <skill folder>/bot-project.md.' <flags> --json

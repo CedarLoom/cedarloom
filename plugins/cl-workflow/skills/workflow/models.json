@@ -1,0 +1,35 @@
+{
+  "models": {
+    "roles": {
+      "deep": { "model": "opus", "effort": "high" },
+      "build": { "model": "opus", "effort": "high" },
+      "light": { "model": "sonnet", "effort": "high" },
+      "read": { "model": "sonnet", "effort": "medium" },
+      "lookup": { "model": "haiku", "effort": "low" }
+    },
+    "tasks": {
+      "coordinate": "deep",
+      "plan": "deep",
+      "review": "deep",
+      "recheck": "deep",
+      "verify": "deep",
+      "fresh-read": "deep",
+      "audit": "deep",
+      "research": "deep",
+      "implement": "build",
+      "fix": "build",
+      "test": "light",
+      "docs": "light",
+      "triage": "light",
+      "digest": "light",
+      "merge": "light",
+      "gather": "read",
+      "lookup": "lookup"
+    },
+    "depth": {},
+    "risk": {
+      "high": { "plan": "deep", "review": "deep" },
+      "critical": { "review": "deep" }
+    }
+  }
+}

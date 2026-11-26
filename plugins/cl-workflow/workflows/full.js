@@ -29,8 +29,25 @@ const FLOW = {
   "entry": "/cl-workflow:full",
   "trial": {
     "agent": "cl-workflow:verify",
-    "model": "opus"
+    "task": "verify"
   },
+  "models": [
+    "haiku",
+    "sonnet",
+    "opus",
+    "fable"
+  ],
+  "rerun": "opus",
+  "tasks": [
+    "plan",
+    "verify",
+    "implement",
+    "test",
+    "review",
+    "audit",
+    "fix",
+    "recheck"
+  ],
   "stages": [
     {
       "id": "plan",
@@ -38,13 +55,13 @@ const FLOW = {
         {
           "id": "plan",
           "agent": "cl-workflow:plan",
-          "model": "opus",
+          "task": "plan",
           "role": "plan"
         },
         {
           "id": "plan-check",
           "agent": "cl-workflow:verify",
-          "model": "opus",
+          "task": "verify",
           "loop": {
             "fix": "plan",
             "maxRounds": 1,
@@ -61,19 +78,19 @@ const FLOW = {
         {
           "id": "implement",
           "agent": "cl-workflow:implement",
-          "model": "opus",
+          "task": "implement",
           "role": "change"
         },
         {
           "id": "test",
           "agent": "cl-workflow:test",
-          "model": "sonnet",
+          "task": "test",
           "role": "test"
         },
         {
           "id": "review",
           "agent": "cl-workflow:review",
-          "model": "opus",
+          "task": "review",
           "loop": {
             "fix": "implement",
             "recheck": "cl-workflow:recheck",
@@ -85,7 +102,7 @@ const FLOW = {
         {
           "id": "audit",
           "agent": "cl-workflow:review",
-          "model": "opus",
+          "task": "audit",
           "with": "review",
           "brief": "Security pass only, read-only: trust boundaries, authentication, permissions, secrets and input handling of the diff.",
           "role": "findings",
@@ -99,8 +116,7 @@ const FLOW = {
 // The runner each generated workflow script carries inline after its constants `meta` and `FLOW`: one stage per run, its rounds held in code.
 // Globals of a workflow script: agent, parallel, args. A stage returns { status, reason, plan?, findings, minor, rounds, phases, result? }.
 
-// The stronger step: the model one up, at the top an effort below high to high; xhigh never.
-const MODELS = ['haiku', 'sonnet', 'opus', 'fable'];
+// The stronger step: the model one up in the map's rank (FLOW.models), at the top an effort below high to high; xhigh never. Code (implement and fix) stays on its model: only the effort goes up.
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const text = { type: 'string' };
 const texts = { type: 'array', items: text };
@@ -141,18 +157,17 @@ const end = (status, reason, findings = [], result) => ({
   ...(result !== undefined && { result }),
 });
 
-// The phase's model and effort: the session's override for it (or for the phase it follows), else the constants.
-function resolved(phase) {
+// The phase's model and effort: the session's override for it (or for the phase it follows), else the map's value for its task (args.models, from the model map's resolver).
+function resolved(phase, task = phase.task) {
   const override = input.overrides?.[phase.id] ?? (phase.overrideOf && input.overrides?.[phase.overrideOf]) ?? {};
-  return { model: override.model ?? phase.model, effort: override.effort ?? phase.effort, recheckModel: override.recheckModel };
+  return { model: override.model ?? input.models[task].model, effort: override.effort ?? input.models[task].effort, recheckModel: override.recheckModel };
 }
 
-function stronger({ model, effort }) {
-  const at = MODELS.indexOf(model);
+function stronger({ model, effort }, code) {
+  const at = FLOW.models.indexOf(model);
   if (at === -1) return undefined;
-  if (at < MODELS.length - 1) return { model: MODELS[at + 1], effort };
-  // An effort nobody set is the agent file's: high.
-  if (EFFORTS.indexOf(effort ?? 'high') < EFFORTS.indexOf('high')) return { model, effort: 'high' };
+  if (!code && at < FLOW.models.length - 1) return { model: FLOW.models[at + 1], effort };
+  if (EFFORTS.indexOf(effort) < EFFORTS.indexOf('high')) return { model, effort: 'high' };
 }
 
 const context = (...more) =>
@@ -174,14 +189,13 @@ function open(findings) {
 
 async function call(label, group, agentType, role, prompt, { model, effort }) {
   run.phases.push(label);
-  const options = { label, phase: group, agentType, schema: SCHEMA[role] };
-  if (model !== 'inherit') options.model = model;
-  if (effort) options.effort = effort;
   let result;
   try {
-    result = await agent(prompt, options);
+    result = await agent(prompt, { label, phase: group, agentType, schema: SCHEMA[role], model, effort });
   } catch (error) {
-    throw new Stop(`${label} failed: ${error?.message ?? error}`);
+    // A model the account refuses: one rerun on the map's build model.
+    if (model === FLOW.rerun) throw new Stop(`${label} failed: ${error?.message ?? error}`);
+    return call(`${label} rerun on ${FLOW.rerun}`, group, agentType, role, prompt, { model: FLOW.rerun, effort });
   }
   if (result == null) throw new Stop(`${label} returned no result`);
   return result;
@@ -191,7 +205,7 @@ async function call(label, group, agentType, role, prompt, { model, effort }) {
 async function change(phase, label, prompt, step, findings) {
   const first = await call(label, phase.id, phase.agent, 'change', prompt, step);
   if (first.status !== 'stuck') return first;
-  const up = stronger(step);
+  const up = stronger(step, true);
   if (!up) throw new Stop(`${label} reported stuck with no stronger step left`, findings, first);
   const again = await call(`${label} rerun`, phase.id, phase.agent, 'change', prompt, up);
   if (again.status !== 'stuck') return again;
@@ -213,14 +227,16 @@ async function loop(phase) {
   const limit = phase.loop.maxRounds + (phase.loop.escalate ? 1 : 0);
   for (let round = 1; found.length; round++) {
     if (round > limit) throw new Stop(`${phase.id} findings remain after round ${round - 1}: a question for the user`, found);
-    const step = round > phase.loop.maxRounds ? stronger(resolved(fixer)) : resolved(fixer);
+    // A remediation of code runs as the map's fix task; a plan revision as the plan's own.
+    const fix = resolved(fixer, fixer.role === 'change' ? 'fix' : fixer.task);
+    const step = round > phase.loop.maxRounds ? stronger(fix, fixer.role === 'change') : fix;
     if (!step) throw new Stop(`${phase.id} findings remain after round ${round - 1} and no stronger step is left: a question for the user`, found);
     run.rounds++;
     // Disputed findings go unfixed, with their evidence, to the re-review.
     const dispute = new Map();
     if (input.trial && round === 1 && fixer.role === 'change') {
       const prompt = context('Trial before the first fix: mark each finding below confirmed or disputed, with evidence; `finding` is its position in the list, from 0.', JSON.stringify(found));
-      for (const v of (await call('trial', phase.id, FLOW.trial.agent, 'trial', prompt, FLOW.trial)).verdicts) if (v.verdict === 'disputed') dispute.set(v.finding, v.evidence);
+      for (const v of (await call('trial', phase.id, FLOW.trial.agent, 'trial', prompt, input.models[FLOW.trial.task])).verdicts) if (v.verdict === 'disputed') dispute.set(v.finding, v.evidence);
     }
     const confirmed = found.filter((_, i) => !dispute.has(i));
     const disputed = found.flatMap((f, i) => (dispute.has(i) ? [{ ...f, dispute: dispute.get(i) }] : []));
@@ -232,9 +248,9 @@ async function loop(phase) {
       const prompt = context(`Remediation of round ${round}: check each finding first, fix the ones that hold, and answer one you disprove with evidence instead of a change.`, JSON.stringify(confirmed));
       report = (await change(fixer, label, prompt, step, found)).report;
     }
-    const recheck = phase.loop.recheck
-      ? { agent: phase.loop.recheck, step: { model: own.recheckModel ?? (own.model === 'fable' ? 'opus' : own.model) } }
-      : { agent: phase.agent, step: own.recheckModel ? { model: own.recheckModel } : own };
+    // A separate re-reviewer runs as the map's recheck task, else the phase re-reviews on its own step.
+    const again = phase.loop.recheck ? input.models.recheck : own;
+    const recheck = { agent: phase.loop.recheck ?? phase.agent, step: { model: own.recheckModel ?? again.model, effort: again.effort } };
     const prompt = context(
       `Re-review of round ${round}: read only what changed since the last check and these findings; keep or drop each disputed one by its evidence.`,
       report && `Remediation report:\n${report}`,
@@ -261,6 +277,8 @@ async function phaseRun(phase) {
 
 async function stageRun() {
   if (!stage) return end('stopped', `args.stage must be one of ${FLOW.stages.map((s) => s.id).join(', ')}: start this workflow from its entry, ${FLOW.entry} <task>`);
+  const missing = FLOW.tasks.filter((task) => !input.models?.[task]?.model || !input.models[task].effort);
+  if (missing.length) return end('stopped', `args.models has no model and effort for ${missing.join(', ')}: start this workflow from its entry, ${FLOW.entry} <task>`);
   // A restart after failed tests; a restart inside the loop would reset its round count.
   const loopAt = stage.phases.findIndex((p) => p.loop);
   const before = loopAt === -1 ? stage.phases : stage.phases.slice(0, loopAt);

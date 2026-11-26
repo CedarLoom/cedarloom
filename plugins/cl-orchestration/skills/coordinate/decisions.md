@@ -14,7 +14,7 @@
 
 - An owner decision goes to the owner as an approval, written, checked and filed as [approvals.md](approvals.md) says: once per pull request and gate. That work waits; the loop keeps watching, verifying and starting work.
 - Only while terminal questions are allowed, ask in the session instead, with the same rows.
-- A decision in the owner's place, a design trade-off and a legal or security call go to a subagent on `fable` first (an agent without that model: a fresh subagent), briefed with the question and the written sources. Check its answer against those sources before you act on it. The owner-only decisions stay the owner's.
+- A decision in the owner's place, a design trade-off and a legal or security call go to a subagent on the model map's `research` task first ([Policy](SKILL.md#policy); an agent without that model: a fresh subagent), briefed with the question and the written sources. Check its answer against those sources before you act on it. The owner-only decisions stay the owner's.
 
 ## Owner-only decisions
 

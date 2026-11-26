@@ -2,7 +2,7 @@
 name: implement
 description: "Implement phase of the CedarLoom workflow; started by its phase orchestrator, not for direct use."
 tools: Read, Grep, Glob, Edit, Write, Bash, Skill, Agent, WebFetch, WebSearch
-model: inherit
+model: opus
 effort: high
 ---
 
