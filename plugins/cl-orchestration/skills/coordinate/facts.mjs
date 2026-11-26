@@ -82,13 +82,11 @@ function jobSection(list, now) {
   }));
 }
 
-// With --json, gh pr checks prints the checks and exits 0 for pending and failing ones (exit 8 is the table output only, kept as a fallback); with no required check it fails and says so.
+// With --json, gh pr checks prints the checks and exits 0 for pending and failing ones; with no required check it fails and says so.
 function requiredChecks(exec, repo, number) {
   let text;
   try { text = exec('gh', ['pr', 'checks', String(number), '-R', repo, '--required', '--json', 'name,bucket']); } catch (e) {
-    if (/no (required )?checks reported/.test(String(e.stderr ?? ''))) return 'none';
-    if (e.status !== 8) return UNREAD;
-    text = e.stdout;
+    return /no (required )?checks reported/.test(String(e.stderr ?? '')) ? 'none' : UNREAD;
   }
   const checks = data(text);
   if (!Array.isArray(checks)) return UNREAD;

@@ -37,7 +37,7 @@ test('precheck: an issue that waits for the owner, that a worker holds or that t
   assert.deepEqual(pickable(POLICY, issues, []), [1]);
 });
 
-test('precheck: the command line takes project paths and a prompts folder only, so an option of an old schedule fails instead of being read as a path', () => {
+test('precheck: the command line takes project paths and a prompts folder only, so another option fails instead of being read as a path', () => {
   assert.deepEqual(argsOf(['/a', '/b']), { dirs: ['/a', '/b'], prompts: undefined });
   assert.deepEqual(argsOf(['--prompts', '/home/prompts', '/a']), { dirs: ['/a'], prompts: '/home/prompts' });
   for (const argv of [['--extra=owner/project', '/a'], ['--issues-in', 'repo', '/a']]) assert.throws(() => argsOf(argv), /--extra|--issues-in/);
