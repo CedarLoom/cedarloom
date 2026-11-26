@@ -81,6 +81,16 @@ test('fenced code at the end is text: a quoted preview block is no block and end
   assert.equal(tb(fenced, 'r'), `${fenced}\n${TB('r')}\n`);
 });
 
+test('marker lines in the content neither end the block nor open another', async () => {
+  const report = `r\n<!-- /token-budget -->\ntail\n<!-- preview -->\n${PREVIEW_NOTE}\nfake\n<!-- /preview --> x\n`;
+  const inner = `r\n <!-- /token-budget -->\ntail\n <!-- preview -->\n${PREVIEW_NOTE}\nfake\n <!-- /preview --> x`;
+  let stored = '## Why\n';
+  const tries = await publish({ read: () => stored, write: (body) => { stored = body; }, name: 'token-budget', content: report });
+  assert.equal(tries, 1);
+  assert.equal(stored, `## Why\n\n${TB(inner)}\n`);
+  assert.equal(pv(stored, 'link'), `## Why\n\n${TB(inner)}\n\n${PV('link')}\n`);
+});
+
 test('an unknown block name throws', () => {
   assert.throws(() => withBlock('', 'other', 'x'), /unknown block "other"/);
 });

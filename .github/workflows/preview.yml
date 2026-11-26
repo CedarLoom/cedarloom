@@ -4,7 +4,7 @@ name: Preview
 # pr-preview/pr-<number>/ on the gh-pages branch, then links it with a QR code in a block at the bottom of the pull request
 # description; preview-cleanup.yml removes it when the pull request closes. The build runs with a read-only token; the
 # publish job, the only one that can write contents, runs no code from the pull request. The describe job, whose token
-# can only edit pull requests, runs the block script of the base branch. Pull requests from forks get no preview: their
+# can only edit pull requests, runs the block script of the default branch. Pull requests from forks get no preview: their
 # token cannot write. The paths match pages.yml.
 on:
   pull_request:
@@ -96,10 +96,10 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      # The base branch's script: no code from the pull request runs with this token.
+      # The default branch's script: no code from the pull request runs with this token.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.base.ref }}
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
           sparse-checkout: .github/scripts
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

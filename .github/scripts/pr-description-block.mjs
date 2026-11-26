@@ -18,6 +18,9 @@ const TRIES = 3;
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// A content line that starts with a block marker would end or open a block; a leading space keeps it a hidden comment.
+const MARKER_LINE = new RegExp(`^(?=<!-- /?(?:${ORDER.map(escape).join('|')}) -->)`);
+
 // A fenced code block; group 3 is its closing fence, missing when the fence runs to the end, as in CommonMark.
 const FENCE = /^ {0,3}((`|~)\2{2,})[^\r\n]*(?:\r?\n|(?![\s\S]))[\s\S]*?(?:(^ {0,3}\1\2*[ \t]*\r?$)|(?![\s\S]))/gm;
 
@@ -43,7 +46,7 @@ export function withBlock(body, name, content) {
   if (!spec) throw new Error(`unknown block "${name}"; known: ${ORDER.join(', ')}`);
   // A description edited in the browser has CRLF line ends: the block takes the body's.
   const eol = body.includes('\r\n') ? '\r\n' : '\n';
-  const block = [`<!-- ${name} -->`, spec.note, ...content.replace(/\r?\n$/, '').split(/\r?\n/), `<!-- /${name} -->`].join(eol);
+  const block = [`<!-- ${name} -->`, spec.note, ...content.replace(/\r?\n$/, '').split(/\r?\n/).map((line) => line.replace(MARKER_LINE, ' ')), `<!-- /${name} -->`].join(eol);
   const text = unfenced(body);
   const old = find(text, name);
   if (old) return body.slice(0, old.index) + block + body.slice(old.index + old[0].length);
