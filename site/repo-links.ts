@@ -5,8 +5,8 @@ type Node = {type: string; url?: string; value?: string; children?: Node[]};
 type File = {path: string};
 
 // Repository docs served as reference pages, by path from the repository root.
-export const referencePages: Record<string, {slug: string; sidebar_label?: string}> = {
-  'README.md': {slug: '/reference', sidebar_label: 'Get started'},
+export const referencePages: Record<string, {slug: string; title?: string; sidebar_label?: string}> = {
+  'README.md': {slug: '/reference', title: 'Get started', sidebar_label: 'Get started'},
   'docs/plugins.md': {slug: '/reference/plugins'},
   'docs/skills.md': {slug: '/reference/skills'},
   'docs/stack.md': {slug: '/reference/stack'},
@@ -18,7 +18,7 @@ export const referencePages: Record<string, {slug: string; sidebar_label?: strin
 
 // Relative links in the repository docs: a link to another reference page stays for Docusaurus to resolve; a link to
 // any other repository file or folder becomes its GitHub URL. A link to a missing path fails the build.
-export function repoLinks({root, repo, baseUrl}: {root: string; repo: string; baseUrl: string}) {
+export function repoLinks({root, repo}: {root: string; repo: string}) {
   const rewrite = (url: string, file: File): string => {
     if (/^([a-z][a-z0-9+.-]*:|#|\/)/i.test(url)) return url;
     const [path, hash = ''] = url.split('#');
@@ -31,8 +31,8 @@ export function repoLinks({root, repo, baseUrl}: {root: string; repo: string; ba
   };
   const walk = (node: Node, file: File) => {
     if ((node.type === 'link' || node.type === 'definition') && node.url) node.url = rewrite(node.url, file);
-    // The README's logo is raw HTML pointing into brand/, which the site serves from its root.
-    if (node.type === 'html' && node.value) node.value = node.value.replace(/(src|srcset)="brand\//g, `$1="${baseUrl}`);
+    // The README's logo picks its file by the system color scheme, not the site's theme toggle, so the site leaves it out.
+    node.children = node.children?.filter((child) => !(child.type === 'html' && child.value?.includes('<picture')));
     node.children?.forEach((child) => walk(child, file));
   };
   return () => (tree: Node, file: File) => walk(tree, file);

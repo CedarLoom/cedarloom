@@ -165,7 +165,8 @@
   color: var(--cl-go);
 }
 
-.owner svg {
+.owner svg,
+.drop svg {
   color: var(--cl-warn);
 }
 

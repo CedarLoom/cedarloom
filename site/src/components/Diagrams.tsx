@@ -5,10 +5,10 @@ import styles from './Diagrams.module.css';
 
 // Every diagram is lists and text in the page: each step, branch and message reads in order without the visuals.
 
-type Outcome = {when: string; to: string; tone: 'go' | 'next' | 'back' | 'owner'};
+type Outcome = {when: string; to: string; tone: 'go' | 'next' | 'back' | 'owner' | 'drop'};
 type Step = {icon: IconName; title: string; text?: string; you?: boolean; outcomes?: Outcome[]};
 
-const toneIcon: Record<Outcome['tone'], IconName> = {go: 'check', next: 'arrow', back: 'loop', owner: 'person'};
+const toneIcon: Record<Outcome['tone'], IconName> = {go: 'check', next: 'arrow', back: 'loop', owner: 'person', drop: 'ban'};
 
 function Flow({steps, caption}: {steps: Step[]; caption: string}): ReactNode {
   return (
@@ -118,7 +118,7 @@ export function TrustCheck(): ReactNode {
           title: 'Trusted author?',
           outcomes: [
             {when: 'yes', to: 'Worker and reviewer read it', tone: 'go'},
-            {when: 'no, or lookup failed', to: 'Left out and counted', tone: 'owner'},
+            {when: 'no, or lookup failed', to: 'Left out and counted', tone: 'drop'},
           ],
         },
       ]}

@@ -8,7 +8,7 @@ import styles from './SkillList.module.css';
 const repo = 'https://github.com/CedarLoom/cedarloom';
 
 const start: Record<StartedBy, [IconName, string]> = {
-  you: ['person', 'you type it'],
+  you: ['person', 'you'],
   agent: ['bot', 'the agent'],
   both: ['bot', 'the agent, or you'],
 };
