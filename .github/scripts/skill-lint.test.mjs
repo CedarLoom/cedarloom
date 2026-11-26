@@ -6,7 +6,7 @@ import { join, sep } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isMain } from './main.mjs';
-import { bareLaunches, descriptionWarnings, LAUNCHERS, launchCommands, launchModes, lintAgent, lintSkill, ownAgents, ownSkills, pluginFiles, wordBudget } from './skill-lint.mjs';
+import { bareLaunches, descriptionWarnings, LAUNCHERS, launchCommands, launchModes, literalModels, lintAgent, lintSkill, ownAgents, ownSkills, pluginFiles, wordBudget } from './skill-lint.mjs';
 
 function skill(name, { fm = `name: ${name}\ndescription: "Does a thing. Use when asked."`, body = '', yaml = 'interface:\n  display_name: "X"\n' } = {}) {
   const dir = join(mkdtempSync(join(tmpdir(), 'lint-')), name);
@@ -51,6 +51,20 @@ test('issue text handed to a worker needs the author filter', () => {
 test('a skill that reads an issue without a worker needs no filter', () => assert.deepEqual(lintSkill(skill('a', { body: 'Read the issue with all its comments.' })), []));
 test('own skills pass', () => assert.deepEqual(ownSkills().flatMap(lintSkill), []));
 test('own agents pass', () => assert.deepEqual(ownAgents().flatMap(lintAgent), []));
+test('a literal model value outside the model map fails; a model named in a rule about its behavior passes', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lint-'));
+  const file = (name, text) => (writeFileSync(join(dir, name), text), join(dir, name));
+  const literal = [
+    ['a.md', 'Run it with `--model opus --effort high`.'],
+    ['b.mjs', "const step = { model: 'sonnet' };"],
+    ['c.json', '{ "model": "haiku" }'],
+    ['d.md', 'The verifier (`cl-workflow:verify`, model `opus`).'],
+    ['e.md', 'A fresh verifier on `fable` at `xhigh`.'],
+  ].map(([name, text]) => file(name, text));
+  assert.deepEqual(literalModels(literal).map((e) => e.split(':')[0]), literal);
+  assert.deepEqual(literalModels([file('f.md', 'A session on `fable` takes one issue and gets no follow-up.')]), []);
+  assert.deepEqual(literalModels(pluginFiles()), []);
+});
 test('a plugin agent needs a name and description, a model alias, and no key plugin agents ignore', () => {
   const agent = (fm) => {
     const file = join(mkdtempSync(join(tmpdir(), 'lint-')), 'a.md');

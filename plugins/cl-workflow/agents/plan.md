@@ -2,7 +2,7 @@
 name: plan
 description: "Plan phase of the CedarLoom workflow; started by its phase orchestrator, not for direct use."
 tools: Read, Grep, Glob, Bash, Skill, WebFetch, WebSearch
-model: inherit
+model: opus
 effort: high
 ---
 

@@ -1,10 +1,11 @@
-// Validates workflow definitions and writes the entry skill of each, and the workflow script of a scripted one; the only validator of the definition format (docs/plugins.md, Workflows).
+// Validates workflow definitions and writes the entry skill of each, and the workflow script of a scripted one; the only validator of the definition format (docs/plugins.md, Workflows). Writing into the plugin folder it also sets the `model` and `effort` of each agent file from the model map's defaults.
 // Usage: node generator/generate.mjs <definition>... [--prefix <plugin name>|--prefix ''] [--out <folder>] [--check] [--json]   (--prefix '' needs --out)
 // Exit 0 written or no difference, 1 a refusal or (with --check) a difference, 2 a usage error.
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { BUILD_MODEL, MODELS, defaultMap } from '../skills/workflow/models.mjs';
 
 const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 // An agent by name, optionally with its plugin, never a file path.
@@ -26,8 +27,10 @@ const ROLES = {
   'cl-workflow:recheck': 'findings',
 };
 // The verifier of a risky change's findings before the first fix (deep.md, Review rounds).
-const TRIAL = { agent: 'cl-workflow:verify', model: 'opus' };
-const RUNNER = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'runner.js'), 'utf8');
+const TRIAL = { agent: 'cl-workflow:verify', task: 'verify' };
+const PLUGIN = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const RUNNER = readFileSync(join(PLUGIN, 'generator/runner.js'), 'utf8');
+const DEFAULTS = defaultMap().tasks;
 
 const text = [(v) => typeof v === 'string' && v.trim() !== '', 'a non-empty string'];
 const bool = [(v) => typeof v === 'boolean', 'true or false'];
@@ -54,8 +57,7 @@ const SESSION = { ...PHASE, step: [...oneOf('settle', 'pull-request'), true], qu
 const AGENT_PHASE = {
   ...PHASE,
   agent: [...agent, true],
-  model: [...oneOf('haiku', 'sonnet', 'opus', 'fable', 'inherit'), true],
-  effort: [...oneOf('low', 'medium', 'high', 'xhigh', 'max'), false],
+  task: [...oneOf(...Object.keys(DEFAULTS)), true],
   with: [...text, false],
   loop: [...object, false],
 };
@@ -176,7 +178,8 @@ function scripted(def, scope) {
   const rule = (phase, stage) => {
     if (phase.loop) {
       const { fix, maxRounds, escalate, recheck } = phase.loop;
-      return `fixed by \`${fix}\`, ${maxRounds} round${maxRounds > 1 ? 's' : ''}${escalate ? ' and one more on the stronger step' : ''}, re-checked by \`${recheck ?? phase.agent}\``;
+      const fixer = stage.phases.find((other) => other.id === fix);
+      return `fixed by \`${fix}\`${ROLES[fixer.agent] === 'change' ? ' as map task `fix`' : ''}, ${maxRounds} round${maxRounds > 1 ? 's' : ''}${escalate ? ' and one more on the stronger step' : ''}, re-checked by \`${recheck ?? phase.agent}\`${recheck ? ' as map task `recheck`' : ''}`;
     }
     if (phase.with) return `once, beside the first \`${phase.with}\`; its Blocking and Important findings join that loop`;
     const loop = stage.phases.find((other) => other.loop?.fix === phase.id);
@@ -186,18 +189,18 @@ function scripted(def, scope) {
     stage.phases.map((phase) => {
       const runs = phase.run === 'session' ? step[phase.step](phase) : `\`${phase.agent}\``;
       const notes = [rule(phase, stage), phase.brief && `Brief: ${phase.brief}`].filter(Boolean).join('. ');
-      return `| ${stage.id} | ${phase.id} | ${cell(runs)} | ${phase.model ?? ''} | ${phase.effort ?? (phase.run === 'agent' ? 'the agent file\'s' : '')} | ${cell(notes)} |`;
+      return `| ${stage.id} | ${phase.id} | ${cell(runs)} | ${phase.task ?? ''} | ${cell(notes)} |`;
     }),
   );
   return [
-    "3. Resolve the run's `args` by that skill's software change and deep playbooks: `task`, the task in one paragraph with the issue or spec reference when one exists; `overrides`, phase id to `{ model, effort, recheckModel }`, only where the rules for risky changes, a spec's Flow line, the user or the recheck rule differ from the table below (a phase run beside another and a plan check take the override of the phase they follow unless they have their own); `trial`, true for a risky change.",
+    "3. Resolve the run's `args` by that skill's software change and deep playbooks: `task`, the task in one paragraph with the issue or spec reference when one exists; `models`, the `tasks` object that `node <cl-workflow:workflow skill folder>/models.mjs <project path> --depth deep --risk <class> --json` prints for the `Risk:` class (`critical` for a change to authentication, permissions, secrets, input validation or firmware safety); `overrides`, phase id to `{ model, effort, recheckModel }`, only where a spec's Flow line or the user differ from that map (a phase run beside another and a plan check take the override of the phase they follow unless they have their own); `trial`, true for a risky change.",
     `4. Run the stages below in order: each session phase here, and the agent phases of each stage as one start of the workflow \`${run}\` through the Workflow tool, with those \`args\` and \`stage\` set to the stage's id.`,
     "   - A plan the task brought: pass its path as `planPath`; the stage that plans then only checks it, and its findings go to the plan's author as the plan check step of the playbook says. Where it carries `Plan check: passed` or names another independent check, skip that stage. After that stage, save its `plan` outside the repository, add `Plan check: passed (cl-workflow:verify)` when it is done, settle its questions, and pass the plan's path as `planPath` from then on.",
     "   - A stage that stops for failed tests: fix them by the playbook, then start the stage again with `from` set to the phase its reason names. Any other stop: run the rest of that stage as prose by the playbooks, counting the rounds the run returned; findings left after the last round are a question for the user.",
     '   - Where the Workflow tool is missing, turned off, or denied in a run without a user: run the same phases as prose by the playbooks and say so. Where the user answers No when asked to approve the run: stop.',
     '',
-    '| Stage | Phase | Runs | Model | Effort | Rule |',
-    '|---|---|---|---|---|---|',
+    '| Stage | Phase | Runs | Map task | Rule |',
+    '|---|---|---|---|---|',
     ...rows,
   ];
 }
@@ -210,6 +213,10 @@ function script(def, scope, note) {
     name: def.name,
     entry: `/${scope}${def.name}`,
     trial: TRIAL,
+    // The map's model rank, the model a refused call reruns on, and the tasks args.models must hold: each phase's, the fix and recheck of its loops, the trial's.
+    models: MODELS,
+    rerun: BUILD_MODEL,
+    tasks: [...new Set([...agents.map((phase) => phase.task), 'fix', 'recheck', TRIAL.task])],
     stages: def.stages.map((stage) => ({
       id: stage.id,
       phases: stage.phases
@@ -223,6 +230,21 @@ function script(def, scope, note) {
     })),
   };
   return `// ${note}\nexport const meta = ${JSON.stringify(meta, null, 2)};\n\nconst FLOW = ${JSON.stringify(flow, null, 2)};\n\n${RUNNER}`;
+}
+
+// The plugin's agent files with the `model` and `effort` of the task each is named for, from the model map's defaults.
+function agentFiles() {
+  return readdirSync(join(PLUGIN, 'agents'))
+    .filter((file) => file.endsWith('.md'))
+    .map((file) => {
+      const task = DEFAULTS[file.slice(0, -3)];
+      if (!task) throw new Error(`agents/${file} names no task of the model map`);
+      const current = readFileSync(join(PLUGIN, 'agents', file), 'utf8');
+      const front = /^---\n[\s\S]*?\n---\n/.exec(current)?.[0];
+      if (!front || !/^model: /m.test(front) || !/^effort: /m.test(front)) throw new Error(`agents/${file} has no front matter with a model and an effort line`);
+      const set = front.replace(/^model: .*$/m, `model: ${task.model}`).replace(/^effort: .*$/m, `effort: ${task.effort}`);
+      return { path: `agents/${file}`, current, content: set + current.slice(front.length) };
+    });
 }
 
 // Reads and validates each file; refusals carry the file as given.
@@ -263,18 +285,19 @@ function main() {
     console.error("usage: node generator/generate.mjs <definition>... [--prefix <plugin name>|--prefix ''] [--out <folder>] [--check] [--json]   (--prefix '' needs --out)");
     return 2;
   }
-  const out = resolve(values.out ?? join(dirname(fileURLToPath(import.meta.url)), '..'));
+  const out = resolve(values.out ?? PLUGIN);
   const { defs, found } = load(positionals);
   const files = defs.flatMap(({ file, def }) =>
     Object.entries(outputs(def, values.prefix)).map(([path, content]) => ({ file, path, content, current: existing(join(out, path)) })),
   );
   for (const { file, path, current } of files) if (current !== undefined && !current.includes(MARK)) found.push({ file, field: 'name', rule: `${path} exists and was not generated: pick another name` });
+  if (out === PLUGIN) files.push(...agentFiles());
   if (values.json) console.log(JSON.stringify(found));
   else for (const r of found) console.error(`${r.file}: ${r.field || '(file)'}: ${r.rule}`);
   if (found.length) return 1;
   if (values.check) {
     const differ = files.filter((f) => f.current !== f.content);
-    for (const { path } of differ) console.error(`${path} differs from its definition: run the generator without --check`);
+    for (const { path } of differ) console.error(`${path} differs from its definition or the model map: run the generator without --check`);
     return differ.length ? 1 : 0;
   }
   for (const { path, content } of files) {

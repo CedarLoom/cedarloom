@@ -23,17 +23,31 @@ const DEFAULT = {
   'cl-workflow:recheck': CLEAN,
 };
 
-// Runs one stage; `stubs` maps a call's label, else its agent, to the result. Returns each call as [agent, model] and the stage's result without its reason text.
+// args.models as the resolver prints it for the tasks of the full workflow.
+const MAP = {
+  plan: { model: 'opus', effort: 'high' },
+  verify: { model: 'opus', effort: 'high' },
+  implement: { model: 'opus', effort: 'high' },
+  fix: { model: 'opus', effort: 'high' },
+  test: { model: 'sonnet', effort: 'high' },
+  review: { model: 'opus', effort: 'high' },
+  audit: { model: 'opus', effort: 'high' },
+  recheck: { model: 'opus', effort: 'high' },
+};
+
+// Runs one stage, with MAP as args.models unless args names its own; `stubs` maps a call's label, else its agent, to the result, and a stub that is an Error is thrown. Returns each call as [agent, model] and the stage's result without its reason text.
 async function run(args, stubs = {}) {
   const calls = [];
   const agent = async (prompt, { agentType, model, label }) => {
     calls.push([agentType, model]);
-    return stubs[label] ?? stubs[agentType] ?? DEFAULT[agentType];
+    const stub = stubs[label] ?? stubs[agentType] ?? DEFAULT[agentType];
+    if (stub instanceof Error) throw stub;
+    return stub;
   };
   const parallel = (thunks) => Promise.all(thunks.map((thunk) => thunk().catch(() => null)));
   const pipeline = () => assert.fail('pipeline is not used');
   const quiet = () => {};
-  const { reason, ...result } = await new AsyncFunction('agent', 'parallel', 'pipeline', 'phase', 'log', 'args', body)(agent, parallel, pipeline, quiet, quiet, args);
+  const { reason, ...result } = await new AsyncFunction('agent', 'parallel', 'pipeline', 'phase', 'log', 'args', body)(agent, parallel, pipeline, quiet, quiet, { models: MAP, ...args });
   assert.equal(typeof reason, 'string');
   return { calls, result };
 }
@@ -166,4 +180,28 @@ test('full: a run without a known stage starts no agent', async () => {
     assert.deepEqual(calls, []);
     assert.deepEqual(result, { status: 'stopped', findings: [], minor: [], rounds: 0, phases: [] });
   }
+});
+
+test('full build: the map gives each phase its task, the remediation its fix task and the re-review its recheck task', async () => {
+  const models = { ...MAP, implement: { model: 'opus', effort: 'medium' }, fix: { model: 'fable', effort: 'high' }, recheck: { model: 'sonnet', effort: 'high' }, audit: { model: 'sonnet', effort: 'high' } };
+  const { calls } = await run(build({ models }), { review: FOUND });
+  assert.deepEqual(calls, [...start.slice(0, 3), ['cl-workflow:review', 'sonnet'], ['cl-workflow:implement', 'fable'], ['cl-workflow:recheck', 'sonnet']]);
+});
+
+test('full build: a call that fails reruns once on opus, and a failure on opus ends the stage', async () => {
+  const refused = new Error('model not available');
+  const rerun = await run(build({ models: { ...MAP, test: { model: 'haiku', effort: 'low' } } }), { test: refused });
+  assert.deepEqual(rerun.calls, [['cl-workflow:implement', 'opus'], ['cl-workflow:test', 'haiku'], ['cl-workflow:test', 'opus'], ['cl-workflow:review', 'opus'], ['cl-workflow:review', 'opus']]);
+  assert.deepEqual(rerun.result, done({ phases: ['implement', 'test', 'test rerun on opus', 'review', 'audit'] }));
+
+  const stopped = await run(build(), { 'cl-workflow:test': refused });
+  assert.deepEqual(stopped.calls, [['cl-workflow:implement', 'opus'], ['cl-workflow:test', 'sonnet'], ['cl-workflow:test', 'opus']]);
+  assert.deepEqual(stopped.result, { status: 'stopped', findings: [], minor: [], rounds: 0, phases: ['implement', 'test', 'test rerun on opus'] });
+});
+
+test('full: a run whose args.models lacks a task of the workflow starts no agent', async () => {
+  const { fix, ...models } = MAP;
+  const { calls, result } = await run(build({ models }));
+  assert.deepEqual(calls, []);
+  assert.deepEqual(result, { status: 'stopped', findings: [], minor: [], rounds: 0, phases: [] });
 });

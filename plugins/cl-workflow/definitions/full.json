@@ -12,9 +12,9 @@
       "id": "plan",
       "phases": [
         { "id": "settle", "run": "session", "step": "settle", "questions": true },
-        { "id": "plan", "run": "agent", "agent": "cl-workflow:plan", "model": "opus" },
+        { "id": "plan", "run": "agent", "agent": "cl-workflow:plan", "task": "plan" },
         {
-          "id": "plan-check", "run": "agent", "agent": "cl-workflow:verify", "model": "opus",
+          "id": "plan-check", "run": "agent", "agent": "cl-workflow:verify", "task": "verify",
           "loop": { "fix": "plan", "maxRounds": 1, "escalate": false }
         }
       ]
@@ -23,14 +23,14 @@
       "id": "build",
       "phases": [
         { "id": "settle-plan", "run": "session", "step": "settle", "questions": true },
-        { "id": "implement", "run": "agent", "agent": "cl-workflow:implement", "model": "opus" },
-        { "id": "test", "run": "agent", "agent": "cl-workflow:test", "model": "sonnet" },
+        { "id": "implement", "run": "agent", "agent": "cl-workflow:implement", "task": "implement" },
+        { "id": "test", "run": "agent", "agent": "cl-workflow:test", "task": "test" },
         {
-          "id": "review", "run": "agent", "agent": "cl-workflow:review", "model": "opus",
+          "id": "review", "run": "agent", "agent": "cl-workflow:review", "task": "review",
           "loop": { "fix": "implement", "recheck": "cl-workflow:recheck", "maxRounds": 2, "escalate": true }
         },
         {
-          "id": "audit", "run": "agent", "agent": "cl-workflow:review", "model": "opus", "with": "review",
+          "id": "audit", "run": "agent", "agent": "cl-workflow:review", "task": "audit", "with": "review",
           "brief": "Security pass only, read-only: trust boundaries, authentication, permissions, secrets and input handling of the diff."
         },
         { "id": "pull-request", "run": "session", "step": "pull-request" }

@@ -3,7 +3,10 @@
     "SessionStart": [
       {
         "matcher": "startup|resume|clear|compact|fork",
-        "hooks": [{ "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/ask/ask.mjs"] }]
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/ask/ask.mjs"] },
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/skills/workflow/models.mjs", "--hook"] }
+        ]
       }
     ],
     "UserPromptExpansion": [

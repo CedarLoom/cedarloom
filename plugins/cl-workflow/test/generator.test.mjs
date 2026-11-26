@@ -22,16 +22,16 @@ const valid = () => ({
       id: 'plan',
       phases: [
         { id: 'settle', run: 'session', step: 'settle', questions: true },
-        { id: 'plan', run: 'agent', agent: 'cl-workflow:plan', model: 'opus' },
-        { id: 'plan-check', run: 'agent', agent: 'cl-workflow:verify', model: 'opus', loop: { fix: 'plan', maxRounds: 1, escalate: false } },
+        { id: 'plan', run: 'agent', agent: 'cl-workflow:plan', task: 'plan' },
+        { id: 'plan-check', run: 'agent', agent: 'cl-workflow:verify', task: 'verify', loop: { fix: 'plan', maxRounds: 1, escalate: false } },
       ],
     },
     {
       id: 'build',
       phases: [
-        { id: 'implement', run: 'agent', agent: 'cl-workflow:implement', model: 'opus' },
-        { id: 'review', run: 'agent', agent: 'cl-workflow:review', model: 'opus', loop: { fix: 'implement', recheck: 'cl-workflow:recheck', maxRounds: 2, escalate: true } },
-        { id: 'audit', run: 'agent', agent: 'cl-workflow:review', model: 'opus', with: 'review' },
+        { id: 'implement', run: 'agent', agent: 'cl-workflow:implement', task: 'implement' },
+        { id: 'review', run: 'agent', agent: 'cl-workflow:review', task: 'review', loop: { fix: 'implement', recheck: 'cl-workflow:recheck', maxRounds: 2, escalate: true } },
+        { id: 'audit', run: 'agent', agent: 'cl-workflow:review', task: 'audit', with: 'review' },
         { id: 'pull-request', run: 'session', step: 'pull-request' },
       ],
     },
@@ -47,12 +47,17 @@ function refusedWith(change) {
   return { file, status: run.status, refusals: JSON.parse(run.stdout) };
 }
 
-test('generator: --check passes on the shipped definitions and fails after a one-character edit', () => {
+test("generator: --check passes on the shipped definitions and fails after a one-character edit or an agent's model off the map's defaults", () => {
   const copy = mkdtempSync(join(tmpdir(), 'plugin-'));
   const names = readdirSync(join(plugin, 'definitions')).map((file) => file.replace(/\.json$/, ''));
-  for (const folder of ['generator', 'definitions', 'workflows', ...names.map((name) => `skills/${name}`)]) cpSync(join(plugin, folder), join(copy, folder), { recursive: true });
+  for (const folder of ['generator', 'definitions', 'workflows', 'agents', 'skills/workflow', ...names.map((name) => `skills/${name}`)]) cpSync(join(plugin, folder), join(copy, folder), { recursive: true });
   const check = () => spawnSync(process.execPath, [join(copy, 'generator/generate.mjs'), ...names.map((name) => join(copy, `definitions/${name}.json`)), '--check']).status;
   assert.equal(check(), 0);
+  const verify = join(copy, 'agents/verify.md');
+  const agent = readFileSync(verify, 'utf8');
+  writeFileSync(verify, agent.replace(/^model: .*$/m, 'model: sonnet'));
+  assert.equal(check(), 1);
+  writeFileSync(verify, agent);
   appendFileSync(join(copy, 'workflows/full.js'), ' ');
   assert.equal(check(), 1);
 });
@@ -73,6 +78,7 @@ test('generator: each refusal names the file, the field and the rule, and exits 
   const cases = [
     [(d) => (d.schemaVersion = 1), 'schemaVersion', 'must be 2'],
     [(d) => (d.extra = true), 'extra', 'unknown field'],
+    [(d) => (d.stages[1].phases[0].task = 'deploy'), 'stages[1].phases[0].task', 'one of "coordinate", "plan", "review", "recheck", "verify", "audit", "research", "implement", "fix", "test", "docs", "gather", "lookup"'],
     // Inherited object keys are unknown fields too.
     [(d) => (d.constructor = true), 'constructor', 'unknown field'],
     [(d) => (d.stages[1].phases[1].loop.toString = 'x'), 'stages[1].phases[1].loop.toString', 'unknown field'],

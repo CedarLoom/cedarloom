@@ -7,7 +7,7 @@ Take each project's policy from the reader, never from the JSON file: `node <ski
 - A project bot reads the policy the same way and acts on the same fields, with the coordinator's steps of its procedures ([SOUL.md](SOUL.md)). It never opens the `chore/agent-policy` pull request: a project without a policy file starts nothing there, and the report names it. Its merges go only through `merge.mjs`, which takes the verdict the bot recorded.
 - Format: [cedarloom.schema.json](cedarloom.schema.json), which the `$schema` URL serves to editors; example: [policy.example.json](policy.example.json).
 - A path entry names a file or folder from the repository root and covers it and everything below it; there are no globs.
-- `xhigh` runs only for the first review of a security or firmware-safety change (the default of `models.sensitive.security`, and the workflow skill's Review phase without a Flow line) and on the owner's request (policy or session).
+- `xhigh` runs only for the first review of a security or firmware-safety change (the model map's `review` task at risk `critical`) and on the owner's request (policy or session).
 
 | Field | Meaning | Without the field |
 |---|---|---|
@@ -30,11 +30,9 @@ Take each project's policy from the reader, never from the JSON file: `node <ski
 | `review.depth`, `review.sensitiveDepth` | the review level of a routine and of a sensitive change (`low`, `medium`, `high`, `xhigh`) | both `high` |
 | `riskyPaths` | paths whose change has high impact: the risk class is at least medium and the change sensitive ([Risk class](decisions.md#risk-class)). | none |
 | `review.sensitivePaths` | paths that make a change sensitive, besides the built-in classes ([review.md](review.md#sensitive-or-routine)) | none |
-| `models.worker` | model and effort of a worker session, printed as a table by depth (`quick`, `standard`, `deep`) and for `research` | quick `sonnet`, standard and deep `opus`, research `fable`, all `high` |
-| `models.phases.<phase>` | model and effort of a worker's phase subagent (`plan`, `implement`, `test`, `review`, `research`), printed only for the phases the policy names; `inherit` is the worker's own model | the workflow skill's: plan, implement and review `opus`, test `sonnet`, research `fable`, each at `high` |
-| `models.sensitive.<use>` | model and effort for a sensitive change: `plan` and `review`, the worker's Plan and Review phases; `independent`, the coordinator's reviewer; `security`, that reviewer for a change to authentication, permissions, secrets, input validation or firmware safety. Each field the policy leaves out keeps its default; `inherit` as in `models.phases`. | plan, review and independent `fable` at `high`, security `fable` at `xhigh`; an account without `fable` sets each `model` |
+| `models` | the model map's `roles`, `tasks`, `depth` and `risk` rows for this project, read by the model map's resolver after CedarLoom's defaults and the user file, not by this reader ([Policy](SKILL.md#policy)); implement and fix run only on `opus` | CedarLoom's defaults and the user file |
 | `issues.labels` | labels an issue must carry besides `startLabel`; the issues live in the project's repository ([SKILL.md](SKILL.md#names)), so the reader drops an `issues.repository` with a warning | no further label |
-| `minPlugin` | the oldest plugin version that may run this policy; on an older plugin the reader exits 1. A policy that sets `mode`, `riskyPaths`, `merge.autoMergeMax` or `models.sensitive` names the first plugin version with that key here: an older plugin refuses the key | any |
+| `minPlugin` | the oldest plugin version that may run this policy; on an older plugin the reader exits 1. A policy that sets `mode`, `riskyPaths`, `merge.autoMergeMax` or `models` names the first plugin version with that key here: an older plugin refuses the key | any |
 
 ## Pick order
 
