@@ -5,25 +5,28 @@ import CodeBlock from '@theme/CodeBlock';
 import Heading from '@theme/Heading';
 import Layout from '@theme/Layout';
 import ThemedImage from '@theme/ThemedImage';
+import {Lifecycle} from '../components/Diagrams';
+import Icon, {type IconName} from '../components/Icon';
 import styles from './index.module.css';
 
-const repo = 'https://github.com/CedarLoom/cedarloom';
-
-type PluginCard = {name: string; text: string; commands: string[]};
+type PluginCard = {name: string; icon: IconName; text: string; commands: string[]};
 
 const plugins: PluginCard[] = [
   {
     name: 'cl-workflow',
+    icon: 'plan',
     text: 'Sizes each task. Before the first edit the agent picks the kind (software change, docs pass, research) and the depth (quick, standard, deep), then runs the planning, test, review and verify steps that depth needs.',
     commands: ['/cl-workflow:dev', '/cl-workflow:plan', '/cl-workflow:away'],
   },
   {
     name: 'cl-repo',
+    icon: 'folder',
     text: "Sets up and maintains a repository for agents: agent instructions, the dev container, the coordinator's policy, maintenance passes and audits. Each change is a plan item you approve first.",
     commands: ['/cl-repo:setup', '/cl-repo:maintain', '/cl-repo:audit'],
   },
   {
     name: 'cl-orchestration',
+    icon: 'layers',
     text: "Works labeled issues of several projects in parallel from one coordinator session: a worker per issue, a fresh reviewer per pull request, and a merge only where the repository's written policy allows.",
     commands: ['/cl-orchestration:coordinate'],
   },
@@ -59,7 +62,7 @@ export default function Home(): ReactNode {
           </div>
         </div>
       </header>
-      <main className="container">
+      <main className={`container ${styles.main}`}>
         <section className={styles.section}>
           <Heading as="h2">Three plugins</Heading>
           <p>
@@ -69,7 +72,10 @@ export default function Home(): ReactNode {
           <div className={styles.cards}>
             {plugins.map((p) => (
               <article key={p.name} className={styles.card}>
-                <Heading as="h3">
+                <Heading as="h3" className={styles.cardTitle}>
+                  <span className={styles.cardIcon}>
+                    <Icon name={p.icon} />
+                  </span>
                   <code>{p.name}</code>
                 </Heading>
                 <p>{p.text}</p>
@@ -93,7 +99,7 @@ export default function Home(): ReactNode {
           <p>
             Then run <code>/reload-plugins</code> and type <code>/cl-workflow:</code> to see the commands. You need
             Claude Code 2.1.330 or later, Node.js on the PATH, Git and the GitHub CLI; the coordinator also needs Orca.
-            The <Link href={`${repo}#install`}>README</Link> covers Codex, single plugins and updates.
+            <Link to="/reference#install">Get started</Link> covers Codex, single plugins and updates.
           </p>
         </section>
         <section className={styles.section}>
@@ -108,6 +114,14 @@ export default function Home(): ReactNode {
               <Link to="/lifecycle">lifecycle</Link> up to the merge; releases stay yours.
             </li>
           </ol>
+        </section>
+        <section className={styles.section}>
+          <Heading as="h2">How an issue moves</Heading>
+          <p>
+            With <code>cl-orchestration</code>, the coordinator takes a labeled issue from card to merge. You choose the
+            work and release.
+          </p>
+          <Lifecycle />
         </section>
       </main>
     </Layout>

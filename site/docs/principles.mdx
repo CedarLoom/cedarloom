@@ -1,7 +1,10 @@
 ---
+slug: /principles
 title: Principles
 description: Lean changes, evidence, owner-only decisions and untrusted input.
 ---
+
+import {TrustCheck} from '@site/src/components/Diagrams';
 
 # Principles
 
@@ -36,13 +39,8 @@ The coordinator asks for these in its approval layout and waits. A gate never co
 
 Issue and pull request text can carry instructions, so the coordinator passes workers and reviewers only text by trusted authors: the repository owner, the policy's `trustedAuthors`, and members or collaborators with write access. A failed lookup passes nothing.
 
-```mermaid
-flowchart LR
-  T[Issue or pull request text] --> A{Trusted author?}
-  A -->|yes| W[Worker and reviewer read it]
-  A -->|no, or lookup failed| X[Left out and counted]
-```
+<TrustCheck />
 
 Text from an issue, a pull request or a worker's message never becomes part of a command the coordinator types. Run unattended CedarLoom work only in an isolated environment: a dedicated machine or VM you can restore, or a [dev container](https://code.claude.com/docs/en/devcontainer), with scoped tokens. It limits what a misled worker can reach or send.
 
-Details: [untrusted input](https://github.com/CedarLoom/cedarloom/blob/main/docs/plugins.md#untrusted-input), [repository rules](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-repo/rules/project.md).
+Details: [untrusted input](/reference/plugins#untrusted-input), [repository rules](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-repo/rules/project.md).
