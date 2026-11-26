@@ -3,20 +3,13 @@ title: Lifecycle
 description: How an issue moves from card to release, and who acts at each step.
 ---
 
+import {BuildToMerge, Lifecycle} from '@site/src/components/Diagrams';
+
 # Lifecycle
 
 With `cl-orchestration`, the coordinator moves an issue from card to merge. You choose the work, answer the questions it raises, and release.
 
-```mermaid
-flowchart TD
-  C["Card: you label the issue"] --> Rf["Refine: plan, questions, design approval"]
-  Rf --> B["Build: a worker per issue"]
-  B --> Rv["Review: a fresh reviewer"]
-  Rv -->|findings| F["Fix: the worker, then a re-review"]
-  F --> Rv
-  Rv -->|clean| M["Merge: the coordinator, by the policy"]
-  M --> Rl["Release: you"]
-```
+<Lifecycle />
 
 ## Card
 
@@ -28,23 +21,7 @@ Refining settles the goal, scope, depth and risk, the steps and an acceptance ta
 
 ## Build to merge
 
-```mermaid
-sequenceDiagram
-  actor You
-  participant C as Coordinator
-  participant W as Worker
-  participant R as Reviewer
-  You->>C: label issues, start the run
-  C->>W: spec, own worktree
-  W-->>C: draft pull request
-  C->>R: review the head
-  R-->>C: findings
-  C->>W: Blocking and Important findings
-  W-->>C: fix pushed
-  C->>R: re-review the fix
-  R-->>C: clean
-  C->>C: checks green, merge by the policy
-```
+<BuildToMerge />
 
 **Build.** The coordinator writes a spec per issue and starts its worker through Orca, within the policy's worker limits. The `cl:in-progress` label keeps an issue from starting twice. The worker runs the workflow at the spec's depth, and its change becomes a draft pull request.
 
@@ -58,4 +35,4 @@ sequenceDiagram
 
 Releases and tags are yours. No worker creates one, and the coordinator leaves a release pull request to you.
 
-Details: [the coordinator](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-orchestration/skills/coordinate/SKILL.md), [policy fields](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-orchestration/skills/coordinate/policy.md), [owner questions and labels](https://github.com/CedarLoom/cedarloom/blob/main/docs/plugins.md#owner-questions).
+Details: [the coordinator](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-orchestration/skills/coordinate/SKILL.md), [policy fields](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-orchestration/skills/coordinate/policy.md), [owner questions and labels](/reference/plugins#owner-questions).

@@ -2,13 +2,15 @@ import type {ReactNode} from 'react';
 import {usePluginData} from '@docusaurus/useGlobalData';
 import Heading from '@theme/Heading';
 import type {Skill, StartedBy} from '../../skills-plugin';
+import Icon, {type IconName} from './Icon';
+import styles from './SkillList.module.css';
 
 const repo = 'https://github.com/CedarLoom/cedarloom';
 
-const startLabel: Record<StartedBy, string> = {
-  you: 'you type it',
-  agent: 'the agent',
-  both: 'the agent, or you',
+const start: Record<StartedBy, [IconName, string]> = {
+  you: ['person', 'you type it'],
+  agent: ['bot', 'the agent'],
+  both: ['bot', 'the agent, or you'],
 };
 
 // One list per plugin, in the order the plugins install.
@@ -24,32 +26,26 @@ export default function SkillList(): ReactNode {
       <Heading as="h2" id={plugin}>
         {plugin}
       </Heading>
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Command</th>
-            <th scope="col">What it is for</th>
-            <th scope="col">Started by</th>
-          </tr>
-        </thead>
-        <tbody>
-          {skills
-            .filter((s) => s.plugin === plugin)
-            .map((s) => (
-              <tr key={s.name}>
-                <td>
-                  <a href={`${repo}/blob/main/plugins/${s.plugin}/skills/${s.name}/SKILL.md`}>
-                    <code>
-                      /{s.plugin}:{s.name}
-                    </code>
-                  </a>
-                </td>
-                <td>{s.purpose}</td>
-                <td>{startLabel[s.startedBy]}</td>
-              </tr>
-            ))}
-        </tbody>
-      </table>
+      <ul className={styles.grid}>
+        {skills
+          .filter((s) => s.plugin === plugin)
+          .map((s) => {
+            const [icon, label] = start[s.startedBy];
+            return (
+              <li key={s.name} className={styles.card}>
+                <a className={styles.command} href={`${repo}/blob/main/plugins/${s.plugin}/skills/${s.name}/SKILL.md`}>
+                  <code>
+                    /{s.plugin}:{s.name}
+                  </code>
+                </a>
+                <p className={styles.purpose}>{s.purpose}</p>
+                <p className={styles.start}>
+                  <Icon name={icon} /> Started by {label}
+                </p>
+              </li>
+            );
+          })}
+      </ul>
     </section>
   ));
 }
