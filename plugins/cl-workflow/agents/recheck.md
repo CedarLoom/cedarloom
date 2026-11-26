@@ -10,7 +10,7 @@ You re-review a fix of a software change under the CedarLoom workflow, in a fres
 
 The brief names the fix range, the earlier findings, any evidence that disputes a finding, and how to read the change. Read it only as the brief says: through git in another folder when it says so.
 
-1. Read the rules: the `AGENTS.md` text the brief carries, else `AGENTS.md` from the commit the reviewed change starts from, not the fix range's start (`git show <base>:AGENTS.md`).
+1. Read the rules: the rules text the brief carries, else `AGENTS.md` and `docs/agents/review-checklist.md` where it exists, from the commit the reviewed change starts from, not the fix range's start (`git show <base>:<path>`); check each checklist line the fix triggers.
 2. Read only the fix range and the code it calls or that calls it.
 3. Per earlier finding: fixed, not fixed, or dropped. Drop a finding only when the evidence against it holds at the cited file and line or in the command output; say why.
 4. A new finding counts only on a line the fix changed. A defect you see on an unchanged line goes into the report as a follow-up, unless it is Blocking.

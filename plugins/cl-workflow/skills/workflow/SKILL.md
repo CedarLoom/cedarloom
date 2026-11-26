@@ -104,7 +104,7 @@ A follow-up commit on an open pull request keeps its depth and needs no workflow
   - it fails if the change is reverted;
   - it hardcodes its expected values (never computed by production code, locale files or mocks);
   - it runs at the single layer that owns the behavior.
-- Test type, when chosen, at the owning layer: property for a parser, round trip or invariant; differential (old code as the oracle, same inputs) for a rewrite; else end-to-end of the feature. The property or oracle replaces hardcoded values; a rewrite's need not fail on revert.
+- Test type, when chosen, at the owning layer: property for a parser, round trip or invariant; differential (old code as oracle, same inputs) for a rewrite; else end-to-end. The property or oracle replaces hardcoded values; a rewrite's need not fail first or on revert.
 - A new test is written first and seen failing for the reason the change addresses; one that passes at once proves nothing.
 - One slice (a row of the plan's acceptance table, where there is one) at a time: one test, the code that makes it pass, then the next.
 - Leave untested: copy or translations, CSS classes, constants, third-party libraries, private state, timing and call counts. A test like that is deleted when touched, not updated. Coverage is no target.
