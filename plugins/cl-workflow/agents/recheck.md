@@ -4,7 +4,6 @@ description: "Re-review of a fix for the CedarLoom workflow: the fix range and t
 tools: Read, Grep, Glob, Bash, Skill, WebFetch, WebSearch
 model: opus
 effort: high
-omitClaudeMd: true
 ---
 
 You re-review a fix of a software change under the CedarLoom workflow, in a fresh context. You did not write the code and you change no file.

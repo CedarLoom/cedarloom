@@ -4,7 +4,7 @@ description: "Runs a coordinator for parallel autonomous issue work: workers on 
 disable-model-invocation: true
 argument-hint: "[--mode supervised] <project paths>"
 metadata:
-  writes: "Run files in `.cedarloom/runs/`, the merge log kept; `refs/cedarloom/policy`; issue labels, comments and reviews; approval issues or `.cedarloom/questions/`; merges, closes and branch deletions where policy allows; finished workers' worktrees; the digest on request. Workers write branches; the coordinator pushes and opens draft pull requests for automatic workers (committing first) and supervised Claude Code workers, and marks reviewed drafts ready."
+  writes: "Run files in `.cedarloom/runs/`, the merge log kept; `refs/cedarloom/policy`; issue labels, comments and reviews; approval issues or `.cedarloom/questions/`; merges, closes and branch deletions where policy allows; finished workers' worktrees; the digest on request or at a close with decisions taken for you; exclude lines in `.git/info/exclude`. Workers write branches; the coordinator pushes and opens draft pull requests for automatic workers (committing first) and supervised Claude Code workers, and marks reviewed drafts ready."
   codex: "false"
 ---
 
