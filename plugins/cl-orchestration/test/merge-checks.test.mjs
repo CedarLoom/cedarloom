@@ -170,7 +170,7 @@ test('merge checks: the command line prints the verdict of a head in its scratch
     assert.deepEqual([r.status, r.stdout], [2, ''], args.join(' '));
     assert.equal(r.stderr.trim().split('\n').length, 1, r.stderr);
   };
-  const plain = { allowed: true, ownerOnly: [], unsafePaths: [], sensitive: [], risky: [], risk: 'low' };
+  const plain = { allowed: true, requiredChecks: ['ci'], ownerOnly: [], unsafePaths: [], sensitive: [], risky: [], risk: 'low' };
   // The branches that change src/a.txt, a riskyPaths file: a low class becomes medium, which merges under the default autoMergeMax.
   const touchesA = { ...plain, sensitive: ['src/a.txt'], risky: ['src/a.txt'], risk: 'medium' };
   const workflows = (file) => ({ ...plain, next: 'owner', ownerOnly: [file], sensitive: [file], pin: 'reviewed', upToDate: false });
@@ -249,7 +249,7 @@ test('merge checks: a head with several merge bases is the owner\'s to judge, an
   // The same tree on one parent, in a project whose policy allows no merge.
   const ready = cli(project, scratch, 'main', plain, plain, 'low');
   assert.equal(ready.status, 0, ready.stderr);
-  assert.deepEqual(JSON.parse(ready.stdout), { next: 'ready', allowed: false, ownerOnly: [], unsafePaths: [], sensitive: [], risky: [], risk: 'low', pin: 'reviewed', upToDate: false, shared: [] });
+  assert.deepEqual(JSON.parse(ready.stdout), { next: 'ready', allowed: false, requiredChecks: [], ownerOnly: [], unsafePaths: [], sensitive: [], risky: [], risk: 'low', pin: 'reviewed', upToDate: false, shared: [] });
 });
 
 test('risk facts: risky files set the floor, and manifests, migrations and code without a test of its name are listed', () => {
@@ -297,7 +297,7 @@ test('merge checks, risk facts: a scratch clone made as scratch-clone.md says, b
   assert.deepEqual(JSON.parse(facts.stdout), { lines: 2, files: 1, risky: ['src/a.txt'], floor: 'medium', dependencies: [], migrations: [], untested: [] });
   const verdict = cli(project, scratch, 'main', reviewed, head, 'low');
   assert.equal(verdict.status, 0, verdict.stderr);
-  assert.deepEqual(JSON.parse(verdict.stdout), { next: 'merge', allowed: true, ownerOnly: [], unsafePaths: [], sensitive: ['src/a.txt'], risky: ['src/a.txt'], risk: 'medium', pin: 'clean-merges', upToDate: true, shared: [] });
+  assert.deepEqual(JSON.parse(verdict.stdout), { next: 'merge', allowed: true, requiredChecks: [], ownerOnly: [], unsafePaths: [], sensitive: ['src/a.txt'], risky: ['src/a.txt'], risk: 'medium', pin: 'clean-merges', upToDate: true, shared: [] });
 });
 
 test('risk facts: the command line reads the diff of a clone and the policy of its origin, and exits 2 on a bad argument', () => {

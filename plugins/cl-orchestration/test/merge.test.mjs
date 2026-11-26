@@ -25,7 +25,7 @@ const head = (branch, files, from = 'main') => {
   git('commit', '-qm', branch);
   return git('rev-parse', 'HEAD').toString().trim();
 };
-head('policy', { 'cedarloom.json': '{ "merge": { "allowed": true, "mode": "disjoint" } }' });
+head('policy', { 'cedarloom.json': '{ "merge": { "allowed": true, "requiredChecks": ["ci"], "mode": "disjoint" } }' });
 git('checkout', '-q', 'main');
 git('merge', '-q', '--ff-only', 'policy');
 const HEAD = head('feat/1-x', { 'src/x.txt': 'x\n' });
@@ -67,7 +67,9 @@ else if (a === 'pr' && b === 'merge' && !args.includes('--disable-auto')) {
 `, { mode: 0o755 });
 process.env.PATH = `${bin}:${process.env.PATH}`;
 
-const openPr = (n, oid, branch) => ({ state: 'OPEN', headRefOid: oid, baseRefName: 'main', isCrossRepository: false, title: 'feat: add x', body: `Closes #${n}.`, headRefName: branch, headRepositoryOwner: { login: 'acme' }, commits: [{ messageHeadline: 'feat: add x', messageBody: 'Adds x.' }] });
+// A run of the check ci, which the policy requires, or of another check by name; it started 30 minutes ago unless startedAt says otherwise.
+const ci = (status, conclusion, startedAt = minutesAgo(30), name = 'ci') => ({ __typename: 'CheckRun', name, workflowName: 'CI', status, conclusion, startedAt });
+const openPr = (n, oid, branch) => ({ state: 'OPEN', headRefOid: oid, baseRefName: 'main', isCrossRepository: false, title: 'feat: add x', body: `Closes #${n}.`, headRefName: branch, headRepositoryOwner: { login: 'acme' }, commits: [{ messageHeadline: 'feat: add x', messageBody: 'Adds x.' }], statusCheckRollup: [ci('COMPLETED', 'SUCCESS')] });
 const run = (sha, status, conclusion, workflow, createdAt) => ({ databaseId: Date.parse(createdAt) / 1000 + workflow, headSha: sha, status, conclusion, workflowDatabaseId: workflow, createdAt });
 const GREEN = [run(TIP, 'completed', 'success', 10, '2026-11-20T11:49:00Z'), run(BEFORE, 'completed', 'success', 10, '2026-11-20T11:00:00Z')];
 
@@ -252,6 +254,23 @@ test('merge: a new head, another verdict or an open review thread restarts the j
   const threads = bot({ world: { threads: [{ id: 'T1', isResolved: false, path: 'src/x.txt', line: 1, comments: { totalCount: 0, nodes: [] } }, { id: 'T2', isResolved: true }] } });
   assert.deepEqual(threads.call(), { outcome: 'restart', reason: '1 review thread(s) are unresolved' });
   assert.deepEqual(merges(threads.calls()), []);
+});
+
+test('merge: a required check that failed, has no run or still runs on the head holds the merge, and only the newest run of each check counts', () => {
+  const checked = (rollup) => bot({ world: { prs: { 1: { ...openPr(1, HEAD, 'feat/1-x'), statusCheckRollup: rollup } } } });
+  const held = [
+    [[ci('COMPLETED', 'SUCCESS', minutesAgo(50)), ci('COMPLETED', 'FAILURE')], { outcome: 'stop', reason: 'required check(s) failed on the head: ci' }],
+    [[ci('COMPLETED', 'SUCCESS', minutesAgo(30), 'lint')], { outcome: 'stop', reason: 'required check(s) have no run on the head: ci' }],
+    [[ci('COMPLETED', 'FAILURE', minutesAgo(50)), ci('IN_PROGRESS', '')], { outcome: 'wait', reason: 'required check(s) still run on the head: ci' }],
+  ];
+  for (const [rollup, answer] of held) {
+    const b = checked(rollup);
+    assert.deepEqual(b.call(), answer);
+    assert.deepEqual(merges(b.calls()), []);
+    assert.equal(b.read('pr-1.json').mergeCommandAt, undefined);
+  }
+  // A failed run that ran again and passed, beside a failed check the policy does not require.
+  assert.equal(checked([ci('COMPLETED', 'FAILURE', minutesAgo(50)), ci('COMPLETED', 'SUCCESS'), ci('COMPLETED', 'FAILURE', minutesAgo(30), 'lint')]).call().outcome, 'merged');
 });
 
 test('merge: a trial verdict merges only while the default branch is the trial base', () => {
