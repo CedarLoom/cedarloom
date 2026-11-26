@@ -185,6 +185,7 @@ test('role guard: denies a push of a tag that git tag creates earlier in the sam
     'git tag --annotate --message=build nightly HEAD && git push origin nightly:nightly',
     'git tag --mess build -- nightly && git push origin nightly',
     'git -C . tag -s -u key nightly && git push origin +nightly',
+    'git tag heads/nightly && git push origin heads/nightly',
   ];
   for (const command of denied) assert.equal(decision(command), 'deny', command);
   assert.equal(decision('git tag nightly; git push origin nightly', { tool: 'PowerShell' }), 'deny');
@@ -204,6 +205,7 @@ test('role guard: denies a push of a tag that git tag creates earlier in the sam
     'git tag --no-merged HEAD feat/x && git push origin feat/x',
     'git tag -m feat/x nightly && git push origin feat/x',
     'git tag nightly feat/x && git push origin feat/x',
+    'git tag --sort refname && git push origin refname',
   ];
   for (const command of allowed) assert.equal(decision(command), 'none', command);
 });

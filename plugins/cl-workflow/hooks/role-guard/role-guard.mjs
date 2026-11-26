@@ -335,8 +335,10 @@ function push(args, dir, known, role, { switched, filled, tags }) {
     // A glob refspec (refs/heads/*:refs/heads/*) and the matching refspec (: or +:) push many refs, the default branch and tags among them.
     if (spec.includes('*') || /^\+?:$/.test(spec)) return 'a push of every branch';
     // git resolves tags/x and heads/x as refs/tags/x and refs/heads/x.
-    const [src, dst = src] = spec.replace(/^\+/, '').split(':').map((side) => side.replace(/^(tags|heads)\//, 'refs/$1/'));
-    if (isTag(dir, src) || isTag(dir, dst) || tags.has(src) || tags.has(dst)) return 'a tag push';
+    const sides = spec.replace(/^\+/, '').split(':');
+    const [src, dst = src] = sides.map((side) => side.replace(/^(tags|heads)\//, 'refs/$1/'));
+    // A source as typed resolves to a tag of that name (heads/x) before a branch refs/heads/x that does not exist.
+    if (isTag(dir, src) || isTag(dir, dst) || tags.has(sides[0]) || tags.has(dst)) return 'a tag push';
     targets.push(dst === '@' ? 'HEAD' : dst.replace(/^refs\/heads\//, ''));
     if (src !== '@') sources.push(src.replace(/^refs\/heads\//, ''));
   }
@@ -360,7 +362,7 @@ function push(args, dir, known, role, { switched, filled, tags }) {
 // The short options of git tag that take a value (in the same word, or the next one where the word ends with them), and its long
 // ones whose value may be the next word; git takes a prefix of each long option.
 const TAG_VALUE_SHORT = 'mFu';
-const TAG_VALUE_LONG = ['message', 'file', 'local-user', 'trailer', 'cleanup'];
+const TAG_VALUE_LONG = ['message', 'file', 'local-user', 'trailer', 'cleanup', 'sort', 'format'];
 // The forms of git tag that list, delete, verify or filter tags and create none: -n and the filters imply --list.
 const TAG_READ_SHORT = 'ldvn';
 const TAG_READ_LONG = ['list', 'delete', 'verify', 'contains', 'no-contains', 'points-at', 'merged', 'no-merged'];
