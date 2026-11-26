@@ -101,9 +101,24 @@ What it does:
 
 The hooks write only the handoff file. They read it, run `git` in its project folder (`ls-files`, `status`, `rev-parse`, `log`), read the modification times of the changed files git lists, and make no network request of their own.
 
+## Model map
+
+Every CedarLoom caller takes a session's or subagent's model and effort from one map: the coordinator, the workflow phases, the `full` workflow script and bot runs.
+
+```sh
+node plugins/cl-workflow/skills/workflow/models.mjs [<project path> | --repository <file>] [--depth quick|standard|deep] [--risk low|medium|high|critical] [--json]
+```
+
+- It prints each task's model and effort with the row and file that set it, at standard depth and low risk unless given. Files, later ones overriding earlier ones entry by entry: the defaults `plugins/cl-workflow/skills/workflow/models.json`, the user file `$XDG_CONFIG_HOME/cedarloom/cedarloom.json` (`~/.config/cedarloom/cedarloom.json` when that variable is unset or not absolute, [XDG base directory spec](https://specifications.freedesktop.org/basedir-spec/latest/)), which holds `models` only, and the repository file: the project's `cedarloom.json` in the working tree, or the `--repository` file (`-` reads it from stdin), and none without either. The coordinator and the project bot pass `cedarloom.json` as the policy reader read it from the default branch (`git show <commit>:cedarloom.json` with the `commit` the reader printed, piped to `--repository -`), so a local edit, another checked-out branch or a moved ref does not change their lookup. The schema of both files is `cedarloom.json`'s.
+- `models.roles` names `{ model, effort }` pairs; `models.tasks` gives each task a role name or an inline pair. A lookup takes the `tasks` row, then the `depth` row (`quick` or `deep`), which may lower or raise it, then the `risk` rows, which only raise it: `high`, and for `critical` the `high` row first, then the `critical` row.
+- Rank for raising: the model first (`haiku`, `sonnet`, `opus`, `fable`), then the effort (`low`, `medium`, `high`, `xhigh`, `max`).
+- `implement` and `fix` run only on `opus`: the schema refuses an inline pair with another model there, and the resolver refuses any file whose rows or roles put them on another model at any depth and risk. It exits 1 and names the row and file for every refused file.
+- `--hook` prints one line for a session's context, the roles and the command; the plugin's SessionStart hook runs it.
+- The plugin's agent files take their `model` and `effort` from the defaults through the generator. The skill lint refuses a literal model value (`--model opus`, `model: opus`, `"model": "opus"`, model `` `opus` ``, a model name next to an effort level) in the plugins outside the defaults file, the resolver, the schema, the agent files, tests and evals.
+
 ## Workflows
 
-A typed entry such as `/cl-workflow:dev` is generated from one JSON definition in `plugins/cl-workflow/definitions/<name>.json`: edit the definition, then run the generator. The generator is the only validator of the format and imports Node.js built-ins only.
+A typed entry such as `/cl-workflow:dev` is generated from one JSON definition in `plugins/cl-workflow/definitions/<name>.json`: edit the definition, then run the generator. The generator is the only validator of the format and imports Node.js built-ins and the model map's resolver only.
 
 | Field | Value |
 |---|---|
@@ -117,7 +132,7 @@ A typed entry such as `/cl-workflow:dev` is generated from one JSON definition i
 | `stages` | `[{ id, phases }]`; a phase has `id`, `run` (`session` or `agent`) and an optional `brief` |
 
 - A session phase has `step` (`settle` or `pull-request`; `settle` may set `questions`) and stands first or last in its stage.
-- An agent phase has `agent` (a name such as `cl-workflow:review`, never a path), `model` (`haiku`, `sonnet`, `opus`, `fable` or `inherit`), and optionally `effort` (`low` to `max`), `loop` and `with` (a phase of the same stage that has a loop, run beside it once).
+- An agent phase has `agent` (a name such as `cl-workflow:review`, never a path), `task` (a task of the [model map](#model-map), whose model and effort the phase runs on), and optionally `loop` and `with` (a phase of the same stage that has a loop, run beside it once).
 - A `loop` has `fix` (an earlier agent phase of the same stage), `maxRounds` (1 or 2; 1 where `fix` is the `cl-workflow:plan` agent), `escalate` (boolean) and an optional `recheck` agent.
 - A scripted definition starts only the agents `cl-workflow:plan`, `implement`, `test`, `verify`, `review` and `recheck`; a phase with `loop` or `with` and a `recheck` are `verify`, `review` or `recheck`, and `fix` is a `plan` or `implement` phase.
 - The test phase (`cl-workflow:test`) runs each test the change adds or changes on the base commit, in a scratch clone, and reports per test `fails on base`, `passes on base` or `not run on base` (blocked by a build or load error from code only other tests use). A test that passes on base is flagged as not proving the change; it fails the phase only when the change claims to fix a bug that test covers.
@@ -126,8 +141,8 @@ A typed entry such as `/cl-workflow:dev` is generated from one JSON definition i
 node plugins/cl-workflow/generator/generate.mjs <definition>... [--prefix <plugin name>|--prefix ''] [--out <folder>] [--check] [--json]
 ```
 
-- Defaults: prefix `cl-workflow`, out the plugin folder. It writes `skills/<name>/SKILL.md` and `skills/<name>/agents/openai.yaml` under the out folder, for `script: true` also `workflows/<name>.js`, and refuses to replace such a file that it did not generate. For `script: false` the entry names the playbook; the stages are validated, not written into it.
-- A script runs one stage per start, as the workflow `<prefix>:<name>-run`, and holds the stage's order, review rounds, trial and stuck reruns in code. The entry starts it and runs the session phases itself; where workflows are off or not allowed, it runs the phases as prose by the playbooks.
+- Defaults: prefix `cl-workflow`, out the plugin folder. It writes `skills/<name>/SKILL.md` and `skills/<name>/agents/openai.yaml` under the out folder, for `script: true` also `workflows/<name>.js`, and refuses to replace such a file that it did not generate. Into the plugin folder it also writes the `model` and `effort` of each `agents/<task>.md` from the model map's defaults. For `script: false` the entry names the playbook; the stages are validated, not written into it.
+- A script runs one stage per start, as the workflow `<prefix>:<name>-run`, and holds the stage's order, review rounds, trial and stuck reruns in code. It takes each phase's model and effort from `args.models`, the resolver's `--json` output for the run's depth and risk class, remediations from the `fix` task and separate re-reviews from `recheck`, and reruns a call that fails on another model once on `opus`. The entry starts it and runs the session phases itself; where workflows are off or not allowed, it runs the phases as prose by the playbooks.
 - `--check` writes nothing and exits 1 when a generated file differs; the plugin tests run it over the shipped definitions.
 - A refusal names the file, the field and the rule, and exits 1; nothing is written. The field is the path to the value: keys joined by `.`, array positions from 0 in brackets, such as `stages[1].phases[3].loop.maxRounds`; an empty field means the whole file. `--json` prints the refusals to standard output as an array of `{ "file", "field", "rule" }` (empty when none).
 - A project's own workflow: keep the definition in `.cedarloom/workflows/<name>.json` and run the installed plugin's generator from the project's root with `--prefix '' --out .claude` (`--prefix ''` needs `--out`). The generator of a plugin installed from this marketplace is `~/.claude/plugins/cache/cedarloom/cl-workflow/<version>/generator/generate.mjs` (under `CLAUDE_CODE_PLUGIN_CACHE_DIR` instead of `~/.claude/plugins` when that is set). The entry is then `/<name>` and a script `/<name>-run`; its header names `.cedarloom/workflows/<name>.json` wherever the generator read the file from. The entry needs `cl-workflow` installed and says so when it is not.

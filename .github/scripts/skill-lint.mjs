@@ -242,6 +242,19 @@ export function launchModes(files) {
   });
 }
 
+// A model and effort come from the model map: a literal value outside the defaults file, the resolver, the schema enum, the
+// agent files the generator writes from the defaults, tests and evals is refused. Rules about a model's behavior stay prose.
+const MODEL = '(?:haiku|sonnet|opus|fable)';
+// `--model opus`, `model: opus`, `"model": "opus"`, model `opus`, and a model name next to an effort level (`opus` at `high`).
+const LITERAL_MODEL = new RegExp(String.raw`\bmodel[\s'"*:=]+${MODEL}\b|\bmodel\s+\x60${MODEL}\b|\b${MODEL}\b[\s'"\x60*]*(?:at\s+|,\s*)?[\s'"\x60*]*\b(?:low|medium|high|xhigh|max)\b`, 'gi');
+const MAP_FILES = /(?:^|\/)(?:skills\/workflow\/models\.(?:json|mjs)|skills\/coordinate\/cedarloom\.schema\.json|agents\/[^/]+\.md|CHANGELOG\.md)$|(?:^|\/)(?:test|evals)\//;
+
+export const literalModels = (files) =>
+  files.filter((file) => !MAP_FILES.test(relative(root, file).split(sep).join('/'))).flatMap((file) => {
+    const text = readFileSync(file, 'utf8');
+    return [...text.matchAll(LITERAL_MODEL)].map((m) => `${file}:${text.slice(0, m.index).split('\n').length}: "${m[0]}" is a literal model value; take it from the model map (skills/workflow/models.json of cl-workflow)`);
+  });
+
 // The files every plugin ships; its tests name commands the hooks deny.
 export function pluginFiles() {
   const plugins = join(root, 'plugins');
@@ -257,7 +270,7 @@ if (isMain(import.meta.url)) {
   const dirs = process.argv.length > 2 ? process.argv.slice(2).map((d) => resolve(d)) : ownSkills();
   const agents = process.argv.length > 2 ? [] : ownAgents();
   const files = process.argv.length > 2 ? [] : pluginFiles();
-  const launches = [...bareLaunches(files), ...launchModes(files)];
+  const launches = [...bareLaunches(files), ...launchModes(files), ...literalModels(files)];
   const instructions = process.argv.length > 2 ? dirs.flatMap(markdownFiles) : [...pluginParts('skills'), ...pluginParts('agents'), ...pluginParts('rules')].flatMap(markdownFiles);
   const budgets = instructions.map((f) => wordBudget(relative(root, f).split(sep).join('/'), readFileSync(f, 'utf8')));
   const errors = [...dirs.flatMap(lintSkill), ...agents.flatMap(lintAgent), ...launches, ...budgets.flatMap((b) => b.errors)];

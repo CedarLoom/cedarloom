@@ -9,7 +9,7 @@
   },
   "homepage": "https://github.com/CedarLoom/cedarloom#readme",
   "repository": "https://github.com/CedarLoom/cedarloom",
-  "license": "ISC",
+  "license": "MIT",
   "engines": {
     "claude-code": ">=2.1.330"
   }

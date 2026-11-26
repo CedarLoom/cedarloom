@@ -1,4 +1,4 @@
-// Usage: node policy.mjs <project path>. Prints the project's effective coordinator policy as JSON; a file the schema rejects, a minPlugin newer than this plugin or an unreadable file prints each error and exits 1, and nothing may start there. Without the file it prints the defaults, exits 0 and says so on stderr.
+// Usage: node policy.mjs <project path>. Prints the project's effective coordinator policy as JSON, with `commit`, the commit of the default branch it read; a file the schema rejects, a minPlugin newer than this plugin or an unreadable file prints each error and exits 1, and nothing may start there. Without the file it prints the defaults, exits 0 and says so on stderr.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
 import { devNull } from 'node:os';
@@ -9,10 +9,6 @@ const FILE = 'cedarloom.json';
 const OWNER_ONLY = ['.github', 'CODEOWNERS', 'docs/CODEOWNERS', FILE, 'docs/agents/worker-rules.md', 'docs/agents', 'orca.yaml'];
 // A path with one of these names as a segment is the owner's at any depth: agents load nested instruction files and a .claude folder below the root, and editor, hook and container settings run commands on the host.
 const OWNER_ONLY_NAMES = ['.claude', '.mcp.json', 'AGENTS.md', 'CLAUDE.md', '.claude-plugin', '.codex', '.cursor', '.vscode', '.husky', '.githooks', '.pre-commit-config.yaml', '.devcontainer', '.devcontainer.json'];
-// A worker session's model and effort by the depth of its task, and for research. Every default effort is high: a higher one costs much more and is the owner's to ask for, in the policy.
-const DEPTHS = { quick: ['sonnet', 'high'], standard: ['opus', 'high'], deep: ['opus', 'high'], research: ['fable', 'high'] };
-// A sensitive change is planned and reviewed on the strongest model; xhigh only for the first independent review of a security or firmware-safety change (owner, 2026-11-12).
-const SENSITIVE = { plan: ['fable', 'high'], review: ['fable', 'high'], independent: ['fable', 'high'], security: ['fable', 'xhigh'] };
 
 // Text of a file, a path, a remote or a program on its way to the terminal: a control or format character could rewrite the line or cut the message, so each becomes a ?, or what `to` gives.
 export const escaped = (text, to = '?') => text.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, to);
@@ -41,14 +37,15 @@ export const sh = (cwd, cmd, args, timeout = 120_000, env = {}) => execFileSync(
 
 const kind = (v) => (v === null ? 'null' : Array.isArray(v) ? 'array' : Number.isInteger(v) ? 'integer' : typeof v);
 
-const KEYWORDS = ['$schema', '$id', 'title', 'type', 'enum', 'minLength', 'pattern', 'minimum', 'maximum', 'minItems', 'items', 'properties', 'additionalProperties', 'patternProperties'];
+const KEYWORDS = ['$schema', '$id', 'title', 'type', 'enum', 'minLength', 'pattern', 'minimum', 'maximum', 'minItems', 'items', 'properties', 'required', 'additionalProperties', 'patternProperties', 'anyOf'];
 // A schema edit that uses a keyword check() does not implement must fail every check, never pass files the schema refuses.
 function supported(s, at = 'the schema') {
   const bad = Object.keys(s).find((k) => !KEYWORDS.includes(k))
-    ?? ('additionalProperties' in s && s.additionalProperties !== false ? 'additionalProperties other than false' : undefined)
-    ?? (Object.values(s.patternProperties ?? {}).some((sub) => Object.keys(sub).length) ? 'patternProperties with rules' : undefined);
+    ?? ('additionalProperties' in s && s.additionalProperties !== false ? 'additionalProperties other than false' : undefined);
   if (bad) throw new Error(`${at} uses ${bad}, which the policy check does not implement`);
   for (const [k, sub] of Object.entries(s.properties ?? {})) supported(sub, `${at}.${k}`);
+  for (const [k, sub] of Object.entries(s.patternProperties ?? {})) supported(sub, `${at}./${k}/`);
+  (s.anyOf ?? []).forEach((sub, i) => supported(sub, `${at}.anyOf[${i}]`));
   if (s.items) supported(s.items, `${at}[]`);
   return s;
 }
@@ -68,6 +65,10 @@ function inlined(s, defs = s.$defs ?? {}) {
 // The JSON Schema keywords the shipped schema uses, nothing more.
 function check(s, v, path, out) {
   const fail = (rule, message) => out.push({ rule, path, message });
+  if (s.anyOf) {
+    if (!s.anyOf.some((sub) => { const own = []; check(sub, v, path, own); return !own.length; })) fail('any-of', `must be ${s.anyOf.map((sub) => sub.title).join(' or ')}`);
+    return;
+  }
   if (s.enum && !s.enum.includes(v)) return fail('enum', `must be one of ${s.enum.map((x) => JSON.stringify(x)).join(', ')}`);
   const want = s.type;
   if (want && kind(v) !== want && !(want === 'number' && kind(v) === 'integer')) return fail('type', `must be ${want}, not ${kind(v)}`);
@@ -79,13 +80,19 @@ function check(s, v, path, out) {
   }
   if (Array.isArray(v)) {
     if (s.minItems && v.length < s.minItems) fail('length', `must have at least ${s.minItems} entries`);
-    v.forEach((x, i) => check(s.items, x, `${path}[${i}]`, out));
+    if (s.items) v.forEach((x, i) => check(s.items, x, `${path}[${i}]`, out));
   } else if (kind(v) === 'object') {
     const at = (k) => (path ? `${path}.${k}` : k);
     const known = s.properties ?? {};
     for (const [k, sub] of Object.entries(known)) if (k in v) check(sub, v[k], at(k), out);
     const shown = (k) => at(escaped(k));
-    if (s.additionalProperties === false) for (const k of Object.keys(v)) if (!Object.hasOwn(known, k) && !Object.keys(s.patternProperties ?? {}).some((p) => new RegExp(p, 'u').test(k))) out.push({ rule: 'unknown-key', path: shown(k), message: 'is not a key the schema names (a comment key starts with //)' });
+    for (const k of s.required ?? []) if (!(k in v)) out.push({ rule: 'required', path: shown(k), message: 'is required' });
+    for (const k of Object.keys(v)) {
+      if (Object.hasOwn(known, k)) continue;
+      const pattern = Object.entries(s.patternProperties ?? {}).find(([p]) => new RegExp(p, 'u').test(k));
+      if (pattern) check(pattern[1], v[k], shown(k), out);
+      else if (s.additionalProperties === false) out.push({ rule: 'unknown-key', path: shown(k), message: 'is not a key the schema names (a comment key starts with //)' });
+    }
   }
 }
 
@@ -102,8 +109,6 @@ const REFUSED_REPOSITORY = { rule: 'refused', path: 'issues.repository', message
 const REFUSED_SANDBOX = { rule: 'refused', path: 'sandbox', message: 'is refused: CedarLoom does not support the Claude Code sandbox; remove the key' };
 
 const older = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i]; return false; };
-// Comment keys explain the file to its reader; the policy holds only what the coordinator acts on.
-const plain = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => !k.startsWith('//')));
 
 // { policy, errors, warnings }: the policy with every default filled in, or null with the errors.
 export function effective(file, version = pluginVersion()) {
@@ -116,7 +121,7 @@ export function effective(file, version = pluginVersion()) {
   if (!errors.length && doc.minPlugin && !version) errors.push({ rule: 'range', path: 'minPlugin', message: 'cannot be checked: the version of this plugin is unknown (no .claude-plugin/plugin.json two folders above the skill)' });
   else if (!errors.length && doc.minPlugin && older(version, doc.minPlugin)) errors.push({ rule: 'range', path: 'minPlugin', message: `must be at most ${version}, the version of this plugin` });
   if (errors.length) return { policy: null, errors, warnings };
-  const { merge = {}, review = {}, issues = {}, models = {} } = doc;
+  const { merge = {}, review = {}, issues = {} } = doc;
   return {
     errors,
     warnings,
@@ -145,11 +150,6 @@ export function effective(file, version = pluginVersion()) {
       review: { depth: review.depth ?? 'high', sensitiveDepth: review.sensitiveDepth ?? 'high', sensitivePaths: review.sensitivePaths ?? [] },
       issues: { labels: issues.labels ?? [] },
       minPlugin: doc.minPlugin ?? null,
-      models: {
-        worker: Object.fromEntries(Object.entries(DEPTHS).map(([depth, [model, effort]]) => [depth, { model: models.worker?.model ?? model, effort: models.worker?.effort ?? effort }])),
-        phases: Object.fromEntries(Object.entries(plain(models.phases ?? {})).map(([phase, named]) => [phase, plain(named)])),
-        sensitive: Object.fromEntries(Object.entries(SENSITIVE).map(([use, [model, effort]]) => [use, { model: models.sensitive?.[use]?.model ?? model, effort: models.sensitive?.[use]?.effort ?? effort }])),
-      },
     },
   };
 }
@@ -180,7 +180,7 @@ const pinned = (found) => {
 // git keeps the first remote.origin.uploadpack it reads, and the repository's config comes before -c: only the option overrides it.
 const UPLOAD_PACK = '--upload-pack=git-upload-pack';
 
-// The effective policy of the project in dir. A project without the file gets the defaults, which start and merge nothing, and absent: true.
+// The effective policy of the project in dir and the commit it read. A project without the file gets the defaults, which start and merge nothing, and absent: true.
 export function read(dir, run = sh) {
   let found;
   try { found = settings(run(dir, 'git', ['config', '--show-scope', '-z', '--list'])); } catch (e) {
@@ -204,14 +204,14 @@ export function read(dir, run = sh) {
   try {
     // ls-tree decides whether the file exists, so a show that fails is never read as "no file", which would mean the defaults. --full-tree: the path counts from the repository root, as in the show, also when dir is a folder below it.
     // The three local reads carry the pins as well: with origin as a promisor, a git that ignores GIT_NO_LAZY_FETCH fetches a missing tree or file from them, and that fetch runs no hook either.
-    if (!run(dir, 'git', [...pins, 'ls-tree', '--full-tree', '--name-only', commit, '--', FILE]).trim()) return { ...effective({}), absent: true };
+    if (!run(dir, 'git', [...pins, 'ls-tree', '--full-tree', '--name-only', commit, '--', FILE]).trim()) return { ...effective({}), commit, absent: true };
     // A blobless clone of origin holds the tree and not the file: the reader asks origin for that one object, with the pinned settings, since no lazy fetch runs here.
     if (partialClone(found)) run(dir, 'git', [...pins, 'fetch', UPLOAD_PACK, '--quiet', '--no-tags', '--no-recurse-submodules', '--no-write-fetch-head', 'origin', run(dir, 'git', [...pins, 'rev-parse', '--verify', `${commit}:${FILE}`]).trim()]);
     text = run(dir, 'git', [...pins, 'show', `${commit}:${FILE}`]);
   } catch { return unreadable(`git could not read ${FILE} from origin's default branch`); }
   let doc;
   try { doc = JSON.parse(text); } catch { return { policy: null, errors: [{ rule: 'bad-json', path: '', message: 'is not valid JSON' }] }; }
-  return effective(doc);
+  return { ...effective(doc), commit };
 }
 
 export const errorLine = (e) => `${e.rule}${e.path ? ` at ${e.path}` : ''}: ${e.message}`;
@@ -224,10 +224,10 @@ export const isMain = (url) => { try { return realpathSync(process.argv[1]) === 
 if (isMain(import.meta.url)) {
   try {
     if (process.argv.length !== 3) throw new Error('usage: node policy.mjs <project path>');
-    const { policy, errors, warnings = [], absent } = read(process.argv[2]);
+    const { policy, errors, warnings = [], absent, commit } = read(process.argv[2]);
     if (absent) console.error(`no ${FILE} on origin's default branch: these defaults start and merge nothing`);
     for (const e of [...warnings, ...errors]) console.error(errorLine(e));
-    if (policy) console.log(JSON.stringify(policy, null, 2));
+    if (policy) console.log(JSON.stringify({ commit, ...policy }, null, 2));
     process.exitCode = policy ? 0 : 1;
   } catch (e) {
     console.error(e.message.split('\n')[0]);

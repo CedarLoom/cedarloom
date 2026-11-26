@@ -23,17 +23,31 @@ const DEFAULT = {
   'cl-workflow:recheck': CLEAN,
 };
 
-// Runs one stage; `stubs` maps a call's label, else its agent, to the result. Returns each call as [agent, model] and the stage's result without its reason text.
+// args.models as the resolver prints it for the tasks of the full workflow.
+const MAP = {
+  plan: { model: 'opus', effort: 'high' },
+  verify: { model: 'opus', effort: 'high' },
+  implement: { model: 'opus', effort: 'high' },
+  fix: { model: 'opus', effort: 'high' },
+  test: { model: 'sonnet', effort: 'high' },
+  review: { model: 'opus', effort: 'high' },
+  audit: { model: 'opus', effort: 'high' },
+  recheck: { model: 'opus', effort: 'high' },
+};
+
+// Runs one stage, with MAP as args.models unless args names its own; `stubs` maps a call's label, else its agent, to the result, and a stub that is an Error is thrown. Returns each call as [agent, model], with its effort third when that is not high, and the stage's result without its reason text.
 async function run(args, stubs = {}) {
   const calls = [];
-  const agent = async (prompt, { agentType, model, label }) => {
-    calls.push([agentType, model]);
-    return stubs[label] ?? stubs[agentType] ?? DEFAULT[agentType];
+  const agent = async (prompt, { agentType, model, effort, label }) => {
+    calls.push(effort === 'high' ? [agentType, model] : [agentType, model, effort]);
+    const stub = stubs[label] ?? stubs[agentType] ?? DEFAULT[agentType];
+    if (stub instanceof Error) throw stub;
+    return stub;
   };
   const parallel = (thunks) => Promise.all(thunks.map((thunk) => thunk().catch(() => null)));
   const pipeline = () => assert.fail('pipeline is not used');
   const quiet = () => {};
-  const { reason, ...result } = await new AsyncFunction('agent', 'parallel', 'pipeline', 'phase', 'log', 'args', body)(agent, parallel, pipeline, quiet, quiet, args);
+  const { reason, ...result } = await new AsyncFunction('agent', 'parallel', 'pipeline', 'phase', 'log', 'args', body)(agent, parallel, pipeline, quiet, quiet, { models: MAP, ...args });
   assert.equal(typeof reason, 'string');
   return { calls, result };
 }
@@ -47,15 +61,17 @@ const start = [
 ];
 const done = (more) => ({ status: 'done', findings: [], minor: [], rounds: 0, phases: ['implement', 'test', 'review', 'audit'], ...more });
 
-test('full build: findings after every re-review end the stage after the third remediation, the last one stronger', async () => {
-  const { calls, result } = await run(build(), { 'cl-workflow:review': FOUND, 'cl-workflow:recheck': FOUND });
+const MEDIUM = { model: 'opus', effort: 'medium' };
+
+test('full build: findings after every re-review end the stage after the third remediation, the last one at a higher effort on opus', async () => {
+  const { calls, result } = await run(build({ models: { ...MAP, fix: MEDIUM } }), { 'cl-workflow:review': FOUND, 'cl-workflow:recheck': FOUND });
   assert.deepEqual(calls, [
     ...start,
-    ['cl-workflow:implement', 'opus'],
+    ['cl-workflow:implement', 'opus', 'medium'],
+    ['cl-workflow:recheck', 'opus'],
+    ['cl-workflow:implement', 'opus', 'medium'],
     ['cl-workflow:recheck', 'opus'],
     ['cl-workflow:implement', 'opus'],
-    ['cl-workflow:recheck', 'opus'],
-    ['cl-workflow:implement', 'fable'],
     ['cl-workflow:recheck', 'opus'],
   ]);
   assert.deepEqual(result, {
@@ -110,23 +126,38 @@ test('full build: the trial verifies before the first fix, and a disputed findin
   assert.deepEqual(disputed.result, done({ rounds: 1, phases: ['implement', 'test', 'review', 'audit', 'trial', 'review recheck 1'] }));
 });
 
-test('full build: an implement call stuck twice ends the stage after one rerun one step up', async () => {
-  const { calls, result } = await run(build(), { 'cl-workflow:implement': STUCK });
-  assert.deepEqual(calls, [
-    ['cl-workflow:implement', 'opus'],
-    ['cl-workflow:implement', 'fable'],
-  ]);
-  assert.deepEqual(result, { status: 'stopped', findings: [], minor: [], rounds: 0, phases: ['implement', 'implement rerun'], result: STUCK });
+test('full build: a fix on opus at high has no stronger step, so findings after round 2 end the stage', async () => {
+  const { calls, result } = await run(build(), { 'cl-workflow:review': FOUND, 'cl-workflow:recheck': FOUND });
+  assert.deepEqual(calls, [...start, ['cl-workflow:implement', 'opus'], ['cl-workflow:recheck', 'opus'], ['cl-workflow:implement', 'opus'], ['cl-workflow:recheck', 'opus']]);
+  assert.deepEqual(result, {
+    status: 'stopped',
+    findings: [IMPORTANT],
+    minor: [],
+    rounds: 2,
+    phases: ['implement', 'test', 'review', 'audit', 'implement round 1', 'review recheck 1', 'implement round 2', 'review recheck 2'],
+  });
 });
 
-test('full build: a stuck remediation reruns once one step up, and the next remediation is back on its own model', async () => {
-  const { calls, result } = await run(build(), { review: FOUND, 'review recheck 1': FOUND, 'implement round 1': STUCK });
+test('full build: an implement call stuck twice ends the stage after one rerun at a higher effort on opus, and at high after none', async () => {
+  const medium = await run(build({ models: { ...MAP, implement: MEDIUM } }), { 'cl-workflow:implement': STUCK });
+  assert.deepEqual(medium.calls, [
+    ['cl-workflow:implement', 'opus', 'medium'],
+    ['cl-workflow:implement', 'opus'],
+  ]);
+  assert.deepEqual(medium.result, { status: 'stopped', findings: [], minor: [], rounds: 0, phases: ['implement', 'implement rerun'], result: STUCK });
+  const high = await run(build(), { 'cl-workflow:implement': STUCK });
+  assert.deepEqual(high.calls, [['cl-workflow:implement', 'opus']]);
+  assert.deepEqual(high.result, { status: 'stopped', findings: [], minor: [], rounds: 0, phases: ['implement'], result: STUCK });
+});
+
+test('full build: a stuck remediation reruns once one step up, and the next remediation is back on its own effort', async () => {
+  const { calls, result } = await run(build({ models: { ...MAP, fix: MEDIUM } }), { review: FOUND, 'review recheck 1': FOUND, 'implement round 1': STUCK });
   assert.deepEqual(calls, [
     ...start,
+    ['cl-workflow:implement', 'opus', 'medium'],
     ['cl-workflow:implement', 'opus'],
-    ['cl-workflow:implement', 'fable'],
     ['cl-workflow:recheck', 'opus'],
-    ['cl-workflow:implement', 'opus'],
+    ['cl-workflow:implement', 'opus', 'medium'],
     ['cl-workflow:recheck', 'opus'],
   ]);
   assert.deepEqual(
@@ -166,4 +197,28 @@ test('full: a run without a known stage starts no agent', async () => {
     assert.deepEqual(calls, []);
     assert.deepEqual(result, { status: 'stopped', findings: [], minor: [], rounds: 0, phases: [] });
   }
+});
+
+test('full build: the map gives each phase its task, the remediation its fix task and the re-review its recheck task', async () => {
+  const models = { ...MAP, implement: { model: 'opus', effort: 'medium' }, fix: { model: 'opus', effort: 'low' }, recheck: { model: 'sonnet', effort: 'high' }, audit: { model: 'sonnet', effort: 'high' } };
+  const { calls } = await run(build({ models }), { review: FOUND });
+  assert.deepEqual(calls, [['cl-workflow:implement', 'opus', 'medium'], ...start.slice(1, 3), ['cl-workflow:review', 'sonnet'], ['cl-workflow:implement', 'opus', 'low'], ['cl-workflow:recheck', 'sonnet']]);
+});
+
+test('full build: a call that fails reruns once on opus, and a failure on opus ends the stage', async () => {
+  const refused = new Error('model not available');
+  const rerun = await run(build({ models: { ...MAP, test: { model: 'haiku', effort: 'low' } } }), { test: refused });
+  assert.deepEqual(rerun.calls, [['cl-workflow:implement', 'opus'], ['cl-workflow:test', 'haiku', 'low'], ['cl-workflow:test', 'opus', 'low'], ['cl-workflow:review', 'opus'], ['cl-workflow:review', 'opus']]);
+  assert.deepEqual(rerun.result, done({ phases: ['implement', 'test', 'test rerun on opus', 'review', 'audit'] }));
+
+  const stopped = await run(build(), { 'cl-workflow:test': refused });
+  assert.deepEqual(stopped.calls, [['cl-workflow:implement', 'opus'], ['cl-workflow:test', 'sonnet'], ['cl-workflow:test', 'opus']]);
+  assert.deepEqual(stopped.result, { status: 'stopped', findings: [], minor: [], rounds: 0, phases: ['implement', 'test', 'test rerun on opus'] });
+});
+
+test('full: a run whose args.models lacks a task of the workflow starts no agent', async () => {
+  const { fix, ...models } = MAP;
+  const { calls, result } = await run(build({ models }));
+  assert.deepEqual(calls, []);
+  assert.deepEqual(result, { status: 'stopped', findings: [], minor: [], rounds: 0, phases: [] });
 });

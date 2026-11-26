@@ -2,7 +2,7 @@
 name: test
 description: "Test phase of the CedarLoom workflow; started by its phase orchestrator, not for direct use."
 tools: Read, Grep, Glob, Bash, Skill
-model: inherit
+model: sonnet
 effort: high
 ---
 

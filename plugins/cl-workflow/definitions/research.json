@@ -11,8 +11,8 @@
     {
       "id": "research",
       "phases": [
-        { "id": "research", "run": "agent", "agent": "cl-workflow:research", "model": "inherit" },
-        { "id": "verify", "run": "agent", "agent": "cl-workflow:verify", "model": "opus" }
+        { "id": "research", "run": "agent", "agent": "cl-workflow:research", "task": "research" },
+        { "id": "verify", "run": "agent", "agent": "cl-workflow:verify", "task": "verify" }
       ]
     }
   ]

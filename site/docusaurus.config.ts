@@ -7,7 +7,6 @@ import {repoFacts} from './scripts/repo-facts.mts';
 
 const slug = 'CedarLoom/cedarloom';
 const repo = `https://github.com/${slug}`;
-const baseUrl = '/cedarloom/';
 const root = resolve(__dirname, '..');
 
 // An async config creator, so the build can read the repository facts first.
@@ -17,7 +16,8 @@ export default async (): Promise<Config> => ({
   favicon: 'cedarloom-icon.svg',
   future: {v4: true},
   url: 'https://cedarloom.github.io',
-  baseUrl,
+  // BASE_URL serves a pull request preview from its own folder (.github/workflows/preview.yml).
+  baseUrl: process.env.BASE_URL ?? '/cedarloom/',
   organizationName: 'CedarLoom',
   projectName: 'cedarloom',
   trailingSlash: false,

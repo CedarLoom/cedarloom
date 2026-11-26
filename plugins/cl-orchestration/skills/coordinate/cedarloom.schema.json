@@ -6,7 +6,11 @@
   "additionalProperties": false,
   "patternProperties": { "^//": {} },
   "$defs": {
-    "phase": { "type": "object", "additionalProperties": false, "patternProperties": { "^//": {} }, "properties": { "model": { "enum": ["fable", "opus", "sonnet", "haiku", "inherit"] }, "effort": { "enum": ["low", "medium", "high", "xhigh", "max"] } } }
+    "pair": { "title": "{ model, effort }", "type": "object", "additionalProperties": false, "patternProperties": { "^//": {} }, "required": ["model", "effort"], "properties": { "model": { "enum": ["haiku", "sonnet", "opus", "fable"] }, "effort": { "enum": ["low", "medium", "high", "xhigh", "max"] } } },
+    "role": { "title": "a role name", "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "value": { "anyOf": [{ "$ref": "#/$defs/role" }, { "$ref": "#/$defs/pair" }] },
+    "build": { "anyOf": [{ "$ref": "#/$defs/role" }, { "title": "{ model: opus, effort }", "type": "object", "additionalProperties": false, "patternProperties": { "^//": {} }, "required": ["model", "effort"], "properties": { "model": { "enum": ["opus"] }, "effort": { "enum": ["low", "medium", "high", "xhigh", "max"] } } }] },
+    "row": { "type": "object", "additionalProperties": false, "patternProperties": { "^//": {} }, "properties": { "coordinate": { "$ref": "#/$defs/value" }, "plan": { "$ref": "#/$defs/value" }, "review": { "$ref": "#/$defs/value" }, "recheck": { "$ref": "#/$defs/value" }, "verify": { "$ref": "#/$defs/value" }, "fresh-read": { "$ref": "#/$defs/value" }, "audit": { "$ref": "#/$defs/value" }, "research": { "$ref": "#/$defs/value" }, "implement": { "$ref": "#/$defs/build" }, "fix": { "$ref": "#/$defs/build" }, "test": { "$ref": "#/$defs/value" }, "docs": { "$ref": "#/$defs/value" }, "triage": { "$ref": "#/$defs/value" }, "digest": { "$ref": "#/$defs/value" }, "merge": { "$ref": "#/$defs/value" }, "gather": { "$ref": "#/$defs/value" }, "lookup": { "$ref": "#/$defs/value" } } }
   },
   "properties": {
     "$schema": { "type": "string" },
@@ -35,38 +39,10 @@
       "additionalProperties": false,
       "patternProperties": { "^//": {} },
       "properties": {
-        "worker": {
-          "type": "object",
-          "additionalProperties": false,
-          "patternProperties": { "^//": {} },
-          "properties": {
-            "model": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/\\[\\]-]{0,127}$" },
-            "effort": { "enum": ["low", "medium", "high", "xhigh", "max"] }
-          }
-        },
-        "phases": {
-          "type": "object",
-          "additionalProperties": false,
-          "patternProperties": { "^//": {} },
-          "properties": {
-            "plan": { "$ref": "#/$defs/phase" },
-            "implement": { "$ref": "#/$defs/phase" },
-            "test": { "$ref": "#/$defs/phase" },
-            "review": { "$ref": "#/$defs/phase" },
-            "research": { "$ref": "#/$defs/phase" }
-          }
-        },
-        "sensitive": {
-          "type": "object",
-          "additionalProperties": false,
-          "patternProperties": { "^//": {} },
-          "properties": {
-            "plan": { "$ref": "#/$defs/phase" },
-            "review": { "$ref": "#/$defs/phase" },
-            "independent": { "$ref": "#/$defs/phase" },
-            "security": { "$ref": "#/$defs/phase" }
-          }
-        }
+        "roles": { "type": "object", "additionalProperties": false, "patternProperties": { "^//": {}, "^[a-z][a-z0-9-]*$": { "$ref": "#/$defs/pair" } } },
+        "tasks": { "$ref": "#/$defs/row" },
+        "depth": { "type": "object", "additionalProperties": false, "patternProperties": { "^//": {} }, "properties": { "quick": { "$ref": "#/$defs/row" }, "deep": { "$ref": "#/$defs/row" } } },
+        "risk": { "type": "object", "additionalProperties": false, "patternProperties": { "^//": {} }, "properties": { "high": { "$ref": "#/$defs/row" }, "critical": { "$ref": "#/$defs/row" } } }
       }
     },
     "review": {
