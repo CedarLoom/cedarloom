@@ -54,7 +54,7 @@ A repository without an `AGENTS.md`, or whose `AGENTS.md` holds the block, gets 
 
 Conventions found in the code that differ from the stack defaults go in one line each under Commands or Pointers. One line under Pointers names the convention for commit subjects and pull request titles: the project's own (a contributing guide, the history), else [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/). No project summary or layout. Update: compare each part, fix failing or changed commands, and after asking remove a project summary or layout section and hand-written lines that repeat or contradict a rule of the block. The workflow skill reads a `Depth minimum:` line and no `Default tier:` line: after asking, turn a hand-written `Default tier: <tier>` line into `Depth minimum: <depth>` outside the block, with `full` as `deep`.
 
-With Claude Code selected and no project skill or doc on how to run the app (a UI, a CLI, a service): propose a committed `.claude/skills/verify/SKILL.md`, a few lines on how to start it, drive it as a user does and observe the result.
+The plan keeps a project skill on how to run the app (a UI, a CLI, a service). With Claude Code selected and neither such a skill nor a doc on it: propose a committed `.claude/skills/verify/SKILL.md`, a few lines on how to start the app, drive it as a user does and observe the result.
 
 `CLAUDE.md` beside that `AGENTS.md`, when Claude Code is selected: exactly `@AGENTS.md`. Claude Code reads `AGENTS.md` on its own only without a `CLAUDE.md`, and the import keeps one source of instructions (https://code.claude.com/docs/en/memory). Move any other content into `AGENTS.md` first, after asking.
 

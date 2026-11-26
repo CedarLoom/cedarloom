@@ -24,7 +24,7 @@ Every depth:
    - Risky: authentication, permissions, secrets, input validation, production data, deploy or production configuration, an irreversible action.
    - Which depth, first match: the user's depth; the `Depth:` line of a coordinator's spec; your pick from the table. A `Depth minimum:` line in `AGENTS.md` raises your pick to that depth; a risky change, to deep.
    - A software change also gets its risk class and the `Risk:` line ([risk.md](risk.md)). The class raises your pick too: high to deep, medium to standard.
-   - A visible result (UI, site, CLI output, rendered document) at standard or deep, not risky and risk below `high`, takes the [draft-first](draft.md) route.
+   - A software change's visible result (UI, site, CLI output, rendered document) at standard or deep, not risky and risk below `high`, takes the [draft-first](draft.md) route.
    - Before the first edit or command, write the depth line `Depth: <depth> (<reason>)`: the change type's name ([Change types](#change-types)), `research` or `docs pass`, or a few words when none fits, and `risky` when it is (`Depth: deep (new auth flow; risky)`).
    - Unsure between two depths: the deeper one.
    - The work grows past its depth: say so, write a new depth line, and run the skipped steps before the next edit.
@@ -98,7 +98,7 @@ A follow-up commit on an open pull request keeps its depth and needs no workflow
 
 ## Verify
 
-- Run the project's own build, types, lint and tests where `AGENTS.md` says, then run the change as a user meets it (app, CLI, browser with `webapp-testing` where installed, local service) as a project skill or doc says where one does (Claude Code: `/verify`); the pull request's Proof section says how, or "not run" and why.
+- Run the project's own build, types, lint and tests where `AGENTS.md` says, then run the change as a user meets it (app, CLI, browser with `webapp-testing` where installed, local service) as a project skill or doc says where one does (Claude Code: `/verify`); the pull request body says how, or "not run" and why.
 - A failing test: diagnose first (code, test or environment) and fix the cause. A flaky one gets no rerun, sleep or skip to green; no cause found: delete it, the reason in the commit and an issue. Edit a test only when it is wrong or the requirement changed, and say so in the pull request.
 - Test rule: no tests by default. Add one only when it meets all three:
   - it fails if the change is reverted;
@@ -109,6 +109,6 @@ A follow-up commit on an open pull request keeps its depth and needs no workflow
 - One slice (a row of the plan's acceptance table, where there is one) at a time: one test, the code that makes it pass, then the next.
 - Leave untested: copy or translations, CSS classes, constants, third-party libraries, private state, timing and call counts. A test like that is deleted when touched, not updated. Coverage is no target.
 - The project's own test rules in `AGENTS.md` win.
-- Browser and build output is git-ignored or deleted.
+- Screenshots, browser and build output are git-ignored or deleted.
 
 After a compaction, reread this skill and the current depth's playbook before the next step.
