@@ -16,8 +16,7 @@ export default async (): Promise<Config> => ({
   favicon: 'cedarloom-icon.svg',
   future: {v4: true},
   url: 'https://cedarloom.github.io',
-  // BASE_URL serves a pull request preview from its own folder (.github/workflows/preview.yml).
-  baseUrl: process.env.BASE_URL ?? '/cedarloom/',
+  baseUrl: '/cedarloom/',
   organizationName: 'CedarLoom',
   projectName: 'cedarloom',
   trailingSlash: false,

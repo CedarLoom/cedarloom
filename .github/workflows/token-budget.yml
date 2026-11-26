@@ -1,7 +1,9 @@
 name: Token budget
 
 # Writes the estimated token change of the files agents load into the pull request description; fails only above the budget in
-# .github/token-budget.json. Not a required check: a required check that the paths filter skips would stay pending.
+# .github/token-budget.json. Not a required check: a required check that the paths filter skips would stay pending. The
+# token-budget job runs code from the pull request with a read-only token; the report job, whose token can edit pull
+# requests, runs the block script of the default branch.
 on:
   pull_request:
     paths:
@@ -17,8 +19,6 @@ on:
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/token-budget.json'
       - '.github/workflows/token-budget.yml'
-      - '.github/scripts/token-budget-block.mjs'
-      - '.github/scripts/token-budget-block.test.mjs'
 
 permissions: {}
 
@@ -33,7 +33,6 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      pull-requests: write
     env:
       LC_ALL: C.UTF-8
       TB: head/plugins/cl-repo/skills/debloat/token-budget.mjs
@@ -58,19 +57,47 @@ jobs:
         run: node "$TB" check --root head --against "$RUNNER_TEMP/base.json" --budget-only > "$RUNNER_TEMP/report.md"
       - name: Job summary
         run: cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
-      # Pull requests from forks and from Dependabot get a read-only token.
-      # A block in the description, not a comment: the bot's other comments (the preview link) stay untouched.
-      - name: Report in the pull request description
-        if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-        run: |
-          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json body > "$RUNNER_TEMP/pr.json"
-          node head/.github/scripts/token-budget-block.mjs "$RUNNER_TEMP/pr.json" "$RUNNER_TEMP/report.md" > "$RUNNER_TEMP/body.md"
-          gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: token-budget-report
+          path: ${{ runner.temp }}/report.md
+          if-no-files-found: error
+          retention-days: 1
       - name: Budget
         if: steps.check.outcome == 'failure'
         run: |
           echo "::error::the token budget check failed: above the budget in .github/token-budget.json, or an error (see the job summary)"
           exit 1
+
+  # A block at the bottom of the description, not a comment. The script reads the description back and writes again when
+  # a review bot replaced it in between. Pull requests from forks and from Dependabot get a read-only token. Runs above
+  # the budget too, so the report shows why the check failed.
+  report:
+    if: >-
+      !cancelled() && github.repository == 'CedarLoom/cedarloom'
+      && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
+    needs: token-budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      # The default branch's script: no code from the pull request runs with this token.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: token-budget-report
+          path: ${{ runner.temp }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.4
+      - name: Report in the pull request description
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: node .github/scripts/token-budget-block.mjs "$GITHUB_REPOSITORY" "$PR" "$RUNNER_TEMP/report.md"
