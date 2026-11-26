@@ -6,7 +6,7 @@
     "name": "CedarLoom",
     "url": "https://github.com/CedarLoom"
   },
-  "license": "ISC",
+  "license": "MIT",
   "skills": "./skills/",
   "hooks": "./hooks/codex.json"
 }
