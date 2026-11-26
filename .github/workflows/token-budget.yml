@@ -17,8 +17,8 @@ on:
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/token-budget.json'
       - '.github/workflows/token-budget.yml'
-      - '.github/scripts/token-budget-block.mjs'
-      - '.github/scripts/token-budget-block.test.mjs'
+      - '.github/scripts/pr-description-block.mjs'
+      - '.github/scripts/pr-description-block.test.mjs'
 
 permissions: {}
 
@@ -59,16 +59,14 @@ jobs:
       - name: Job summary
         run: cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
       # Pull requests from forks and from Dependabot get a read-only token.
-      # A block in the description, not a comment: the bot's other comments (the preview link) stay untouched.
+      # A block in the description, not a comment. The script reads the description back and writes again when another
+      # workflow (the preview) or a bot replaced it in between.
       - name: Report in the pull request description
         if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-        run: |
-          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json body > "$RUNNER_TEMP/pr.json"
-          node head/.github/scripts/token-budget-block.mjs "$RUNNER_TEMP/pr.json" "$RUNNER_TEMP/report.md" > "$RUNNER_TEMP/body.md"
-          gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
+        run: node head/.github/scripts/pr-description-block.mjs "$GITHUB_REPOSITORY" "$PR" token-budget "$RUNNER_TEMP/report.md"
       - name: Budget
         if: steps.check.outcome == 'failure'
         run: |

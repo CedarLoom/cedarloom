@@ -1,9 +1,11 @@
 name: Preview
 
 # Builds the site of a pull request from this repository with the base URL of its preview and publishes it to
-# pr-preview/pr-<number>/ on the gh-pages branch with one sticky comment that links it; preview-cleanup.yml removes it
-# when the pull request closes. The build runs with a read-only token; the publish job runs no code from the pull
-# request. Pull requests from forks get no preview: their token cannot write. The paths match pages.yml.
+# pr-preview/pr-<number>/ on the gh-pages branch, then links it with a QR code in a block at the bottom of the pull request
+# description; preview-cleanup.yml removes it when the pull request closes. The build runs with a read-only token; the
+# publish job, the only one that can write contents, runs no code from the pull request. The describe job runs the block
+# script of the pull request with a token that can only edit pull requests, as token-budget.yml does. Pull requests from
+# forks get no preview: their token cannot write. The paths match pages.yml, plus the block script.
 on:
   pull_request:
     types: [opened, reopened, synchronize]
@@ -14,6 +16,7 @@ on:
       - '.github/scripts/skills-doc.mjs'
       - '.github/scripts/skill-lint.mjs'
       - '.github/scripts/main.mjs'
+      - '.github/scripts/pr-description-block.mjs'
       - '.github/workflows/preview.yml'
 
 permissions: {}
@@ -62,7 +65,9 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
-      pull-requests: write
+    outputs:
+      url: ${{ steps.deploy.outputs.preview-url }}
+      built: ${{ steps.deploy.outputs.action-start-time }}
     steps:
       # The preview action pushes to gh-pages from this checkout with its own token.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,6 +78,36 @@ jobs:
           name: site
           path: site/build
       - uses: rossjrw/pr-preview-action@873417d2df72380da1f3978378fb58560bcde976 # v1.8.2
+        id: deploy
         with:
           action: deploy
           source-dir: site/build
+          comment: false
+
+  describe:
+    if: github.repository == 'CedarLoom/cedarloom' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.4
+      # The QR code service and its parameters are the preview action's defaults for its comment.
+      - name: Link the preview in the pull request description
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          URL: ${{ needs.preview.outputs.url }}
+          BUILT: ${{ needs.preview.outputs.built }}
+        run: |
+          printf '<img src="https://qr.rossjrw.com/?color.dark=0d1117&url=%s" height="100" align="right" alt="QR code for preview link">\n\n**Site preview:** %s\n\nBuilt at %s; ready when the [GitHub Pages deployment](%s/%s/deployments) finishes.\n' \
+            "$URL" "$URL" "$BUILT" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" > "$RUNNER_TEMP/preview.md"
+          node .github/scripts/pr-description-block.mjs "$GITHUB_REPOSITORY" "$PR" preview "$RUNNER_TEMP/preview.md"
