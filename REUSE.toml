@@ -6,7 +6,7 @@ version = 1
 [[annotations]]
 path = "**"
 SPDX-FileCopyrightText = "2026 Eike Landin"
-SPDX-License-Identifier = "ISC"
+SPDX-License-Identifier = "MIT"
 
 # The CedarLoom name and logos are not under the code license: LICENSES/LicenseRef-Brand.txt, the brand repository's
 # own text.
