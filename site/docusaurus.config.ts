@@ -70,7 +70,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: 'Code and docs under the ISC license. The CedarLoom name and logos are not.',
+      copyright: 'Code and docs under the MIT license. The CedarLoom name and logos are not.',
     },
     prism: {theme: prismThemes.github, darkTheme: prismThemes.dracula},
   } satisfies Preset.ThemeConfig,
