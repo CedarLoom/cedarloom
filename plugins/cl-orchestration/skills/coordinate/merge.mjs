@@ -51,10 +51,12 @@ const GOOD = ['SUCCESS', 'SKIPPED', 'NEUTRAL'];
 // { name, state } of each check of a statusCheckRollup, state 'green', 'red' or 'pending': check runs carry status and conclusion, commit statuses a state.
 // The rollup lists every run of a check; as gh pr checks does, only the newest of each (by name and workflow, or a status's context) counts.
 export function checkStates(rollup) {
+  // A run that has not started has no start time, or gh's zero time: it is newer than every run that started.
+  const startOf = (c) => { const at = Date.parse(c.startedAt); return at > 0 ? at : Infinity; };
   const newest = new Map();
   for (const c of rollup ?? []) {
     const key = c.context ?? `${c.name}\n${c.workflowName}`;
-    if (!newest.has(key) || newest.get(key).startedAt < c.startedAt) newest.set(key, c);
+    if (!newest.has(key) || startOf(newest.get(key)) < startOf(c)) newest.set(key, c);
   }
   const done = (c) => (c.status === undefined ? !['PENDING', 'EXPECTED'].includes(c.state) : c.status === 'COMPLETED');
   return [...newest.values()].map((c) => ({ name: c.context ?? c.name, state: !done(c) ? 'pending' : GOOD.includes(c.conclusion ?? c.state) ? 'green' : 'red' }));

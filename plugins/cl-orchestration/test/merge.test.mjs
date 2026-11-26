@@ -262,6 +262,8 @@ test('merge: a required check that failed, has no run or still runs on the head 
     [[ci('COMPLETED', 'SUCCESS', minutesAgo(50)), ci('COMPLETED', 'FAILURE')], { outcome: 'stop', reason: 'required check(s) failed on the head: ci' }],
     [[ci('COMPLETED', 'SUCCESS', minutesAgo(30), 'lint')], { outcome: 'stop', reason: 'required check(s) have no run on the head: ci' }],
     [[ci('COMPLETED', 'FAILURE', minutesAgo(50)), ci('IN_PROGRESS', '')], { outcome: 'wait', reason: 'required check(s) still run on the head: ci' }],
+    // A queued run again, which gh lists with the zero time.
+    [[ci('COMPLETED', 'SUCCESS'), ci('QUEUED', '', '0001-01-01T00:00:00Z')], { outcome: 'wait', reason: 'required check(s) still run on the head: ci' }],
   ];
   for (const [rollup, answer] of held) {
     const b = checked(rollup);
