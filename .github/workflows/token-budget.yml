@@ -1,6 +1,6 @@
 name: Token budget
 
-# Comments the estimated token change of instruction files and docs on a pull request; fails only above the budget in
+# Writes the estimated token change of the files agents load into the pull request description; fails only above the budget in
 # .github/token-budget.json. Not a required check: a required check that the paths filter skips would stay pending.
 on:
   pull_request:
@@ -12,11 +12,13 @@ on:
       - 'plugins/*/agents/**'
       - 'plugins/*/rules/**'
       - 'README.md'
-      - 'docs/**'
+      - 'docs/agents/**'
       - '.github/PULL_REQUEST_TEMPLATE.md'
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/token-budget.json'
       - '.github/workflows/token-budget.yml'
+      - '.github/scripts/token-budget-block.mjs'
+      - '.github/scripts/token-budget-block.test.mjs'
 
 permissions: {}
 
@@ -57,12 +59,16 @@ jobs:
       - name: Job summary
         run: cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
       # Pull requests from forks and from Dependabot get a read-only token.
-      - name: Comment on the pull request
+      # A block in the description, not a comment: the bot's other comments (the preview link) stay untouched.
+      - name: Report in the pull request description
         if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-        run: gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --edit-last --create-if-none --body-file "$RUNNER_TEMP/report.md"
+        run: |
+          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json body > "$RUNNER_TEMP/pr.json"
+          node head/.github/scripts/token-budget-block.mjs "$RUNNER_TEMP/pr.json" "$RUNNER_TEMP/report.md" > "$RUNNER_TEMP/body.md"
+          gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
       - name: Budget
         if: steps.check.outcome == 'failure'
         run: |

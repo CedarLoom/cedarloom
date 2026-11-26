@@ -1,7 +1,10 @@
 ---
+slug: /concepts
 title: Concepts
 description: The ideas behind CedarLoom.
 ---
+
+import {DepthMap, ReviewLoop} from '@site/src/components/Diagrams';
 
 # Concepts
 
@@ -9,19 +12,7 @@ description: The ideas behind CedarLoom.
 
 Before the first edit, the `workflow` skill sorts the task by kind and gives it a depth. It writes the pick as a line you can check, such as `Depth: standard (bug)`.
 
-```mermaid
-flowchart TD
-  T[Task] --> K{Kind}
-  K --> S[Software change]
-  K --> D[Docs pass]
-  K --> R[Research]
-  S --> P{Depth}
-  D --> P
-  R --> P
-  P --> Q["quick: edit, check, commit"]
-  P --> St["standard: plan, test, one review"]
-  P --> De["deep: spec, tickets, review rounds"]
-```
+<DepthMap />
 
 | Depth | When |
 |---|---|
@@ -69,17 +60,8 @@ The agent may ask you while you are here. Run `/cl-workflow:away` when you leave
 
 Every pull request gets a fresh reviewer. A sensitive change (CI, guards, data formats, money, agent instructions) gets a deeper review plus a security review.
 
-```mermaid
-flowchart TD
-  PR[Pull request] --> Rev[Fresh review]
-  Rev -->|clean| Ready[Ready to merge]
-  Rev -->|Blocking or Important| Fix[Worker fixes]
-  Fix --> Re[Scoped re-review]
-  Re -->|clean| Ready
-  Re -->|findings, rounds 1 and 2| Fix
-  Re -->|findings after round 3| Owner[Owner decides]
-```
+<ReviewLoop />
 
 Round 3 runs the fix on a stronger model. Minor findings are listed, not fixed.
 
-Details: [the plugins](https://github.com/CedarLoom/cedarloom/blob/main/docs/plugins.md), [the workflow skill](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-workflow/skills/workflow/SKILL.md), [review](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-orchestration/skills/coordinate/review.md) and [merge](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-orchestration/skills/coordinate/merge.md).
+Details: [the plugins](/reference/plugins), [the workflow skill](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-workflow/skills/workflow/SKILL.md), [review](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-orchestration/skills/coordinate/review.md) and [merge](https://github.com/CedarLoom/cedarloom/blob/main/plugins/cl-orchestration/skills/coordinate/merge.md).
