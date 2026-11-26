@@ -17,6 +17,8 @@ on:
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/token-budget.json'
       - '.github/workflows/token-budget.yml'
+      - '.github/scripts/token-budget-block.mjs'
+      - '.github/scripts/token-budget-block.test.mjs'
 
 permissions: {}
 
