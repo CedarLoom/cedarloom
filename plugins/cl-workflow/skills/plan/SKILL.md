@@ -3,8 +3,9 @@ name: plan
 description: "Settles one task with you and writes the plan the workflow builds against: goal, scope, depth and risk, the steps, an acceptance table and the open questions."
 disable-model-invocation: true
 argument-hint: "<task, or the path of a plan to revise>"
-when: "On request, for work whose goal, scope or risk is open; headless as the prompt line /cl-workflow:plan <task>."
-writes: "One plan file outside the repository; without terminal questions, the open questions in one issue in the tracker the project names. Nothing in the repository."
+metadata:
+  when: "On request, for work whose goal, scope or risk is open; headless as the prompt line /cl-workflow:plan <task>."
+  writes: "One plan file outside the repository; without terminal questions, the open questions in one issue in the tracker the project names. Nothing in the repository."
 ---
 
 # Plan

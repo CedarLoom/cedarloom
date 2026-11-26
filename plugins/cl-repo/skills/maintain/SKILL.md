@@ -3,8 +3,9 @@ name: maintain
 description: "Runs a repository-wide maintenance pass: dead code, duplicates, unused options and dependencies, dependency cycles, test audit by mutation, shortcut debt, grouped dependency updates with changelog checks, version pins, docs drift, instruction-file audit, unused skills, repository hygiene."
 disable-model-invocation: true
 disallowed-tools: "Edit Write NotebookEdit"
-when: "On request, on a clean working tree."
-writes: "Nothing until you approve the findings (Edit and Write are off), apart from the verdicts in the project's local knowledge base and the `.cedarloom/knowledge/` line in `.git/info/exclude` that keeps it local; then the commits of each approved change under `workflow`."
+metadata:
+  when: "On request, on a clean working tree."
+  writes: "Nothing until you approve the findings (Edit and Write are off), apart from the verdicts in the project's local knowledge base and the `.cedarloom/knowledge/` line in `.git/info/exclude` that keeps it local; then the commits of each approved change under `workflow`."
 ---
 
 # Maintaining repositories

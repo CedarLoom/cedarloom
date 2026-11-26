@@ -3,8 +3,9 @@ name: full
 description: "Plans, builds, tests, reviews and security-checks one software change at deep depth, then opens its pull request and watches its checks."
 disable-model-invocation: true
 argument-hint: "<task>"
-when: "On request, for a software change you want run at deep depth with its round limits held by a workflow script."
-writes: "The depth and risk lines, a plan file outside the repository, the change's commits on a branch and its pull request in the project's convention."
+metadata:
+  when: "On request, for a software change you want run at deep depth with its round limits held by a workflow script."
+  writes: "The depth and risk lines, a plan file outside the repository, the change's commits on a branch and its pull request in the project's convention."
 ---
 <!-- Generated from definitions/full.json by generator/generate.mjs: edit the definition, not this file. -->
 

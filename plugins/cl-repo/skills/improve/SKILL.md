@@ -3,8 +3,9 @@ name: improve
 description: "Turns audit findings for agent instructions, docs or code into one diff per finding and applies the diffs you approve."
 disable-model-invocation: true
 argument-hint: "<path | instructions | docs | code>"
-when: "On request, after an audit, when the wording, placement or content of the target should change."
-writes: "The approved changes in the working tree, uncommitted. Nothing outside the repository."
+metadata:
+  when: "On request, after an audit, when the wording, placement or content of the target should change."
+  writes: "The approved changes in the working tree, uncommitted. Nothing outside the repository."
 ---
 
 Target: $ARGUMENTS (Codex: the text after the skill name), as in [audit](../audit/SKILL.md). No target: ask.

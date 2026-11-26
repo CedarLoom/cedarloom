@@ -3,8 +3,9 @@ name: lite
 description: "Runs a one-sentence software change with its checks, without the workflow skill, a plan, subagents or review."
 disable-model-invocation: true
 argument-hint: "<task>"
-when: "On request, for a change whose diff fits in one sentence."
-writes: "The depth and risk lines, the change's commit, and a pull request only where the project requires one."
+metadata:
+  when: "On request, for a change whose diff fits in one sentence."
+  writes: "The depth and risk lines, the change's commit, and a pull request only where the project requires one."
 ---
 
 # Lite

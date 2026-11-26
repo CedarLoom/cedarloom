@@ -3,8 +3,9 @@ name: dev
 description: "Runs one task as a software change through the workflow skill, at the depth its rules pick."
 disable-model-invocation: true
 argument-hint: "<task>"
-when: "On request, for a task you want run as a software change without the agent guessing its kind."
-writes: "The depth and risk lines before the first edit; through the workflow skill's playbooks commits and a pull request in the project's convention."
+metadata:
+  when: "On request, for a task you want run as a software change without the agent guessing its kind."
+  writes: "The depth and risk lines before the first edit; through the workflow skill's playbooks commits and a pull request in the project's convention."
 ---
 <!-- Generated from definitions/dev.json by generator/generate.mjs: edit the definition, not this file. -->
 

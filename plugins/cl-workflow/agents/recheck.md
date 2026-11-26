@@ -1,6 +1,6 @@
 ---
 name: recheck
-description: "Re-review of a fix under the CedarLoom workflow: the fix range and the earlier findings only; started by its phase orchestrator or the coordinator, not for direct use."
+description: "Re-review of a fix for the CedarLoom workflow: the fix range and the earlier findings only. Not for direct use."
 tools: Read, Grep, Glob, Bash, Skill, WebFetch, WebSearch
 model: opus
 effort: high

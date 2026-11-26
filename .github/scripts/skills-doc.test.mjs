@@ -18,34 +18,34 @@ test('every plugin skill has its row', () => {
   for (const s of sources()) assert.match(page, new RegExp(`^\\| \\[${s.name}\\]`, 'm'));
 });
 test('the when column comes from the field, else from the description after its first sentence', () => {
-  const agent = skillEntry(skill(['name: a', 'description: "Does a. Use when b."', 'writes: "c"']));
+  const agent = skillEntry(skill(['name: a', 'description: "Does a. Use when b."', 'metadata:', '  writes: "c"']));
   assert.deepEqual([agent.purpose, agent.when, agent.writes], ['Does a.', 'Use when b.', 'c']);
   assert.match(agent.start, /^the agent/);
-  const agentOnly = skillEntry(skill(['name: a', 'description: "Does a. Use when b."', 'user-invocable: false', 'writes: "c"']), 'cl-workflow');
+  const agentOnly = skillEntry(skill(['name: a', 'description: "Does a. Use when b."', 'user-invocable: false', 'metadata:', '  writes: "c"']), 'cl-workflow');
   assert.equal(agentOnly.start, 'the agent');
-  const user = skillEntry(skill(['name: u', 'description: "Does u."', 'disable-model-invocation: true', 'when: "On request."', 'writes: "x"']), 'cl-repo');
+  const user = skillEntry(skill(['name: u', 'description: "Does u."', 'disable-model-invocation: true', 'metadata:', '  when: "On request."', '  writes: "x"']), 'cl-repo');
   assert.equal(user.when, 'On request.');
   assert.equal(user.start, 'you: `/cl-repo:u` (Codex `$cl-repo:u`)');
-  const claudeOnly = skillEntry(skill(['name: u', 'description: "Does u."', 'disable-model-invocation: true', 'codex: false', 'when: "On request."', 'writes: "x"']), 'cl-orchestration');
+  const claudeOnly = skillEntry(skill(['name: u', 'description: "Does u."', 'disable-model-invocation: true', 'metadata:', '  when: "On request."', '  writes: "x"', '  codex: "false"']), 'cl-orchestration');
   assert.equal(claudeOnly.start, 'you: `/cl-orchestration:u`');
 });
 test('the first sentence ends where the earlier /^(.*?\.)(?:\s+(.*))?$/ ended it', () => {
   const FIRST = /^(.*?\.)(?:\s+(.*))?$/;
   for (const d of ['Does a. Use when b.', 'Does a.b. Use when c.', 'Does a.  Use when b.', 'v1.2 does a. When b.', 'Does a. When b. And c.']) {
     const [, purpose, rest] = FIRST.exec(d);
-    const e = skillEntry(skill(['name: a', `description: "${d}"`, 'writes: "c"']));
+    const e = skillEntry(skill(['name: a', `description: "${d}"`, 'metadata:', '  writes: "c"']));
     assert.deepEqual([e.purpose, e.when], [purpose, rest], d);
   }
-  // No second sentence: the earlier match had no rest, and without a when field the skill fails.
+  // No second sentence: the earlier match had no rest, and without metadata.when the skill fails.
   for (const d of ['Does a.', 'Does a. ']) {
     assert.ok(!FIRST.exec(d)[2], d);
-    assert.throws(() => skillEntry(skill(['name: a', `description: "${d}"`, 'writes: "c"'])), /when/, d);
+    assert.throws(() => skillEntry(skill(['name: a', `description: "${d}"`, 'metadata:', '  writes: "c"'])), /when/, d);
   }
-  assert.throws(() => skillEntry(skill(['name: a', 'description: "No period"', 'writes: "c"'])), /a sentence that ends with a period/);
+  assert.throws(() => skillEntry(skill(['name: a', 'description: "No period"', 'metadata:', '  writes: "c"'])), /a sentence that ends with a period/);
 });
 test('a skill without writes or when fails', () => {
   assert.throws(() => skillEntry(skill(['name: a', 'description: "Does a. Use when b."'])), /writes/);
-  assert.throws(() => skillEntry(skill(['name: a', 'description: "Does a."', 'writes: "c"'])), /when/);
+  assert.throws(() => skillEntry(skill(['name: a', 'description: "Does a."', 'metadata:', '  writes: "c"'])), /when/);
 });
 // Also started through a symlinked folder (the macOS temporary folder is one): the check must still run.
 test('--check fails on a page that differs from its sources', () => {

@@ -7,7 +7,8 @@ const lite = read('lite/SKILL.md');
 const workflow = read('workflow/SKILL.md');
 
 test('lite: a typed, short skill that loads no playbook', () => {
-  assert.ok(lite.split(/\s+/).filter(Boolean).length <= 350);
+  // The body only: Claude Code loads a skill without its front matter.
+  assert.ok(lite.replace(/^---\n[\s\S]*?\n---\n/, '').split(/\s+/).filter(Boolean).length <= 300);
   assert.match(lite, /^disable-model-invocation: true$/m);
   assert.doesNotMatch(lite, /\]\([^)]*(software|deep|risk)\.md/);
 });
