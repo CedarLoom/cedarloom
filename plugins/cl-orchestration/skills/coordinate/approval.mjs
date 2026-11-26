@@ -157,6 +157,16 @@ const queueDir = (create) => ownDir(QUEUE, create);
 // git exits 128 on any fatal error, and its message is translated: only without a .git here or above is there no repository.
 const inRepository = () => { for (let at = realpathSync('.'); ; at = dirname(at)) { if (existsSync(join(at, '.git'))) return true; if (dirname(at) === at) return false; } };
 
+// The lower-case paths, relative to the working directory, of the files git tracks in the queue folder, in any case, since macOS and Windows join names that differ only in case; none outside a repository.
+function trackedQueue() {
+  try {
+    return new Set(sh('.', 'git', ['ls-files', '-z', '--', `:(icase)${QUEUE.replaceAll(sep, '/')}/`]).split('\0').filter(Boolean).map((path) => path.toLowerCase()));
+  } catch (e) {
+    if (e.status === 128 && !inRepository()) return new Set();
+    throw e;
+  }
+}
+
 // Adds an existing folder of the working directory to info/exclude unless git ignores it already.
 function keepOut(folder, run) {
   try {
@@ -202,7 +212,10 @@ export function fileQuestion(text, project, run) {
 export function readQueue() {
   const dir = queueDir(false);
   const names = dir ? readdirSync(dir).filter((name) => name.endsWith('.md')).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })) : [];
+  const tracked = names.length ? trackedQueue() : new Set();
   return names.map((file) => {
+    // A tracked file came with a commit, which a merged pull request can carry: only an untracked local file is the owner's.
+    if (tracked.has(`${QUEUE.replaceAll(sep, '/')}/${file}`.toLowerCase())) return { file, error: 'is tracked by git: a question counts only as an untracked local file' };
     let body;
     try {
       body = readFileSync(join(dir, file), 'utf8');

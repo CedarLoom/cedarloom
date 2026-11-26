@@ -409,4 +409,11 @@ test('precheck: Pick leaves an issue while a question that names it waits for th
   assert.deepEqual(check('/p', run([]), {}, local('answered', true)), []);
   assert.deepEqual(check('/p', run([]), {}, local('answered', false)), [7]);
   assert.throws(() => check('/p', run([]), {}, () => [{ file: 'project-1.md', error: 'cannot be read (EISDIR)' }]), /the question project-1\.md cannot be read/);
+  // A list at its limit, or a question with as many comments as gh lists, may hide a question or its Hold: nothing starts.
+  const strangers = (n) => Array.from({ length: n }, (_, i) => ({ number: 100 + i, labels: [], body: 'Issue: owner/project#7', author: { login: 'stranger' }, comments: [] }));
+  assert.deepEqual(check('/p', run(strangers(999)), {}, none), [7]);
+  assert.throws(() => check('/p', run(strangers(1000)), {}, none), /returned its limit of 1000 issues/);
+  const chatter = (n) => Array.from({ length: n }, () => ({ author: { login: 'stranger' }, authorAssociation: 'NONE', body: 'me too', createdAt: '2026-11-20T11:00:00Z' }));
+  assert.deepEqual(check('/p', run([question([answered[0], ...chatter(98)], options)]), {}, none), [7]);
+  assert.throws(() => check('/p', run([question([answered[0], ...chatter(99)], options)]), {}, none), /owner\/project#20 has 100 comments or more/);
 });

@@ -294,6 +294,28 @@ test('approval: without a private tracker, the question goes into the local queu
   assert.equal(queue()[0].held, false);
 });
 
+test('approval: a question file that git tracks is no answer, only an untracked local one is', () => {
+  const script = fileURLToPath(new URL(`${SKILL}approval.mjs`, import.meta.url));
+  const repo = mkdtempSync(join(tmpdir(), 'cl-approval-'));
+  gitInit(repo);
+  const dir = join(repo, '.cedarloom/questions');
+  mkdirSync(dir, { recursive: true });
+  const answered = `Status: answered\n\n${FILLED}\nOwner answer (2026-11-15): a. Go.\n`;
+  for (const n of [1, 2, 3]) writeFileSync(join(dir, `project-${n}.md`), answered);
+  // A merged pull request can bring a file into the queue folder, also in another case, which macOS and Windows join.
+  execFileSync('git', ['add', '--force', '--', '.cedarloom/questions/project-1.md'], { cwd: repo });
+  const blob = execFileSync('git', ['hash-object', '-w', '--', '.cedarloom/questions/project-2.md'], { cwd: repo, encoding: 'utf8' }).trim();
+  execFileSync('git', ['update-index', '--add', '--cacheinfo', `100644,${blob},.CedarLoom/Questions/PROJECT-2.md`], { cwd: repo });
+  const r = spawnSync(process.execPath, [script, 'queue'], { cwd: repo, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  const tracked = 'is tracked by git: a question counts only as an untracked local file';
+  assert.deepEqual(JSON.parse(r.stdout), [
+    { file: 'project-1.md', error: tracked },
+    { file: 'project-2.md', error: tracked },
+    { file: 'project-3.md', status: 'answered', option: 'a', text: 'Go.', at: '2026-11-15', held: false },
+  ]);
+});
+
 test('approval: the digest folder is kept out of git with one exclude line, also on a second write', () => {
   const script = fileURLToPath(new URL(`${SKILL}approval.mjs`, import.meta.url));
   const repo = mkdtempSync(join(tmpdir(), 'cl-approval-'));
