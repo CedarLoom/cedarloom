@@ -1,6 +1,6 @@
 name: Token budget
 
-# Comments the estimated token change of instruction files and docs on a pull request; fails only above the budget in
+# Comments the estimated token change of the files agents load on a pull request; fails only above the budget in
 # .github/token-budget.json. Not a required check: a required check that the paths filter skips would stay pending.
 on:
   pull_request:
@@ -12,7 +12,7 @@ on:
       - 'plugins/*/agents/**'
       - 'plugins/*/rules/**'
       - 'README.md'
-      - 'docs/**'
+      - 'docs/agents/**'
       - '.github/PULL_REQUEST_TEMPLATE.md'
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/token-budget.json'
@@ -57,12 +57,13 @@ jobs:
       - name: Job summary
         run: cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
       # Pull requests from forks and from Dependabot get a read-only token.
+      # The header keeps this comment apart from the other comments of the same bot.
       - name: Comment on the pull request
         if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-        run: gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --edit-last --create-if-none --body-file "$RUNNER_TEMP/report.md"
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: token-budget
+          path: ${{ runner.temp }}/report.md
       - name: Budget
         if: steps.check.outcome == 'failure'
         run: |
