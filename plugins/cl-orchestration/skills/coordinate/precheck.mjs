@@ -107,7 +107,7 @@ export function priorities(repo, numbers, exec) {
   return found;
 }
 
-// gh issue list reads at most --limit issues and the first 100 comments of each (comments(first: 100) in https://github.com/cli/cli/blob/trunk/api/query_builder.go).
+// gh issue list reads at most --limit issues and the first 100 comments of each (comments(first: 100) in https://github.com/cli/cli/blob/trunk/api/query_builder.go); gh issue view reads every comment (preloadIssueComments in https://github.com/cli/cli/blob/trunk/pkg/cmd/issue/view/http.go).
 const ISSUES_LIMIT = 1000, COMMENTS_LIMIT = 100;
 
 // { tracker, numbers, priority }: the repository that holds the project's issues, the pickable ones and their Priority field; no tracker is read without a startLabel.
@@ -122,7 +122,7 @@ function picks(dir, run, env, queue) {
   const pulls = JSON.parse(run(dir, 'gh', ['pr', 'list', '-R', repo, '--state', 'all', '--limit', '1000', '--json', 'headRefName,state,isCrossRepository']))
     .filter((p) => p.state === 'MERGED' || (p.state !== 'CLOSED' && !p.isCrossRepository));
   const writes = writers(repo, (cmd, args) => run(dir, cmd, args));
-  // A list at its limit may leave out a question, and an issue at gh's 100 comments its Hold: a missing answer would release the issue, so nothing starts.
+  // A list at its limit may leave out a question, and a missing question would release its issue, so nothing starts.
   const listed = (...filter) => {
     const found = JSON.parse(run(dir, 'gh', ['issue', 'list', '-R', repo, ...filter, '--state', 'open', '--limit', String(ISSUES_LIMIT), '--json', 'number,labels,comments,author,body']));
     if (found.length >= ISSUES_LIMIT) throw new Error(`gh issue list ${filter.join(' ')} returned its limit of ${ISSUES_LIMIT} issues: a question past it may hold an issue`);
@@ -130,9 +130,9 @@ function picks(dir, run, env, queue) {
   };
   // An answered question has lost cl:needs-human, and a new one may not be in the search index yet: both lists count.
   // Only a trusted author's question holds an issue back: anyone can open an issue that names one.
-  const asked = [...listed('--label', 'cl:needs-human'), ...listed('--search', `"Issue: ${repo}#" in:body`)].filter(asks(policy, writes));
-  const long = asked.find((i) => i.comments.length >= COMMENTS_LIMIT);
-  if (long) throw new Error(`the question ${repo}#${long.number} has ${COMMENTS_LIMIT} comments or more, of which gh lists ${COMMENTS_LIMIT}: an answer past them may hold an issue`);
+  // A question at gh issue list's comment limit is read again with all its comments, so an answer or a Head comment past them counts.
+  const asked = [...listed('--label', 'cl:needs-human'), ...listed('--search', `"Issue: ${repo}#" in:body`)].filter(asks(policy, writes))
+    .map((i) => (i.comments.length >= COMMENTS_LIMIT ? JSON.parse(run(dir, 'gh', ['issue', 'view', String(i.number), '-R', repo, '--json', 'number,labels,comments,author,body'])) : i));
   const held = waiting(repo, asked, queue(), writes);
   // An answer that names no single option row holds its issue too: the line says why it is not picked.
   const said = [...held].sort((a, b) => a - b).map((n) => ({ rule: 'question', message: `a question without an answer that releases it holds ${repo}#${n}` }));
