@@ -38,28 +38,30 @@ Every case needs `--scaffold`. `--allow-tools` grants the gated tools for the wh
 
 The first complete run of every suite on `main`, `--runs 3`, with the model, the judge and the commit named here. Pass rate is passing runs over all runs; tokens, wall time and cost are the run's sums.
 
-Model: . Judge: . Commit: .
+Model: `claude-opus-5-5`. Judge: `haiku` (default). Commit: `3d94dbc9`.
+
+Pass rate, tokens, wall time and cost count the with-plugin runs only; the run also had the no-plugin arm (`with-without`), which is not in the table. Tokens are the sum of `inputTokens`, `cacheCreationInputTokens`, `cacheReadInputTokens` and `outputTokens` over the `modelUsage` of each run's final `result` event; cost is `costUsd` plus `judgeCostUsd`. One run of `coord-review-sensitive-level` timed out after 300 s and counts as failing.
 
 | Suite | Cases | Pass rate | Tokens | Wall time | Cost |
 |---|---|---|---|---|---|
-| `coord-start` | 3 | | | | |
-| `coord-watch` | 3 | | | | |
-| `coord-host-limit` | 3 | | | | |
-| `coord-follow-up` | 3 | | | | |
-| `coord-clean-up` | 3 | | | | |
-| `coord-commit` | 3 | | | | |
-| `coord-checks` | 3 | | | | |
-| `coord-bots` | 3 | | | | |
-| `coord-pick` | 3 | | | | |
-| `coord-merge` | 3 | | | | |
-| `coord-review` | 3 | | | | |
-| `coord-trial` | 3 | | | | |
-| `coord-untrusted` | 3 | | | | |
-| `coord-dialog` | 3 | | | | |
-| `coord-resume` | 3 | | | | |
-| `coord-approvals` | 3 | | | | |
-| `coord-policy` | 3 | | | | |
-| `coord-reconcile` | 3 | | | | |
-| `coord-outcomes` | 3 | | | | |
-| `coord-worker-rules` | 3 | | | | |
-| `coord-digest` | 3 | | | | |
+| `coord-start` | 3 | 1/9 (11%) | 0.65M | 16m39s | $1.36 |
+| `coord-watch` | 3 | 3/9 (33%) | 0.37M | 7m21s | $1.06 |
+| `coord-host-limit` | 3 | 8/9 (89%) | 0.16M | 6m38s | $0.87 |
+| `coord-follow-up` | 3 | 5/9 (56%) | 0.20M | 4m33s | $0.91 |
+| `coord-clean-up` | 3 | 0/9 (0%) | 0.59M | 4m14s | $1.25 |
+| `coord-commit` | 3 | 6/9 (67%) | 0.16M | 1m43s | $0.87 |
+| `coord-checks` | 3 | 3/9 (33%) | 0.20M | 2m29s | $0.89 |
+| `coord-bots` | 3 | 0/9 (0%) | 0.33M | 4m01s | $1.05 |
+| `coord-pick` | 3 | 6/9 (67%) | 0.16M | 2m45s | $0.83 |
+| `coord-merge` | 3 | 0/9 (0%) | 0.67M | 3m43s | $1.25 |
+| `coord-review` | 3 | 2/9 (22%) | 0.69M | 23m03s | $1.38 |
+| `coord-trial` | 3 | 2/9 (22%) | 0.55M | 7m16s | $1.33 |
+| `coord-untrusted` | 3 | 0/9 (0%) | 0.59M | 8m42s | $1.19 |
+| `coord-dialog` | 3 | 3/9 (33%) | 0.19M | 1m35s | $0.88 |
+| `coord-resume` | 3 | 1/9 (11%) | 0.38M | 5m23s | $1.07 |
+| `coord-approvals` | 3 | 4/9 (44%) | 0.40M | 9m37s | $1.21 |
+| `coord-policy` | 3 | 2/9 (22%) | 0.38M | 2m58s | $1.04 |
+| `coord-reconcile` | 3 | 3/9 (33%) | 0.34M | 4m23s | $1.02 |
+| `coord-outcomes` | 3 | 0/9 (0%) | 0.51M | 3m18s | $1.09 |
+| `coord-worker-rules` | 3 | 1/9 (11%) | 0.34M | 5m20s | $1.08 |
+| `coord-digest` | 3 | 2/9 (22%) | 0.42M | 2m23s | $1.10 |
