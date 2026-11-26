@@ -105,7 +105,7 @@ function merged(found) {
 function valueOf(map, { value, file }, row) {
   if (typeof value !== 'string') return { model: value.model, effort: value.effort, row, file };
   const role = map.roles[value];
-  if (!role) throw new Refused(`${row} in the ${file} file names the role ${value}, which no file defines`);
+  if (!Object.hasOwn(map.roles, value)) throw new Refused(`${row} in the ${file} file names the role ${value}, which no file defines`);
   return { model: role.model, effort: role.effort, row, file, role: `roles.${value}`, roleFile: role.file };
 }
 
@@ -131,18 +131,17 @@ function lookup(map, task, depth, risk) {
 // The defaults file alone, at standard depth and low risk: what the plugin ships.
 export const defaultMap = () => resolveMap({ project: null, env: null });
 
-// { files, tasks }: every task's { model, effort, row, file, role?, roleFile? } at that depth and risk. Refuses a map that puts implement or fix on another model than BUILD_MODEL at any depth and risk.
+// { files, tasks }: every task's { model, effort, row, file, role?, roleFile? } at that depth and risk. Refuses a map with a row that puts implement or fix on another model than BUILD_MODEL.
 export function resolveMap({ project = '.', depth = 'standard', risk = 'low', env = process.env } = {}) {
   if (!DEPTHS.includes(depth)) throw new Refused(`depth must be one of ${DEPTHS.join(', ')}`);
   if (!Object.hasOwn(RISK_ROWS, risk)) throw new Refused(`risk must be one of ${Object.keys(RISK_ROWS).join(', ')}`);
   const found = layers({ project, env });
   const map = merged(found);
-  // Every row's role name is checked, not only the rows this lookup reads.
-  for (const [task, entry] of Object.entries(map.tasks)) valueOf(map, entry, `tasks.${task}`);
-  for (const key of ['depth', 'risk']) for (const [name, row] of Object.entries(map[key])) for (const [task, entry] of Object.entries(row)) valueOf(map, entry, `${key}.${name}.${task}`);
-  for (const d of DEPTHS) for (const r of Object.keys(RISK_ROWS)) for (const task of BUILD_TASKS) {
-    const v = lookup(map, task, d, r);
-    if (v.model !== BUILD_MODEL) throw new Refused(`${source(v)} puts ${task} on ${v.model} at depth ${d}, risk ${r}: ${task} runs only on ${BUILD_MODEL}`);
+  // Every row is checked, not only the rows this lookup reads: its role name exists, and implement and fix are on BUILD_MODEL in each row, a lower-ranked risk value included.
+  const rows = [...Object.entries(map.tasks).map(([task, entry]) => [task, entry, `tasks.${task}`]), ...['depth', 'risk'].flatMap((key) => Object.entries(map[key]).flatMap(([name, row]) => Object.entries(row).map(([task, entry]) => [task, entry, `${key}.${name}.${task}`])))];
+  for (const [task, entry, row] of rows) {
+    const v = valueOf(map, entry, row);
+    if (BUILD_TASKS.includes(task) && v.model !== BUILD_MODEL) throw new Refused(`${source(v)} puts ${task} on ${v.model}: ${task} runs only on ${BUILD_MODEL}`);
   }
   return {
     depth,

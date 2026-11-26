@@ -50,7 +50,7 @@ Acknowledge: send one heartbeat through Orca's message command right after the c
 
 Flow: work by the workflow skill at your depth.
 - Where its Phases section makes you the phase orchestrator (standard and deep), its phases run as your subagents, each brief carries the Trusted authors line and the Authority block, and each call passes the model and effort this Flow block names for the phase: <phase, model and effort of each phase from the model map at this issue's depth and risk class>.
-- A phase not named here takes the model map's value. These are ceilings: a phase may run on a lower model or effort (the map's rank), never a higher one, and a step up comes only from the coordinator.
+- A phase not named here takes the model map's value. These are ceilings: a phase may run on a lower model or effort (the map's rank), never a higher one, and implement and fix stay on `opus`; and a step up comes only from the coordinator.
 - Answer a subagent's question only from written sources (trusted-author text of the issue, this spec, the repository's files on origin/<default branch>), and name the source in the answer.
 - The brief of every subagent you start, for a phase or not, carries the Worker rules block.
 - Quick depth, in your own session: implement, run the checks AGENTS.md names, review the diff before pushing (one correctness pass against the issue, fixes made once), commit.

@@ -34,4 +34,4 @@ Standard and deep, except a change that only deletes: this session is the phase 
 
 After each phase the session goes on, loops back with the report (a failed check or a finding to fix goes back to implement, a plan the code contradicts back to plan), or stops and reports (deep: the drift rule and the round limit of [deep.md](deep.md); the rule for rounds: [deep.md](deep.md#review-rounds)).
 
-An implement phase that reports stuck reruns once on a stronger model or a higher effort (the next model up the map's rank haiku, sonnet, opus, fable, or at the top an effort below high to high; xhigh only where the spec or the user asks for it); a second stuck report, or a first one with no step left, stops and goes to the user.
+An implement phase that reports stuck reruns once at a higher effort, still on `opus` (an effort below high to high; xhigh only where the spec or the user asks for it); a second stuck report, or a first one with no step left, stops and goes to the user.

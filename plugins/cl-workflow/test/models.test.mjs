@@ -63,10 +63,12 @@ test('models: a critical lookup applies the high row, then the critical row', ()
 
 test('models: implement and fix run only on opus, whatever row or role would move them', () => {
   for (const [user, message] of [
-    [{ models: { tasks: { implement: 'light' } } }, /tasks\.implement \(user\), roles\.light \(default\) puts implement on sonnet at depth quick, risk low/],
+    [{ models: { tasks: { implement: 'light' } } }, /tasks\.implement \(user\), roles\.light \(default\) puts implement on sonnet: implement runs only on opus/],
     [{ models: { depth: { quick: { fix: { model: 'sonnet', effort: 'high' } } } } }, /depth\.quick\.fix \(user\) puts fix on sonnet/],
-    [{ models: { risk: { critical: { fix: { model: 'fable', effort: 'high' } } } } }, /risk\.critical\.fix \(user\) puts fix on fable at depth quick, risk critical/],
+    [{ models: { risk: { critical: { fix: { model: 'fable', effort: 'high' } } } } }, /risk\.critical\.fix \(user\) puts fix on fable/],
     [{ models: { roles: { build: { model: 'haiku', effort: 'high' } } } }, /tasks\.implement \(default\), roles\.build \(user\) puts implement on haiku/],
+    // A risk value below the tasks row would never be taken; the row is refused all the same.
+    [{ models: { risk: { high: { fix: { model: 'sonnet', effort: 'high' } } } } }, /risk\.high\.fix \(user\) puts fix on sonnet/],
   ]) assert.throws(() => resolveMap(setup({ user })), message);
 });
 
@@ -76,6 +78,7 @@ test('models: a file is refused for an unknown task, key or value, a role nobody
     [{ user: { models: { risk: { medium: {} } } } }, /models\.risk\.medium: unknown key/],
     [{ user: { models: { roles: { deep: { model: 'claude-opus-5', effort: 'high' } } } } }, /models\.roles\.deep\.model: must be one of haiku, sonnet, opus, fable/],
     [{ user: { models: { tasks: { review: 'strongest' } } } }, /tasks\.review in the user file names the role strongest, which no file defines/],
+    [{ user: { models: { tasks: { review: 'constructor' } } } }, /tasks\.review in the user file names the role constructor, which no file defines/],
     [{ repository: { models: { depth: { deep: { test: 'typo' } } } } }, /depth\.deep\.test in the repository file names the role typo/],
     [{ user: { startLabel: 'ready', models: {} } }, /startLabel: the user file holds models only/],
   ]) assert.throws(() => resolveMap(setup(files)), message);

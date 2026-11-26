@@ -80,7 +80,7 @@ function check(s, v, path, out) {
   }
   if (Array.isArray(v)) {
     if (s.minItems && v.length < s.minItems) fail('length', `must have at least ${s.minItems} entries`);
-    v.forEach((x, i) => check(s.items, x, `${path}[${i}]`, out));
+    if (s.items) v.forEach((x, i) => check(s.items, x, `${path}[${i}]`, out));
   } else if (kind(v) === 'object') {
     const at = (k) => (path ? `${path}.${k}` : k);
     const known = s.properties ?? {};

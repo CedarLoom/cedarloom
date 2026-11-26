@@ -1,7 +1,7 @@
 // The runner each generated workflow script carries inline after its constants `meta` and `FLOW`: one stage per run, its rounds held in code.
 // Globals of a workflow script: agent, parallel, args. A stage returns { status, reason, plan?, findings, minor, rounds, phases, result? }.
 
-// The stronger step: the model one up in the map's rank (FLOW.models), at the top an effort below high to high; xhigh never.
+// The stronger step: the model one up in the map's rank (FLOW.models), at the top an effort below high to high; xhigh never. Code (implement and fix) stays on its model: only the effort goes up.
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const text = { type: 'string' };
 const texts = { type: 'array', items: text };
@@ -48,10 +48,10 @@ function resolved(phase, task = phase.task) {
   return { model: override.model ?? input.models[task].model, effort: override.effort ?? input.models[task].effort, recheckModel: override.recheckModel };
 }
 
-function stronger({ model, effort }) {
+function stronger({ model, effort }, code) {
   const at = FLOW.models.indexOf(model);
   if (at === -1) return undefined;
-  if (at < FLOW.models.length - 1) return { model: FLOW.models[at + 1], effort };
+  if (!code && at < FLOW.models.length - 1) return { model: FLOW.models[at + 1], effort };
   if (EFFORTS.indexOf(effort) < EFFORTS.indexOf('high')) return { model, effort: 'high' };
 }
 
@@ -90,7 +90,7 @@ async function call(label, group, agentType, role, prompt, { model, effort }) {
 async function change(phase, label, prompt, step, findings) {
   const first = await call(label, phase.id, phase.agent, 'change', prompt, step);
   if (first.status !== 'stuck') return first;
-  const up = stronger(step);
+  const up = stronger(step, true);
   if (!up) throw new Stop(`${label} reported stuck with no stronger step left`, findings, first);
   const again = await call(`${label} rerun`, phase.id, phase.agent, 'change', prompt, up);
   if (again.status !== 'stuck') return again;
@@ -114,7 +114,7 @@ async function loop(phase) {
     if (round > limit) throw new Stop(`${phase.id} findings remain after round ${round - 1}: a question for the user`, found);
     // A remediation of code runs as the map's fix task; a plan revision as the plan's own.
     const fix = resolved(fixer, fixer.role === 'change' ? 'fix' : fixer.task);
-    const step = round > phase.loop.maxRounds ? stronger(fix) : fix;
+    const step = round > phase.loop.maxRounds ? stronger(fix, fixer.role === 'change') : fix;
     if (!step) throw new Stop(`${phase.id} findings remain after round ${round - 1} and no stronger step is left: a question for the user`, found);
     run.rounds++;
     // Disputed findings go unfixed, with their evidence, to the re-review.

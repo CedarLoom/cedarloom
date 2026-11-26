@@ -104,7 +104,7 @@ test('policy: minPlugin newer than the plugin gives no policy, and versions comp
 });
 
 test('policy: the schema takes a models section of roles, tasks, depth and risk rows, and keeps implement and fix inline on opus', () => {
-  assert.deepEqual(validate({ models: { '//': 'note', roles: { top: { model: 'fable', effort: 'high' } }, tasks: { review: 'top', implement: { model: 'opus', effort: 'medium' } }, depth: { quick: { plan: 'light' } }, risk: { critical: { review: { model: 'fable', effort: 'xhigh' } } } } }), []);
+  assert.deepEqual(validate({ '//': ['a comment', 'in lines'], models: { '//': 'note', roles: { top: { model: 'fable', effort: 'high' } }, tasks: { review: 'top', implement: { model: 'opus', effort: 'medium' } }, depth: { quick: { plan: 'light' } }, risk: { critical: { review: { model: 'fable', effort: 'xhigh' } } } } }), []);
 });
 
 test('policy: a path entry that leaves the repository, starts at its root or holds a glob is rejected', () => {
