@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 const FILE = 'cedarloom.json';
 // Pull requests on these paths are left for the owner, and a policy adds to the list and cannot shorten it: what CI runs and who reviews (.github, CODEOWNERS), the coordinator's own rules and what agents are told (cedarloom.json, docs/agents), and orca.yaml, whose scripts run on the host.
 const OWNER_ONLY = ['.github', 'CODEOWNERS', 'docs/CODEOWNERS', FILE, 'docs/agents/worker-rules.md', 'docs/agents', 'orca.yaml'];
-// A path with one of these names as a segment is the owner's at any depth: agents load nested instruction files and a .claude folder below the root, and editor, hook and container settings run commands on the host.
-const OWNER_ONLY_NAMES = ['.claude', '.mcp.json', 'AGENTS.md', 'CLAUDE.md', '.claude-plugin', '.codex', '.cursor', '.vscode', '.husky', '.githooks', '.pre-commit-config.yaml', '.devcontainer', '.devcontainer.json'];
+// A path with one of these names as a segment is the owner's at any depth: agents load nested instruction files and a .claude folder below the root, editor, hook and container settings run commands on the host, and .cedarloom holds the coordinator's runs and the owner's question queue, in whichever folder the coordinator works.
+const OWNER_ONLY_NAMES = ['.cedarloom', '.claude', '.mcp.json', 'AGENTS.md', 'CLAUDE.md', '.claude-plugin', '.codex', '.cursor', '.vscode', '.husky', '.githooks', '.pre-commit-config.yaml', '.devcontainer', '.devcontainer.json'];
 
 // Text of a file, a path, a remote or a program on its way to the terminal: a control or format character could rewrite the line or cut the message, so each becomes a ?, or what `to` gives.
 export const escaped = (text, to = '?') => text.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, to);

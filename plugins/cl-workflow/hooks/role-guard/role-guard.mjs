@@ -283,7 +283,8 @@ function folder(dir, args) {
 // known: dir is the folder git runs in. Otherwise dir is one of the folders it may run in, and only a named branch is read.
 // switched: an earlier git command in the same command line changes the branch, which the guard reads before the line runs.
 // filled: the shell fills in words of the push at run time (a backtick substitution, or xargs), which the guard never sees.
-function push(args, dir, known, role, { switched, filled }) {
+// tags: the tags an earlier git tag in the same command line creates, which do not exist yet when the guard reads the repository.
+function push(args, dir, known, role, { switched, filled, tags }) {
   if (BOTS.has(role) && !OWN_BRANCH.has(role)) return 'a push';
   const own = OWN_BRANCH.has(role);
   if (own && switched) return 'a push after a branch switch in the same command';
@@ -331,9 +332,13 @@ function push(args, dir, known, role, { switched, filled }) {
   const sources = [];
   for (const spec of specs) {
     if (own && /^(\+|:)/.test(spec)) return 'a force or delete push';
+    // A glob refspec (refs/heads/*:refs/heads/*) and the matching refspec (: or +:) push many refs, the default branch and tags among them.
+    if (spec.includes('*') || /^\+?:$/.test(spec)) return 'a push of every branch';
     // git resolves tags/x and heads/x as refs/tags/x and refs/heads/x.
-    const [src, dst = src] = spec.replace(/^\+/, '').split(':').map((side) => side.replace(/^(tags|heads)\//, 'refs/$1/'));
-    if (isTag(dir, src) || isTag(dir, dst)) return 'a tag push';
+    const sides = spec.replace(/^\+/, '').split(':');
+    const [src, dst = src] = sides.map((side) => side.replace(/^(tags|heads)\//, 'refs/$1/'));
+    // A source as typed resolves to a tag of that name (heads/x) before a branch refs/heads/x that does not exist.
+    if (isTag(dir, src) || isTag(dir, dst) || tags.has(sides[0]) || tags.has(dst)) return 'a tag push';
     targets.push(dst === '@' ? 'HEAD' : dst.replace(/^refs\/heads\//, ''));
     if (src !== '@') sources.push(src.replace(/^refs\/heads\//, ''));
   }
@@ -354,7 +359,39 @@ function push(args, dir, known, role, { switched, filled }) {
   return other ? `a push that names ${other}, which is not the branch checked out where git runs` : null;
 }
 
-// gitDir: the command text sets GIT_DIR. line.switched records a branch switch for the pushes after it.
+// The short options of git tag that take a value (in the same word, or the next one where the word ends with them), and its long
+// ones whose value may be the next word; git takes a prefix of each long option.
+const TAG_VALUE_SHORT = 'mFu';
+const TAG_VALUE_LONG = ['message', 'file', 'local-user', 'trailer', 'cleanup', 'sort', 'format'];
+// The forms of git tag that list, delete, verify or filter tags and create none: -n and the filters imply --list.
+const TAG_READ_SHORT = 'ldvn';
+const TAG_READ_LONG = ['list', 'delete', 'verify', 'contains', 'no-contains', 'points-at', 'merged', 'no-merged'];
+
+// The tag a git tag command creates, its first word that is no option or an option's value; null for a form that creates none.
+function createdTag(args) {
+  const names = [];
+  for (let j = 0; j < args.length; j++) {
+    const w = args[j];
+    if (w === '--') {
+      names.push(...args.slice(j + 1));
+      break;
+    }
+    if (w.startsWith('--')) {
+      const name = w.slice(2).split('=')[0];
+      if (TAG_READ_LONG.some((option) => option.startsWith(name))) return null;
+      if (!w.includes('=') && TAG_VALUE_LONG.some((option) => option.startsWith(name))) j++;
+    } else if (w.startsWith('-') && w.length > 1) {
+      const flags = w.slice(1);
+      const value = [...flags].findIndex((flag) => TAG_VALUE_SHORT.includes(flag));
+      if ([...(value < 0 ? flags : flags.slice(0, value))].some((flag) => TAG_READ_SHORT.includes(flag))) return null;
+      if (value === flags.length - 1) j++;
+    } else names.push(w);
+  }
+  return names[0] ?? null;
+}
+
+// gitDir: the command text sets GIT_DIR. line.switched records a branch switch and line.tags each tag a git tag creates, for the
+// pushes after it.
 function git(args, cwd, known, gitDir, role, line) {
   let i = 0;
   let dir = cwd;
@@ -377,6 +414,8 @@ function git(args, cwd, known, gitDir, role, line) {
   // A rebase may switch to the branch it names, bisect checks out commits and its reset a branch, and symbolic-ref HEAD <ref>
   // moves HEAD; git takes --mo and --cop for --move and --copy.
   if (sub === 'checkout' || sub === 'switch' || sub === 'rebase' || sub === 'bisect' || (sub === 'symbolic-ref' && rest.filter((w) => !w.startsWith('-')).length > 1) || (sub === 'branch' && rest.some((w) => /^(-[^-]*[mMcC]|--(mov?e?|copy?)$)/.test(w)))) line.switched = true;
+  const tag = sub === 'tag' && createdTag(rest);
+  if (tag) line.tags.add(tag);
   return sub === 'push' ? push(rest, dir, known, role, line) : null;
 }
 
@@ -549,7 +588,7 @@ function checks(parsed, cmd, cwd, role, powershell, source, gitDir) {
   // not hold where git runs: from then on git is read in every folder seen, and a push has to name its branch.
   let dir = cwd, known = true, first = changesDir(/\S*/.exec(cmd.trimStart())[0]);
   const seen = [cwd];
-  const line = { switched: false, filled: false };
+  const line = { switched: false, filled: false, tags: new Set() };
   // The tokenizer ends a command at a backtick, so the raw text tells whether one runs.
   const substitutes = !powershell && backtick(cmd);
   for (const { words, nested } of parsed) {

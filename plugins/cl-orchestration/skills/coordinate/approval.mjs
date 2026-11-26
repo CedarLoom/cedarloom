@@ -4,7 +4,7 @@
 // Usage: node approval.mjs apply <owner/name> <number>. Reads the issue with gh and its owner's answer as the answer mode does; on an answer takes cl:needs-human and cl:deferred off, and cl:ready-for-agent too when the body holds an Approval table or an Issue line, else puts cl:ready-for-agent on, then prints { option, text, at, labels } and exits 0; exit 1 while there is none, exit 2 with one line on an error.
 // Usage: node approval.mjs queue: { file, status, issue, option, text, at, held } of each question in the local queue as JSON (issue where its Issue line names one; held: whether the answer keeps that issue back, holds), or exit 2 with one line.
 // Usage: node approval.mjs digests: makes the digest folder .cedarloom/digests/ (digest.md) and keeps it out of git as the queue is, printing { folder }, or exit 2 with one line.
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { escaped, isMain, json, sh } from './policy.mjs';
 import { writers } from './precheck.mjs';
@@ -157,6 +157,23 @@ const queueDir = (create) => ownDir(QUEUE, create);
 // git exits 128 on any fatal error, and its message is translated: only without a .git here or above is there no repository.
 const inRepository = () => { for (let at = realpathSync('.'); ; at = dirname(at)) { if (existsSync(join(at, '.git'))) return true; if (dirname(at) === at) return false; } };
 
+// The file identity (lstat dev:ino) of a path; bigint, since a Windows file ID can exceed 2^53.
+const identity = (path) => { const { dev, ino } = lstatSync(path, { bigint: true }); return `${dev}:${ino}`; };
+
+// The identities of the .md files git tracks below the working directory that exist; none outside a repository.
+// By identity, not by name: a file system can open one file under several names (case, ſ for s, ﬆ for st on macOS, Unicode normalization).
+// lstat, so a tracked link marks itself and not the file it points to.
+function trackedFiles() {
+  let listed;
+  try {
+    listed = sh('.', 'git', ['ls-files', '-z', '--', '*.md']);
+  } catch (e) {
+    if (e.status === 128 && !inRepository()) return new Set();
+    throw e;
+  }
+  return new Set(listed.split('\0').filter((path) => path && existsSync(path)).map(identity));
+}
+
 // Adds an existing folder of the working directory to info/exclude unless git ignores it already.
 function keepOut(folder, run) {
   try {
@@ -202,7 +219,10 @@ export function fileQuestion(text, project, run) {
 export function readQueue() {
   const dir = queueDir(false);
   const names = dir ? readdirSync(dir).filter((name) => name.endsWith('.md')).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })) : [];
+  const tracked = names.length ? trackedFiles() : new Set();
   return names.map((file) => {
+    // A tracked file came with a commit, which a merged pull request can carry: only an untracked local file is the owner's.
+    if (tracked.has(identity(join(dir, file)))) return { file, error: 'is tracked by git: a question counts only as an untracked local file' };
     let body;
     try {
       body = readFileSync(join(dir, file), 'utf8');
