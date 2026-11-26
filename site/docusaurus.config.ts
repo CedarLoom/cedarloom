@@ -21,12 +21,14 @@ const config: Config = {
   onBrokenLinks: 'throw',
   onBrokenAnchors: 'throw',
   markdown: {
+    // .md files are CommonMark (the repository docs), .mdx files are MDX (the guide pages with components).
+    format: 'detect',
     hooks: {onBrokenMarkdownLinks: 'throw'},
-    // The reference pages are repository files in plain Markdown: their slug and label come from referencePages.
+    // The reference pages are repository files without front matter: their slug and label come from referencePages.
     parseFrontMatter: async (params) => {
       const result = await params.defaultParseFrontMatter(params);
       const page = referencePages[relative(root, params.filePath)];
-      return page ? {...result, frontMatter: {...result.frontMatter, ...page, format: 'md'}} : result;
+      return page ? {...result, frontMatter: {...result.frontMatter, ...page}} : result;
     },
   },
   // static/ holds the cedarloom.json schema, written by .github/scripts/skills-doc.mjs. The logos stay in brand/ under their own terms; the site serves them from there.
@@ -36,26 +38,20 @@ const config: Config = {
     [
       'classic',
       {
-        docs: {routeBasePath: '/', sidebarPath: './sidebars.ts'},
+        // One docs instance over the repository: the guide in site/docs and the repository docs it links to.
+        docs: {
+          path: '..',
+          include: ['site/docs/*.mdx', ...Object.keys(referencePages)],
+          routeBasePath: '/',
+          sidebarPath: './sidebars.ts',
+          beforeDefaultRemarkPlugins: [repoLinks({root, repo, baseUrl})],
+        },
         blog: false,
         theme: {customCss: './src/css/custom.css'},
       } satisfies Preset.Options,
     ],
   ],
-  plugins: [
-    './skills-plugin.ts',
-    [
-      '@docusaurus/plugin-content-docs',
-      {
-        id: 'reference',
-        path: '..',
-        include: Object.keys(referencePages),
-        routeBasePath: 'reference',
-        sidebarPath: './sidebars-reference.ts',
-        beforeDefaultRemarkPlugins: [repoLinks({root, repo, baseUrl})],
-      },
-    ],
-  ],
+  plugins: ['./skills-plugin.ts'],
   themeConfig: {
     image: 'cedarloom-light-1280x640.png',
     colorMode: {respectPrefersColorScheme: true},
@@ -67,7 +63,7 @@ const config: Config = {
         {to: '/principles', label: 'Principles', position: 'left'},
         {to: '/skills', label: 'Skills', position: 'left'},
         {to: '/lifecycle', label: 'Lifecycle', position: 'left'},
-        {type: 'docSidebar', docsPluginId: 'reference', sidebarId: 'reference', label: 'Reference', position: 'left'},
+        {type: 'docSidebar', sidebarId: 'reference', label: 'Reference', position: 'left'},
         {href: repo, label: 'GitHub', position: 'right'},
       ],
     },

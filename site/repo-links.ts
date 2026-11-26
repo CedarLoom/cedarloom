@@ -4,16 +4,16 @@ import {dirname, relative, resolve} from 'node:path';
 type Node = {type: string; url?: string; value?: string; children?: Node[]};
 type File = {path: string};
 
-// Pages the reference docs serve from repository files, by path from the repository root; the keys are the docs.
+// Repository docs served as reference pages, by path from the repository root.
 export const referencePages: Record<string, {slug: string; sidebar_label?: string}> = {
-  'README.md': {slug: '/', sidebar_label: 'Get started'},
-  'docs/plugins.md': {slug: '/plugins'},
-  'docs/skills.md': {slug: '/skills'},
-  'docs/stack.md': {slug: '/stack'},
-  'docs/development.md': {slug: '/development'},
-  'docs/authoring.md': {slug: '/authoring'},
-  'docs/releasing.md': {slug: '/releasing'},
-  'SECURITY.md': {slug: '/security'},
+  'README.md': {slug: '/reference', sidebar_label: 'Get started'},
+  'docs/plugins.md': {slug: '/reference/plugins'},
+  'docs/skills.md': {slug: '/reference/skills'},
+  'docs/stack.md': {slug: '/reference/stack'},
+  'docs/development.md': {slug: '/reference/development'},
+  'docs/authoring.md': {slug: '/reference/authoring'},
+  'docs/releasing.md': {slug: '/reference/releasing'},
+  'SECURITY.md': {slug: '/reference/security'},
 };
 
 // Relative links in the repository docs: a link to another reference page stays for Docusaurus to resolve; a link to
