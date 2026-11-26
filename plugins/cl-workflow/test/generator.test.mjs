@@ -78,7 +78,7 @@ test('generator: each refusal names the file, the field and the rule, and exits 
   const cases = [
     [(d) => (d.schemaVersion = 1), 'schemaVersion', 'must be 2'],
     [(d) => (d.extra = true), 'extra', 'unknown field'],
-    [(d) => (d.stages[1].phases[0].task = 'deploy'), 'stages[1].phases[0].task', 'one of "coordinate", "plan", "review", "recheck", "verify", "audit", "research", "implement", "fix", "test", "docs", "gather", "lookup"'],
+    [(d) => (d.stages[1].phases[0].task = 'deploy'), 'stages[1].phases[0].task', 'one of "coordinate", "plan", "review", "recheck", "verify", "fresh-read", "audit", "research", "implement", "fix", "test", "docs", "triage", "digest", "merge", "gather", "lookup"'],
     // Inherited object keys are unknown fields too.
     [(d) => (d.constructor = true), 'constructor', 'unknown field'],
     [(d) => (d.stages[1].phases[1].loop.toString = 'x'), 'stages[1].phases[1].loop.toString', 'unknown field'],

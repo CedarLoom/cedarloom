@@ -106,14 +106,14 @@ The hooks write only the handoff file. They read it, run `git` in its project fo
 Every CedarLoom caller takes a session's or subagent's model and effort from one map: the coordinator, the workflow phases, the `full` workflow script and bot runs.
 
 ```sh
-node plugins/cl-workflow/skills/workflow/models.mjs [<project path>] [--depth quick|standard|deep] [--risk low|medium|high|critical] [--json]
+node plugins/cl-workflow/skills/workflow/models.mjs [<project path> | --repository <file>] [--depth quick|standard|deep] [--risk low|medium|high|critical] [--json]
 ```
 
-- It prints each task's model and effort with the row and file that set it, at standard depth and low risk unless given. Files, later ones overriding earlier ones entry by entry: the defaults `plugins/cl-workflow/skills/workflow/models.json`, the user file `$XDG_CONFIG_HOME/cedarloom/cedarloom.json` (`~/.config/cedarloom/cedarloom.json` when that variable is unset or not absolute, [XDG base directory spec](https://specifications.freedesktop.org/basedir-spec/latest/)), which holds `models` only, and the project's `cedarloom.json`. The schema of both files is `cedarloom.json`'s.
+- It prints each task's model and effort with the row and file that set it, at standard depth and low risk unless given. Files, later ones overriding earlier ones entry by entry: the defaults `plugins/cl-workflow/skills/workflow/models.json`, the user file `$XDG_CONFIG_HOME/cedarloom/cedarloom.json` (`~/.config/cedarloom/cedarloom.json` when that variable is unset or not absolute, [XDG base directory spec](https://specifications.freedesktop.org/basedir-spec/latest/)), which holds `models` only, and the repository file: the project's `cedarloom.json` in the working tree, or the `--repository` file (`-` reads it from stdin), and none without either. The coordinator and the project bot pass `cedarloom.json` as the policy reader read it from the default branch (`git show refs/cedarloom/policy:cedarloom.json` piped to `--repository -`), so a local edit or another checked-out branch does not change their lookup. The schema of both files is `cedarloom.json`'s.
 - `models.roles` names `{ model, effort }` pairs; `models.tasks` gives each task a role name or an inline pair. A lookup takes the `tasks` row, then the `depth` row (`quick` or `deep`), which may lower or raise it, then the `risk` rows, which only raise it: `high`, and for `critical` the `high` row first, then the `critical` row.
 - Rank for raising: the model first (`haiku`, `sonnet`, `opus`, `fable`), then the effort (`low`, `medium`, `high`, `xhigh`, `max`).
 - `implement` and `fix` run only on `opus`: the schema refuses an inline pair with another model there, and the resolver refuses any file whose rows or roles put them on another model at any depth and risk. It exits 1 and names the row and file for every refused file.
-- `--hook` prints one line of the map for a session's context; the plugin's SessionStart hook runs it.
+- `--hook` prints one line for a session's context, the roles and the command; the plugin's SessionStart hook runs it.
 - The plugin's agent files take their `model` and `effort` from the defaults through the generator. The skill lint refuses a literal model value (`--model opus`, `model: opus`, `"model": "opus"`, model `` `opus` ``, a model name next to an effort level) in the plugins outside the defaults file, the resolver, the schema, the agent files, tests and evals.
 
 ## Workflows

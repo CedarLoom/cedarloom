@@ -1,7 +1,6 @@
 {
   "models": {
     "roles": {
-      "top": { "model": "fable", "effort": "high" },
       "deep": { "model": "opus", "effort": "high" },
       "build": { "model": "opus", "effort": "high" },
       "light": { "model": "sonnet", "effort": "high" },
@@ -14,19 +13,23 @@
       "review": "deep",
       "recheck": "deep",
       "verify": "deep",
+      "fresh-read": "deep",
       "audit": "deep",
-      "research": "top",
+      "research": "deep",
       "implement": "build",
       "fix": "build",
       "test": "light",
       "docs": "light",
+      "triage": "light",
+      "digest": "light",
+      "merge": "light",
       "gather": "read",
       "lookup": "lookup"
     },
     "depth": {},
     "risk": {
-      "high": { "plan": "top", "review": "top" },
-      "critical": { "review": { "model": "fable", "effort": "xhigh" }, "recheck": "top" }
+      "high": { "plan": "deep", "review": "deep" },
+      "critical": { "review": "deep" }
     }
   }
 }

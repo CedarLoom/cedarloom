@@ -90,9 +90,32 @@ test('models: the command prints each task with its row and file, and exits 1 on
   const printed = run(at.project, '--risk', 'high');
   assert.equal(printed.status, 0);
   assert.match(printed.stdout, /^docs: opus high from tasks\.docs \(user\), roles\.deep \(default\)$/m);
-  assert.match(printed.stdout, /^plan: fable high from risk\.high\.plan \(default\), roles\.top \(default\)$/m);
   const refused = setup({ repository: { models: { tasks: { fix: { model: 'sonnet', effort: 'high' } } } } });
   const failed = run(refused.project);
   assert.equal(failed.status, 1);
   assert.match(failed.stderr, /puts fix on sonnet/);
+});
+
+test('models: a user file sets the fresh-read task', () => {
+  const at = setup({ user: { models: { tasks: { 'fresh-read': { model: 'fable', effort: 'high' } } } } });
+  assert.deepEqual(resolveMap(at).tasks['fresh-read'], { model: 'fable', effort: 'high', row: 'tasks.fresh-read', file: 'user' });
+});
+
+test('models: the repository file from stdin at the policy ref, so a working-tree edit does not change the lookup', () => {
+  const at = setup({ repository: { models: { tasks: { review: 'light' } } } });
+  const git = (...args) => {
+    const done = spawnSync('git', ['-C', at.project, '-c', 'user.name=test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' });
+    assert.equal(done.status, 0, done.stderr);
+    return done.stdout;
+  };
+  git('init', '--quiet');
+  git('add', 'cedarloom.json');
+  git('commit', '--quiet', '-m', 'policy');
+  git('update-ref', 'refs/cedarloom/policy', 'HEAD');
+  writeFileSync(join(at.project, 'cedarloom.json'), JSON.stringify({ models: { tasks: { review: 'lookup' } } }));
+  const input = git('show', 'refs/cedarloom/policy:cedarloom.json');
+  const looked = spawnSync(process.execPath, [script, '--repository', '-', '--json'], { input, cwd: at.project, encoding: 'utf8', env: { ...process.env, ...at.env } });
+  assert.equal(looked.status, 0, looked.stderr);
+  const { review } = JSON.parse(looked.stdout).tasks;
+  assert.deepEqual([pick(review), review.file], ['sonnet high', 'repository']);
 });

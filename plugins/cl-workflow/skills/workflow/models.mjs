@@ -1,5 +1,5 @@
-// Usage: node models.mjs [<project path>] [--depth quick|standard|deep] [--risk low|medium|high|critical] [--json]   or   node models.mjs [<project path>] --hook
-// Prints the model and effort of each task at that depth and risk (standard and low by default), with the row and file that set each: CedarLoom's defaults (models.json beside this file), then the user file, then the project's cedarloom.json. A file it refuses prints each error and exits 1.
+// Usage: node models.mjs [<project path> | --repository <file>] [--depth quick|standard|deep] [--risk low|medium|high|critical] [--json]   or   node models.mjs [<project path>] --hook
+// Prints the model and effort of each task at that depth and risk (standard and low by default), with the row and file that set each: CedarLoom's defaults (models.json beside this file), then the user file, then the repository file: <project path>/cedarloom.json, or the --repository file (- for stdin), and none without either. A file it refuses prints each error and exits 1.
 import { readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
@@ -54,11 +54,11 @@ function refusals(models, tasks) {
   return found;
 }
 
-// The parsed file, or undefined when it does not exist.
+// The parsed file, or undefined when it does not exist; path - is stdin.
 function readJson(path) {
   let text;
   try {
-    text = readFileSync(path, 'utf8');
+    text = readFileSync(path === '-' ? 0 : path, 'utf8');
   } catch (error) {
     if (error.code === 'ENOENT') return undefined;
     throw new Refused(`${path}: cannot be read: ${error.code ?? error.message}`);
@@ -70,8 +70,8 @@ function readJson(path) {
   }
 }
 
-// The layers in order, each { file, path, models }; a file that does not exist is left out, and so are the user file without env and the repository file without project. The user file holds models only.
-export function layers({ project, env }) {
+// The layers in order, each { file, path, models }; a file that does not exist is left out, and so are the user file without env and the repository file without project or repository. The user file holds models only.
+export function layers({ project, repository: given, env }) {
   const defaults = readJson(DEFAULTS);
   const tasks = Object.keys(defaults.models.tasks);
   const found = [{ file: 'default', path: DEFAULTS, models: defaults.models }];
@@ -83,7 +83,7 @@ export function layers({ project, env }) {
     if (other.length) throw new Refused(`${user}: ${other.join(', ')}: the user file holds models only`);
     found.push({ file: 'user', path: user, models: userDoc.models ?? {} });
   }
-  const repository = project ? join(resolve(project), 'cedarloom.json') : undefined;
+  const repository = given ?? (project ? join(resolve(project), 'cedarloom.json') : undefined);
   const repoDoc = repository ? readJson(repository) : undefined;
   if (repoDoc !== undefined) found.push({ file: 'repository', path: repository, models: isObject(repoDoc) ? repoDoc.models ?? {} : repoDoc });
   const errors = found.flatMap(({ path, models }) => refusals(models, tasks).map((e) => `${path}: ${e}`));
@@ -132,10 +132,10 @@ function lookup(map, task, depth, risk) {
 export const defaultMap = () => resolveMap({ project: null, env: null });
 
 // { files, tasks }: every task's { model, effort, row, file, role?, roleFile? } at that depth and risk. Refuses a map with a row that puts implement or fix on another model than BUILD_MODEL.
-export function resolveMap({ project = '.', depth = 'standard', risk = 'low', env = process.env } = {}) {
+export function resolveMap({ project = '.', repository, depth = 'standard', risk = 'low', env = process.env } = {}) {
   if (!DEPTHS.includes(depth)) throw new Refused(`depth must be one of ${DEPTHS.join(', ')}`);
   if (!Object.hasOwn(RISK_ROWS, risk)) throw new Refused(`risk must be one of ${Object.keys(RISK_ROWS).join(', ')}`);
-  const found = layers({ project, env });
+  const found = layers({ project, repository, env });
   const map = merged(found);
   // Every row is checked, not only the rows this lookup reads: its role name exists, and implement and fix are on BUILD_MODEL in each row, a lower-ranked risk value included.
   const rows = [...Object.entries(map.tasks).map(([task, entry]) => [task, entry, `tasks.${task}`]), ...['depth', 'risk'].flatMap((key) => Object.entries(map[key]).flatMap(([name, row]) => Object.entries(row).map(([task, entry]) => [task, entry, `${key}.${name}.${task}`])))];
@@ -147,6 +147,7 @@ export function resolveMap({ project = '.', depth = 'standard', risk = 'low', en
     depth,
     risk,
     files: Object.fromEntries(found.map(({ file, path }) => [file, path])),
+    roles: Object.fromEntries(Object.entries(map.roles).map(([role, { model, effort }]) => [role, { model, effort }])),
     tasks: Object.fromEntries(Object.keys(map.tasks).map((task) => [task, lookup(map, task, depth, risk)])),
   };
 }
@@ -154,19 +155,16 @@ export function resolveMap({ project = '.', depth = 'standard', risk = 'low', en
 function main() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
-    options: { depth: { type: 'string' }, risk: { type: 'string' }, json: { type: 'boolean' }, hook: { type: 'boolean' } },
+    options: { repository: { type: 'string' }, depth: { type: 'string' }, risk: { type: 'string' }, json: { type: 'boolean' }, hook: { type: 'boolean' } },
   });
-  if (positionals.length > 1 || (values.hook && (values.json || values.depth || values.risk))) throw new Refused('usage: node models.mjs [<project path>] [--depth quick|standard|deep] [--risk low|medium|high|critical] [--json] | node models.mjs [<project path>] --hook');
-  const project = positionals[0] ?? '.';
-  const at = (depth, risk) => resolveMap({ project, depth: depth ?? 'standard', risk: risk ?? 'low' });
-  const pairs = (tasks, only = Object.keys(tasks)) => only.map((task) => `${task} ${tasks[task].model} ${tasks[task].effort}`).join(', ');
+  if (positionals.length > 1 || (values.repository !== undefined && positionals.length) || (values.hook && (values.repository !== undefined || values.json || values.depth || values.risk))) throw new Refused('usage: node models.mjs [<project path> | --repository <file>] [--depth quick|standard|deep] [--risk low|medium|high|critical] [--json] | node models.mjs [<project path>] --hook');
+  const project = positionals[0] ?? null;
+  const result = resolveMap({ project, repository: values.repository, depth: values.depth ?? 'standard', risk: values.risk ?? 'low' });
   if (values.hook) {
-    // A session without the skill loader still knows the map at standard depth; other depths and the sources come from the script.
-    const base = at().tasks;
-    const raisedAt = (risk) => { const tasks = at(undefined, risk).tasks; return pairs(tasks, Object.keys(tasks).filter((t) => rank(tasks[t]) !== rank(base[t]))); };
-    return console.log(`CedarLoom model map (task model effort), standard depth: ${pairs(base)}. Risk high raises ${raisedAt('high') || 'nothing'}; critical ${raisedAt('critical') || 'nothing'}. Other depths and sources: node ${fileURLToPath(import.meta.url)} --depth <depth> --risk <risk>.`);
+    // Kept short, as it loads in every session: the roles, and the command that prints each task's value.
+    const roles = Object.entries(result.roles).map(([role, { model, effort }]) => `${role} ${model} ${effort}`).join(', ');
+    return console.log(`CedarLoom model roles: ${roles}. Task values: node ${fileURLToPath(import.meta.url)} <project> --depth <d> --risk <r>`);
   }
-  const result = at(values.depth, values.risk);
   if (values.json) return console.log(JSON.stringify(result, null, 2));
   console.log(`Depth ${result.depth}, risk ${result.risk}. Files: ${Object.entries(result.files).map(([file, path]) => `${file} ${path}`).join('; ')}`);
   for (const [task, v] of Object.entries(result.tasks)) console.log(`${task}: ${v.model} ${v.effort} from ${source(v)}`);
