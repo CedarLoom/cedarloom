@@ -8,7 +8,7 @@ user-invocable: false
 # Workflow
 
 Every depth:
-- Before the first edit, state the assumptions you work from and the check that proves each step done (a test, a command, a screenshot); loop until those checks pass, and stop and report on the stuck signals of step 6 of [the implement agent](../../agents/implement.md).
+- Before the first edit, state the assumptions you work from and the check that proves each step done; loop until those checks pass, and stop and report on the stuck signals of step 6 of [the implement agent](../../agents/implement.md).
 - Keep validation at trust boundaries, error handling that prevents data loss, and security checks.
 - A step here or in the playbooks that asks or waits on the user does so in the session only while the user allows terminal questions. Otherwise its questions go with your recommendations into one issue per task in the issue tracker the project names, else the report; take each recommendation that is safe and reversible (an item without one waits), and go on.
 - An installed skill may run a step of this skill or its playbooks in more detail: these texts set its floor and gates and win where the two differ. Reviews, research notes and pull request text follow these playbooks.
@@ -69,7 +69,7 @@ A session itself on `fable` follows these defaults unless the user or spec chang
 
 ## Change types
 
-The check before done, per change type; the change type names the depth line. Never run a check that changes shared or production systems (`terraform apply`, `kubectl apply`, `helm upgrade`, migrations against shared databases).
+The check before done, per change type (it names the depth line). Never run a check that changes shared or production systems (`terraform apply`, `kubectl apply`, `helm upgrade`, migrations against shared databases).
 
 | Change | Check before done |
 |---|---|
@@ -82,7 +82,8 @@ The check before done, per change type; the change type names the depth line. Ne
 | Bug | known cause: a failing test first, where the [test rule](#verify) allows one. Unknown: diagnose the cause first ([diagnose.md](diagnose.md)) |
 | Refactor | suite unchanged and passing |
 | Dependency major or security advisory | changelog read, full suite, package audit |
-| CI workflow, new gate | `actionlint`; a new check, hook, lint or review rule only reports until it flags only what a human would |
+| CI workflow | `actionlint` |
+| New CI check, hook or lint rule | reports only until it flags only what a human would |
 | Feature, performance | performance: benchmark before and after on the same machine |
 | Infrastructure as code | `fmt -check`, `validate`, `plan`; `ansible-lint --check --diff`; `kubeconform`, `kubectl diff`; `helm lint`, `helm template` |
 | Schema migration | expand and contract, migrate a throwaway database |
@@ -97,13 +98,13 @@ A follow-up commit on an open pull request keeps its depth and needs no workflow
 
 ## Verify
 
-- Run the project's own build, types, lint and tests where `AGENTS.md` says, then run the change as a user meets it (app, CLI, browser with `webapp-testing` where installed, local service) as a project skill or doc says (Claude Code: `/verify`); the pull request's Proof section says how, or "not run" and why.
-- A failing or flaky test: diagnose first (code, test or environment) and fix the cause, never rerun, sleep or skip it to green, else delete it with the reason in the commit and an issue. Edit a test only when it is wrong or the requirement changed, and say so in the pull request.
+- Run the project's own build, types, lint and tests where `AGENTS.md` says, then run the change as a user meets it (app, CLI, browser with `webapp-testing` where installed, local service) as a project skill or doc says where one does (Claude Code: `/verify`); the pull request's Proof section says how, or "not run" and why.
+- A failing test: diagnose first (code, test or environment) and fix the cause. A flaky one gets no rerun, sleep or skip to green; no cause found: delete it, the reason in the commit and an issue. Edit a test only when it is wrong or the requirement changed, and say so in the pull request.
 - Test rule: no tests by default. Add one only when it meets all three:
   - it fails if the change is reverted;
   - it hardcodes its expected values (never computed by production code, locale files or mocks);
   - it runs at the single layer that owns the behavior.
-- Test type when one is chosen: property for a parser, round trip or invariant; differential (old and new code, same inputs) for a rewrite; else end-to-end of the feature.
+- Test type when one is chosen, at the owning layer: property for a parser, round trip or invariant; differential (old code as the oracle, same inputs) for a rewrite; else end-to-end of the feature.
 - A new test is written first and seen failing for the reason the change addresses; one that passes at once proves nothing.
 - One slice (a row of the plan's acceptance table, where there is one) at a time: one test, the code that makes it pass, then the next.
 - Leave untested: copy or translations, CSS classes, constants, third-party libraries, private state, timing and call counts. A test like that is deleted when touched, not updated. Coverage is no target.
