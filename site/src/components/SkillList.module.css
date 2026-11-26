@@ -7,11 +7,15 @@
   list-style: none;
 }
 
+/* Doubled class: outranks the docs theme's spacing between list items (.markdown li + li). */
+.card.card {
+  margin: 0;
+}
+
 .card {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  margin: 0;
   padding: 0.9rem 1rem;
   border: 1px solid var(--cl-line);
   border-radius: 0.75rem;

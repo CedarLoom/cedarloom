@@ -18,7 +18,8 @@
   list-style: none;
 }
 
-.figure li {
+/* Doubled class: outranks the docs theme's spacing between list items (.markdown li + li). */
+.figure.figure li {
   margin: 0;
 }
 
