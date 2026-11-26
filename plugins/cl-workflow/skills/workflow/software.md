@@ -17,7 +17,7 @@
 Standard and deep, except a change that only deletes: this session is the phase orchestrator.
 
 - It runs each phase as a subagent with a fresh context and keeps the decision after each phase and the questions to the user, which a subagent cannot ask ([Claude Code withholds the question tool from subagents](https://code.claude.com/docs/en/sub-agents#available-tools)).
-- Standard depth, below risk `high` by the risk line below: Plan, and Implement in a session on the model of Implement's task (`implement`, or `docs` below), run in this session itself, following their steps below; Plan check, Test, Review and Implement in a session on another model stay subagents. Every other change runs every phase as a subagent.
+- Standard depth, below risk `high` by the risk line below: Plan, and Implement in a session on the model and effort of Implement's task (`implement`, or `docs` below), run in this session itself, following their steps below; Plan check, Test, Review and Implement in a session on another model or effort stay subagents. Every other change runs every phase as a subagent.
 - Where the plugin's agent named for a phase below is available (Claude Code), the phase runs as that agent, which sets its tools and effort.
 - Each phase runs on the model and effort of its task in the model map ([models.md](models.md)) at the change's depth and risk class, passed in the call: the task named with the phase below, a remediation `fix`, a re-review `recheck`.
 - Implement of a change that only renames, edits docs or edits tests runs on the `docs` task.
