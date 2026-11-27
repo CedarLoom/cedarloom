@@ -152,14 +152,17 @@ export function append(path, entry) {
   return true;
 }
 
-// pr-<pr>.json rebuilt from fields the run gathered (the pull request, its reviews and claim comment, worker-list, automations list), at version 0. A file that was unreadable, or fields whose pull request merged (mergedAt) with no merge log line, also get mergeCommandAt and held "state rebuilt", which pause every merge until the owner's answer. A readable file is never replaced. Gives { held }.
-export function rebuild(state, pr, fields, now) {
+// pr-<pr>.json rebuilt from fields the run gathered (the pull request, its reviews and claim comment, worker-list, automations list), at version 1, through change. A file that was unreadable, or fields whose pull request merged (mergedAt) with no merge log line, also get mergeCommandAt and held "state rebuilt", which pause every merge until the owner's answer. A readable file is never replaced. Gives { held }.
+export function rebuild(state, pr, fields, now, options) {
   if (!Number.isInteger(pr) || pr < 1) throw new Error('rebuild: no pull request number');
   if (!isRecord(fields) || fields.pr !== pr || typeof fields.repo !== 'string' || !/^\S+\/\S+$/.test(fields.repo)) throw new Error(`rebuild: the fields name no repo and pr ${pr}`);
-  const path = join(state, `pr-${pr}.json`), current = loadPr(path);
-  if (current !== MISSING && current !== UNREADABLE) throw new Error(`${basename(path)} is readable: nothing to rebuild`);
-  const held = current === UNREADABLE || (fields.mergedAt != null && !logged(state, fields.repo, pr));
-  writeState(path, { ...fields, version: 0, ...(held && { mergeCommandAt: now.toISOString(), held: 'state rebuilt' }) });
+  const path = join(state, `pr-${pr}.json`);
+  let held;
+  change(path, (current, unreadable) => {
+    if (current) throw new Error(`${basename(path)} is readable: nothing to rebuild`);
+    held = unreadable || (fields.mergedAt != null && !logged(state, fields.repo, pr));
+    return { ...fields, version: 0, ...(held && { mergeCommandAt: now.toISOString(), held: 'state rebuilt' }) };
+  }, options);
   return { held };
 }
 

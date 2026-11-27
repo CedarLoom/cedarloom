@@ -223,6 +223,9 @@ test('precheck: a fresh worker handed to the Orca count after another start bega
   handOver({ prompt: join(alpha.prompts, `r-1-builder-0-${RUN}`), lock }, at('2026-11-24T10:00:10Z'));
   assert.deepEqual(start(beta, '2026-11-24T10:00:05Z', '2026-11-24T10:00:12Z'), { runs: [], fits: false, recount: true });
   assert.deepEqual(readdirSync(beta.prompts), []);
+  // A hand-over that stalled since 10:00:07 lands last: the 10:00:10 one still counts.
+  handOver({ prompt: join(alpha.prompts, `r-2-builder-0-${RUN}`), lock }, at('2026-11-24T10:00:07Z'));
+  assert.equal(start(beta, '2026-11-24T10:00:08Z', '2026-11-24T10:00:13Z').recount, true);
   // A count that began after the hand-over holds alpha's worker, so its working count is taken as it is.
   assert.equal(start(beta, '2026-11-24T10:00:15Z', '2026-11-24T10:00:16Z').fits, true);
 });

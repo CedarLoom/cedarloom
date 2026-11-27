@@ -10,7 +10,7 @@ import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { readQueue, waiting } from './approval.mjs';
 import { errorLine, escaped, isMain, json, read, sh } from './policy.mjs';
-import { unique, writeState } from './state.mjs';
+import { unique } from './state.mjs';
 
 // MEMBER is any member of the owning organization and COLLABORATOR any invited collaborator: either may have only the Read role, so each counts only with write access.
 const ASSOCIATED = ['MEMBER', 'COLLABORATOR'];
@@ -282,21 +282,24 @@ function locked(lock, now, fn) {
   } finally { unlock(lock, token); }
 }
 
-// The file beside the lock that holds when the last fresh worker was handed to the Orca count: null before the first.
-const handed = (lock) => `${lock}-handed`;
-function handedAt(lock) {
-  let raw;
-  try { raw = readFileSync(handed(lock), 'utf8'); } catch (e) { if (e.code === 'ENOENT') return null; throw e; }
-  let at = null;
-  try { at = JSON.parse(raw); } catch { /* no JSON: refused below */ }
-  if (typeof at !== 'string' || Number.isNaN(Date.parse(at))) throw new Error(`${handed(lock)} holds no time`);
-  return Date.parse(at);
+// Each hand-over leaves an empty file beside the lock named by its time, <lock>-handed-<ms>-<token>, before its prompt file goes. A record is only made or removed for an older one, never replaced, so the newest time never moves back, also where a holder stalled past LOCK_STALE_MS and lost the lock.
+function handed(lock) {
+  const prefix = `${basename(lock)}-handed-`;
+  return readdirSync(dirname(lock)).filter((n) => n.startsWith(prefix)).map((name) => {
+    const at = Number(name.slice(prefix.length).split('-')[0]);
+    if (!Number.isSafeInteger(at)) throw new Error(`${name} names no hand-over time`);
+    return { name, at };
+  });
 }
+// The newest hand-over time, null before the first.
+const handedAt = (lock) => handed(lock).reduce((newest, { at }) => Math.max(newest ?? at, at), null);
 
-// A fresh worker's prompt file counts it until the Orca count shows it: deleting the file and recording the time are one step under the lock, so a start whose Orca count began before is refused (reserveStart).
+// A fresh worker's prompt file counts it until the Orca count shows it: the time is recorded before the file goes, both under the lock, so a start whose Orca count began before is refused (reserveStart). Older records go.
 export function handOver({ prompt, lock }, now = Date.now) {
   return locked(lock, now, () => {
-    writeState(handed(lock), new Date(now()).toISOString());
+    const dir = dirname(lock), at = now();
+    writeFileSync(join(dir, `${basename(lock)}-handed-${at}-${unique()}`), '', { flag: 'wx' });
+    for (const record of handed(lock)) if (record.at < at) rmSync(join(dir, record.name), { force: true });
     rmSync(prompt, { force: true });
   });
 }
