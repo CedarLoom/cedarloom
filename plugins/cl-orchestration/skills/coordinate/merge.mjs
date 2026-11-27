@@ -48,7 +48,7 @@ const replaces = (x, r) => r.conclusion === 'cancelled' && x.workflowDatabaseId 
 export const redRuns = (onCommit) => onCommit.filter((r) => isRed(r) && !onCommit.some((x) => replaces(x, r)));
 
 const GOOD = ['SUCCESS', 'SKIPPED', 'NEUTRAL'];
-// { name, state } of each check of a statusCheckRollup, state 'green', 'red' or 'pending': check runs carry status and conclusion, commit statuses a state.
+// { name, state, conclusion } of each check of a statusCheckRollup, state 'green', 'red' or 'pending': check runs carry status and conclusion, commit statuses a state, which conclusion gives for them.
 // The rollup lists every run of a check; as gh pr checks does, only the newest of each (by name and workflow, or a status's context) counts.
 export function checkStates(rollup) {
   // gh prints a missing time as the zero time. A skipped run has an end but no start; a run that has not started has neither and is newer than every other.
@@ -63,7 +63,7 @@ export function checkStates(rollup) {
     // Of runs that started in the same second the list order says nothing: the one furthest from green counts.
     if (!kept || startOf(kept) < startOf(c) || (startOf(kept) === startOf(c) && RANK[stateOf(kept)] < RANK[stateOf(c)])) newest.set(key, c);
   }
-  return [...newest.values()].map((c) => ({ name: c.context ?? c.name, state: stateOf(c) }));
+  return [...newest.values()].map((c) => ({ name: c.context ?? c.name, state: stateOf(c), conclusion: c.conclusion ?? c.state }));
 }
 
 // null when every required check is green, else the answer: a red or missing check stops, one that runs waits.
