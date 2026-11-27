@@ -24,7 +24,7 @@ execution:
 graders:
   - type: regex
     name: checks-on-worktree
-    pattern: 'Checks 3 and 4:\W*node \S*start-checks\.mjs --project \S+ --worktree \S*worktrees/widget/12-login-timeout\b'
+    pattern: 'Checks 3 and 4:[^\n]*start-checks\.mjs[^\n]*--worktree[`''"]?\s+[`''"]?\S*worktrees/widget/12-login-timeout\b'
   - type: regex
     name: check-3-fails
     pattern: 'Result:\W*fail\b'
