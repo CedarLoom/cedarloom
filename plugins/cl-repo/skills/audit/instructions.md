@@ -42,8 +42,6 @@ Answer with one JSON object and nothing else: {"findings": [{"kind": "...", "lin
 FILE
 ```
 
-The prompt is checked against the fixtures in `test/fixtures/audit/` of this plugin by a unit test with a recorded answer. When the prompt changes, run `bash test/fixtures/audit/live.sh claude` (or `codex`) in this plugin's folder by hand against a real agent, and record its answers with `--record` once every fixture passes. CI never calls an agent.
-
 ## Not findings
 
 - A line that is specific and gives its reason, for vague, enforceable and restates ([One rule file](#one-rule-file)).
