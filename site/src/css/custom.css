@@ -3,24 +3,24 @@
 /* Infima reads the brand tokens. html[data-theme] outranks Infima's own html[data-theme='dark'] values. */
 html[data-theme] {
   --ifm-color-primary: var(--cl-accent);
-  --ifm-color-primary-dark: color-mix(in oklch, var(--cl-accent), var(--cl-ink) 10%);
-  --ifm-color-primary-darker: color-mix(in oklch, var(--cl-accent), var(--cl-ink) 15%);
-  --ifm-color-primary-darkest: color-mix(in oklch, var(--cl-accent), var(--cl-ink) 25%);
-  --ifm-color-primary-light: color-mix(in oklch, var(--cl-accent), var(--cl-surface) 5%);
-  --ifm-color-primary-lighter: color-mix(in oklch, var(--cl-accent), var(--cl-surface) 8%);
-  --ifm-color-primary-lightest: color-mix(in oklch, var(--cl-accent), var(--cl-surface) 12%);
+  --ifm-color-primary-dark: color-mix(in srgb, var(--cl-accent), var(--cl-ink) 10%);
+  --ifm-color-primary-darker: color-mix(in srgb, var(--cl-accent), var(--cl-ink) 15%);
+  --ifm-color-primary-darkest: color-mix(in srgb, var(--cl-accent), var(--cl-ink) 25%);
+  --ifm-color-primary-light: color-mix(in srgb, var(--cl-accent), var(--cl-surface) 5%);
+  --ifm-color-primary-lighter: color-mix(in srgb, var(--cl-accent), var(--cl-surface) 8%);
+  --ifm-color-primary-lightest: color-mix(in srgb, var(--cl-accent), var(--cl-surface) 12%);
   --ifm-color-danger: var(--cl-danger);
   /* The neutral scale runs from the surface (0) to the ink (1000), so it flips with the theme. */
   --ifm-color-emphasis-0: var(--cl-surface);
-  --ifm-color-emphasis-100: color-mix(in oklch, var(--cl-ink) 6%, var(--cl-surface));
-  --ifm-color-emphasis-200: color-mix(in oklch, var(--cl-ink) 12%, var(--cl-surface));
-  --ifm-color-emphasis-300: color-mix(in oklch, var(--cl-ink) 22%, var(--cl-surface));
-  --ifm-color-emphasis-400: color-mix(in oklch, var(--cl-ink) 35%, var(--cl-surface));
-  --ifm-color-emphasis-500: color-mix(in oklch, var(--cl-ink) 50%, var(--cl-surface));
+  --ifm-color-emphasis-100: color-mix(in srgb, var(--cl-ink) 6%, var(--cl-surface));
+  --ifm-color-emphasis-200: color-mix(in srgb, var(--cl-ink) 12%, var(--cl-surface));
+  --ifm-color-emphasis-300: color-mix(in srgb, var(--cl-ink) 22%, var(--cl-surface));
+  --ifm-color-emphasis-400: color-mix(in srgb, var(--cl-ink) 35%, var(--cl-surface));
+  --ifm-color-emphasis-500: color-mix(in srgb, var(--cl-ink) 50%, var(--cl-surface));
   --ifm-color-emphasis-600: var(--cl-ink-2);
   --ifm-color-emphasis-700: var(--cl-ink-2);
-  --ifm-color-emphasis-800: color-mix(in oklch, var(--cl-ink) 80%, var(--cl-surface));
-  --ifm-color-emphasis-900: color-mix(in oklch, var(--cl-ink) 90%, var(--cl-surface));
+  --ifm-color-emphasis-800: color-mix(in srgb, var(--cl-ink) 80%, var(--cl-surface));
+  --ifm-color-emphasis-900: color-mix(in srgb, var(--cl-ink) 90%, var(--cl-surface));
   --ifm-color-emphasis-1000: var(--cl-ink);
   --ifm-background-color: var(--cl-surface);
   --ifm-background-surface-color: var(--cl-surface);
@@ -44,16 +44,16 @@ html[data-theme] {
   --ifm-global-radius: 0.6rem;
   --ifm-navbar-height: 3.75rem;
   --ifm-navbar-shadow: none;
-  --docusaurus-highlighted-code-line-bg: color-mix(in oklch, var(--cl-ink) 10%, transparent);
+  --docusaurus-highlighted-code-line-bg: color-mix(in srgb, var(--cl-ink) 10%, transparent);
   /* Site tokens: lines, raised surfaces and the tinted bands of headers and inline code. */
-  --cl-line: color-mix(in oklch, var(--cl-ink) 16%, var(--cl-surface));
-  --cl-raised: color-mix(in oklch, var(--cl-surface), white 60%);
-  --cl-accent-soft: color-mix(in oklch, var(--cl-accent) 10%, var(--cl-surface));
+  --cl-line: color-mix(in srgb, var(--cl-ink) 16%, var(--cl-surface));
+  --cl-raised: color-mix(in srgb, var(--cl-surface), white 60%);
+  --cl-accent-soft: color-mix(in srgb, var(--cl-accent) 10%, var(--cl-surface));
   --cl-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 html[data-theme='dark'] {
-  --cl-raised: color-mix(in oklch, var(--cl-surface), var(--cl-ink) 5%);
+  --cl-raised: color-mix(in srgb, var(--cl-surface), var(--cl-ink) 5%);
   --cl-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
