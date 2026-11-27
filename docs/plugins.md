@@ -110,11 +110,46 @@ node plugins/cl-workflow/skills/workflow/models.mjs [<project path> | --reposito
 ```
 
 - It prints each task's model and effort with the row and file that set it, at standard depth and low risk unless given. Files, later ones overriding earlier ones entry by entry: the defaults `plugins/cl-workflow/skills/workflow/models.json`, the user file `$XDG_CONFIG_HOME/cedarloom/cedarloom.json` (`~/.config/cedarloom/cedarloom.json` when that variable is unset or not absolute, [XDG base directory spec](https://specifications.freedesktop.org/basedir-spec/latest/)), which holds `models` only, and the repository file: the project's `cedarloom.json` in the working tree, or the `--repository` file (`-` reads it from stdin), and none without either. The coordinator and the project bot pass `cedarloom.json` as the policy reader read it from the default branch (`git show <commit>:cedarloom.json` with the `commit` the reader printed, piped to `--repository -`), so a local edit, another checked-out branch or a moved ref does not change their lookup. The schema of both files is `cedarloom.json`'s.
-- `models.roles` names `{ model, effort }` pairs; `models.tasks` gives each task a role name or an inline pair. A lookup takes the `tasks` row, then the `depth` row (`quick` or `deep`), which may lower or raise it, then the `risk` rows, which only raise it: `high`, and for `critical` the `high` row first, then the `critical` row.
+- `models.roles` names `{ model, effort }` pairs; `models.tasks` gives each task a role name or an inline pair. A lookup takes the `tasks` row, then the `depth` row (`quick` or `deep`), which may lower or raise it when it comes from the same file as the `tasks` value or a later one (defaults, then user, then repository), then the `risk` rows, which only raise it: `high`, and for `critical` the `high` row first, then the `critical` row.
 - Rank for raising: the model first (`haiku`, `sonnet`, `opus`, `fable`), then the effort (`low`, `medium`, `high`, `xhigh`, `max`).
 - `implement` and `fix` run only on `opus`: the schema refuses an inline pair with another model there, and the resolver refuses any file whose rows or roles put them on another model at any depth and risk. It exits 1 and names the row and file for every refused file.
 - `--hook` prints one line for a session's context, the roles and the command; the plugin's SessionStart hook runs it.
 - The plugin's agent files take their `model` and `effort` from the defaults through the generator. The skill lint refuses a literal model value (`--model opus`, `model: opus`, `"model": "opus"`, model `` `opus` ``, a model name next to an effort level) in the plugins outside the defaults file, the resolver, the schema, the agent files, tests and evals.
+
+The defaults' efforts come from an effort sweep over the eval suites. Each task with a suite ran at `medium` and `high` (review also at `xhigh`); the depth rows ran plan, implement, fix and review together at one effort. Cost is in USD, over the arm's runs.
+
+| Task | Arm | Cases with headroom | Runs | Pass rate | Cost | Default before | Default after |
+|---|---|---|---|---|---|---|---|
+| implement | medium | 1 | 3 | 0/3 | 0.85 | opus high | opus medium (`build-fast`) |
+| implement | high | 1 | 3 | 0/3 | 0.88 | opus high | opus medium (`build-fast`) |
+| fix | none | 0 | 0 | - | - | opus high | opus high |
+| review | medium | 1 | 3 | 0/3 | 0.97 | opus high | opus medium |
+| review | high | 1 | 3 | 0/3 | 1.05 | opus high | opus medium |
+| review | xhigh | 1 | 3 | 0/3 | 1.44 | opus high | opus medium |
+| plan | none | 0 | 0 | - | - | opus high | opus high |
+| depth quick | none | 0 | 0 | - | - | standard values | plan sonnet high (`light`) |
+| depth deep | none | 0 | 0 | - | - | standard values | implement and fix opus high (`build`), review opus high (`deep`) |
+| recheck | medium | 2 | 6 | 3/6 | 1.57 | opus high | opus high |
+| recheck | high | 2 | 6 | 5/6 | 1.78 | opus high | opus high |
+| verify | medium | 1 | 3 | 0/3 | 0.70 | opus high | opus high |
+| verify | high | 1 | 3 | 1/3 | 0.68 | opus high | opus high |
+| research | none | 0 | 0 | - | - | opus high | opus high |
+| test | medium | 2 | 6 | 3/6 | 1.28 | sonnet high | sonnet high |
+| test | high | 2 | 6 | 6/6 | 1.33 | sonnet high | sonnet high |
+| gather | medium | 1 | 3 | 0/3 | 0.46 | sonnet medium | sonnet medium |
+| gather | high | 1 | 3 | 0/3 | 0.46 | sonnet medium | sonnet medium |
+| audit | medium | 1 | 3 | 2/3 | 0.49 | opus high | opus medium |
+| audit | high | 1 | 3 | 1/3 | 0.53 | opus high | opus medium |
+| digest | medium | 2 | 6 | 1/6 | 0.37 | sonnet high | sonnet medium |
+| digest | high | 2 | 6 | 0/6 | 0.35 | sonnet high | sonnet medium |
+| merge | medium | 2 | 6 | 0/6 | 0.49 | sonnet high | sonnet medium |
+| merge | high | 2 | 6 | 0/6 | 0.51 | sonnet high | sonnet medium |
+| coordinate | medium | 36 | 108 | 6/108 | 14.45 | opus high | opus medium |
+| coordinate | high | 36 | 108 | 6/108 | 15.91 | opus high | opus medium |
+
+Implement, review, merge and gather passed no run at any arm, and coordinate passed 6 of 108 at both `medium` and `high`: their `medium` default rests on no gain from `high`, not on a measured pass.
+
+Method: commit `96a96ff`, model `claude-opus-5-5` (digest and merge with `--model sonnet`, test and gather on their agents' `sonnet`), the main session at Opus 5.5's default effort, `medium`, judge `haiku` (the eval default), 3 runs per case and arm. Headroom: a case that passed one `medium` run left the sweep, and the rest ran 3 times per arm. A higher arm becomes the default when it passes at least 2 more runs than the current default, a lower arm when it passes at least as many; a task without headroom keeps its default. 571 sessions (probe, headroom pass, arms, and a run of the other cases at the map's values), 95.98 USD in total.
 
 ## Workflows
 

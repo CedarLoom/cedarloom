@@ -40,6 +40,16 @@ test('models: a depth row lowers a task, and the risk row after it only raises',
   assert.deepEqual([pick(plan), plan.row], ['sonnet medium', 'depth.quick.plan']);
 });
 
+test('models: a repository tasks value holds at deep depth over the defaults depth row', () => {
+  const review = resolveMap({ ...setup({ repository: { models: { tasks: { review: { model: 'fable', effort: 'high' } } } } }), depth: 'deep' }).tasks.review;
+  assert.deepEqual([pick(review), review.row, review.file], ['fable high', 'tasks.review', 'repository']);
+});
+
+test('models: a repository tasks value holds at quick depth over the defaults depth row', () => {
+  const plan = resolveMap({ ...setup({ repository: { models: { tasks: { plan: { model: 'fable', effort: 'high' } } } } }), depth: 'quick' }).tasks.plan;
+  assert.deepEqual([pick(plan), plan.row, plan.file], ['fable high', 'tasks.plan', 'repository']);
+});
+
 test('models: rank compares the model first, then the effort', () => {
   const at = setup({
     user: {
@@ -58,7 +68,7 @@ test('models: a critical lookup applies the high row, then the critical row', ()
   const { tasks } = resolveMap({ ...at, risk: 'critical' });
   assert.deepEqual([pick(tasks.audit), tasks.audit.row], ['fable high', 'risk.high.audit']);
   assert.deepEqual([pick(tasks.verify), tasks.verify.row], ['fable xhigh', 'risk.high.verify']);
-  assert.equal(pick(resolveMap({ ...at, risk: 'medium' }).tasks.audit), 'opus high');
+  assert.equal(pick(resolveMap({ ...at, risk: 'medium' }).tasks.audit), 'opus medium');
 });
 
 test('models: implement and fix run only on opus, whatever row or role would move them', () => {
@@ -66,7 +76,7 @@ test('models: implement and fix run only on opus, whatever row or role would mov
     [{ models: { tasks: { implement: 'light' } } }, /tasks\.implement \(user\), roles\.light \(default\) puts implement on sonnet: implement runs only on opus/],
     [{ models: { depth: { quick: { fix: { model: 'sonnet', effort: 'high' } } } } }, /depth\.quick\.fix \(user\) puts fix on sonnet/],
     [{ models: { risk: { critical: { fix: { model: 'fable', effort: 'high' } } } } }, /risk\.critical\.fix \(user\) puts fix on fable/],
-    [{ models: { roles: { build: { model: 'haiku', effort: 'high' } } } }, /tasks\.implement \(default\), roles\.build \(user\) puts implement on haiku/],
+    [{ models: { roles: { build: { model: 'haiku', effort: 'high' } } } }, /tasks\.fix \(default\), roles\.build \(user\) puts fix on haiku/],
     // A risk value below the tasks row would never be taken; the row is refused all the same.
     [{ models: { risk: { high: { fix: { model: 'sonnet', effort: 'high' } } } } }, /risk\.high\.fix \(user\) puts fix on sonnet/],
   ]) assert.throws(() => resolveMap(setup({ user })), message);

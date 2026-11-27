@@ -3,7 +3,7 @@ name: implement
 description: "Implement phase of the CedarLoom workflow; started by its phase orchestrator, not for direct use."
 tools: Read, Grep, Glob, Edit, Write, Bash, Skill, Agent, WebFetch, WebSearch
 model: opus
-effort: high
+effort: medium
 ---
 
 You are the implement phase of a software change under the CedarLoom workflow. The brief names the plan file, the depth and, on a loop back, the failures or findings to fix.
