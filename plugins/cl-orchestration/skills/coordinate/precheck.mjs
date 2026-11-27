@@ -1,6 +1,7 @@
 // Usage: node precheck.mjs [--prompts <folder>] <project paths...>. Sample precheck for a scheduled coordinator run: exit 0 when a project has an issue to pick or a builder's build result in <folder> is unread, else 1. It starts and merges nothing.
 // node precheck.mjs --catch-up <clone> [--state <folder>]: the project bot's catch-up precheck (catch-up.mjs).
-// node precheck.mjs --host-limit <n> --working <m> [--reserve <prompt file> --result <result file> --lock <folder>] <prompts folders...>: the host limit before a start (bot-project.md, Start). It prints each unfinished role bot run in the folders, of every project bot on the host, and exits 0 when one more start fits within <n> beside <m> working Orca workers, 1 when not, 2 when it cannot count. With --reserve it counts and, when the start fits, creates the prompt file, both while it holds the lock folder, which every project bot on the host names alike.
+// node precheck.mjs --host-limit <n> --working <m> [--counted-at <UTC time> --reserve <prompt file> --result <result file> --lock <folder>] <prompts folders...>: the host limit before a project bot start (orca.md, Project bot starts). It prints each unfinished role bot run in the folders, of every project bot on the host, and exits 0 when one more start fits within <n> beside <m> working Orca workers, 1 when not, 2 when it cannot count. With --reserve it counts and, when the start fits, creates the prompt file, both while it holds the lock folder, which every project bot on the host names alike; a worker handed to the Orca count at or after --counted-at, when the count of <m> began, prints "recount" and exits 1.
+// node precheck.mjs --hand-over <prompt file> --lock <folder>: deletes a fresh worker's prompt file under the lock once the Orca count shows that worker, and records when.
 // Pickable: open, carries startLabel and every issues.labels entry, not labeled cl:needs-human (an owner question), cl:in-progress (a worker holds it) or cl:deferred (the owner parked it), named by no question that waits for the owner (approval.mjs waiting), written by a trusted author (the repository owner, a trustedAuthors login, or a member or collaborator with write access), and no pull request for it: none merged or open in the repository with a head branch <type>/<number>-<slug> (an open one from a fork does not count, since anyone can open it).
 // An issue that several of the given projects list starts in none of them: it is printed once on stderr, as "several projects: <owner/repo>#<number> (<paths>)".
 // Unread: the prompt file of a builder run in round 0 (a build or plan from the spec, before its pull request) in the project bot's prompts folder whose result file holds text; the pick sweep deletes the prompt file once it read the result (bot-project.md, Pick and Start). Each is printed on stderr as "<folder>: <reason>".
@@ -201,16 +202,26 @@ export function unfinished(folders) {
   return found;
 }
 
-// { limit, working, folders, reserve, result, lock } of the --host-limit command line; a count that is no whole number fails, so a typo never lifts the limit.
+const UTC_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+// { limit, working, folders, countedAt, reserve, result, lock } of the --host-limit command line; a count that is no whole number fails, so a typo never lifts the limit.
 export function hostArgs(argv) {
-  const options = { 'host-limit': { type: 'string' }, working: { type: 'string' }, reserve: { type: 'string' }, result: { type: 'string' }, lock: { type: 'string' } };
+  const options = { 'host-limit': { type: 'string' }, working: { type: 'string' }, 'counted-at': { type: 'string' }, reserve: { type: 'string' }, result: { type: 'string' }, lock: { type: 'string' } };
   const { values, positionals } = parseArgs({ args: argv, options, allowPositionals: true });
   const [limit, working] = [values['host-limit'], values.working].map((v) => (/^\d+$/.test(v ?? '') ? Number(v) : NaN));
-  const { reserve, result, lock } = values;
-  const given = [reserve, result, lock].filter((v) => v !== undefined).length;
-  if (Number.isNaN(limit) || Number.isNaN(working) || (given && given < 3)) throw new Error('usage: node precheck.mjs --host-limit <n> --working <m> [--reserve <prompt file> --result <result file> --lock <folder>] <prompts folders...>');
+  const { 'counted-at': counted, reserve, result, lock } = values;
+  const given = [counted, reserve, result, lock].filter((v) => v !== undefined).length;
+  if (Number.isNaN(limit) || Number.isNaN(working) || (given && given < 4)) throw new Error('usage: node precheck.mjs --host-limit <n> --working <m> [--counted-at <UTC time> --reserve <prompt file> --result <result file> --lock <folder>] <prompts folders...>');
   if (given && (!PROMPT.test(basename(reserve)) || !positionals.some((f) => resolve(f) === resolve(dirname(reserve))) || !isAbsolute(result) || !isAbsolute(lock))) throw new Error('--reserve names no role bot prompt file in a given folder, or --result or --lock no absolute path');
-  return { limit, working, folders: positionals, reserve, result, lock };
+  if (given && !(UTC_TIME.test(counted) && !Number.isNaN(Date.parse(counted)))) throw new Error('--counted-at names no UTC time YYYY-MM-DDTHH:MM:SSZ');
+  return { limit, working, folders: positionals, countedAt: given ? Date.parse(counted) : undefined, reserve, result, lock };
+}
+
+// { prompt, lock } of the --hand-over command line.
+export function handOverArgs(argv) {
+  const { values } = parseArgs({ args: argv, options: { 'hand-over': { type: 'string' }, lock: { type: 'string' } } });
+  const { 'hand-over': prompt, lock } = values;
+  if (!PROMPT.test(basename(prompt ?? '')) || !isAbsolute(prompt) || !isAbsolute(lock ?? '')) throw new Error('usage: node precheck.mjs --hand-over <absolute prompt file> --lock <absolute folder>');
+  return { prompt, lock };
 }
 
 // The host-wide lock of the count and the reservation, so one start at a time counts and creates its prompt file: a folder that holds one empty file named by its holder's token. A start takes it by renaming a folder of its own onto the path, which fails while a holder's folder is there, since a rename replaces only an empty folder. Nothing moves a holder's folder, so the path is never free while the lock is held.
@@ -245,6 +256,18 @@ export function unlock(lock, token) {
   try { rmdirSync(lock); } catch (e) { if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(e.code)) throw e; }
 }
 
+// A start that died before it took the lock left its own folder beside it. A waiting start renews its token file at every try, so a folder whose token file (without one, the folder) aged past LOCK_STALE_MS is a dead start's.
+function sweep(lock, now) {
+  const dir = dirname(lock), prefix = `${basename(lock)}-new-`;
+  for (const name of readdirSync(dir).filter((n) => n.startsWith(prefix))) {
+    const folder = join(dir, name);
+    let at;
+    try { at = statSync(join(folder, name.slice(prefix.length))).mtimeMs; } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    try { at ??= statSync(folder).mtimeMs; } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
+    if (now() - at > LOCK_STALE_MS) rmSync(folder, { recursive: true, force: true });
+  }
+}
+
 function locked(lock, now, fn) {
   const token = lockToken(lock), until = now() + LOCK_WAIT_MS;
   try {
@@ -253,15 +276,42 @@ function locked(lock, now, fn) {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
     }
   } catch (e) { rmSync(own(lock, token), { recursive: true, force: true }); throw e; }
-  try { return fn(); } finally { unlock(lock, token); }
+  try {
+    sweep(lock, now);
+    return fn();
+  } finally { unlock(lock, token); }
 }
 
-// { runs, fits }: with reserve, the count and the placeholder prompt file (its result line only) are one step under the lock, so starts at the same time never pass the limit; the project bot then writes the prompt into that file, which counts as unfinished meanwhile.
-export function reserveStart({ limit, working, folders, reserve, lock, result }, now = Date.now) {
+// Each hand-over leaves an empty file beside the lock named by its time, <lock>-handed-<ms>-<token>, before its prompt file goes. A record is only made or removed for an older one, never replaced, so the newest time never moves back, also where a holder stalled past LOCK_STALE_MS and lost the lock.
+function handed(lock) {
+  const prefix = `${basename(lock)}-handed-`;
+  return readdirSync(dirname(lock)).filter((n) => n.startsWith(prefix)).map((name) => {
+    const at = Number(name.slice(prefix.length).split('-')[0]);
+    if (!Number.isSafeInteger(at)) throw new Error(`${name} names no hand-over time`);
+    return { name, at };
+  });
+}
+// The newest hand-over time, null before the first.
+const handedAt = (lock) => handed(lock).reduce((newest, { at }) => Math.max(newest ?? at, at), null);
+
+// A fresh worker's prompt file counts it until the Orca count shows it: the time is recorded before the file goes, both under the lock, so a start whose Orca count began before is refused (reserveStart). Older records go.
+export function handOver({ prompt, lock }, now = Date.now) {
+  return locked(lock, now, () => {
+    const dir = dirname(lock), at = now();
+    writeFileSync(join(dir, `${basename(lock)}-handed-${at}-${unique()}`), '', { flag: 'wx' });
+    for (const record of handed(lock)) if (record.at < at) rmSync(join(dir, record.name), { force: true });
+    rmSync(prompt, { force: true });
+  });
+}
+
+// { runs, fits, recount }: with reserve, the count and the placeholder prompt file (its result line only) are one step under the lock, so starts at the same time never pass the limit; the project bot then writes the prompt into that file, which counts as unfinished meanwhile.
+// The Orca count of working comes from outside the lock: a worker handed over at or after countedAt may be in neither that count nor the folders, so it reserves nothing and asks for a recount.
+export function reserveStart({ limit, working, folders, countedAt, reserve, lock, result }, now = Date.now) {
   const count = () => { const runs = unfinished(folders); return { runs, fits: working + runs.length < limit }; };
   if (reserve === undefined) return count();
   return locked(lock, now, () => {
-    const got = count();
+    const got = count(), at = handedAt(lock);
+    if (at !== null && at >= countedAt) return { ...got, fits: false, recount: true };
     if (got.fits) writeFileSync(reserve, `Result file: ${result}\n`, { flag: 'wx' });
     return got;
   });
@@ -304,10 +354,13 @@ if (isMain(import.meta.url) && process.argv.slice(2).includes('--catch-up')) {
     process.exit(0);
   });
 } else if (isMain(import.meta.url) && process.argv.slice(2).some((a) => a.startsWith('--host-limit'))) {
-  let runs, fits;
-  try { ({ runs, fits } = reserveStart(hostArgs(process.argv.slice(2)))); } catch (e) { console.error(escaped(e.message.split('\n')[0])); process.exit(2); }
+  let runs, fits, recount;
+  try { ({ runs, fits, recount } = reserveStart(hostArgs(process.argv.slice(2)))); } catch (e) { console.error(escaped(e.message.split('\n')[0])); process.exit(2); }
   for (const run of runs) console.log(escaped(run));
+  if (recount) console.log('recount');
   process.exit(fits ? 0 : 1);
+} else if (isMain(import.meta.url) && process.argv.slice(2).some((a) => a.startsWith('--hand-over'))) {
+  try { handOver(handOverArgs(process.argv.slice(2))); } catch (e) { console.error(escaped(e.message.split('\n')[0])); process.exit(2); }
 } else if (isMain(import.meta.url)) {
   let dirs, prompts;
   try { ({ dirs, prompts } = argsOf(process.argv.slice(2))); } catch (e) { console.error(e.message); process.exit(1); }
