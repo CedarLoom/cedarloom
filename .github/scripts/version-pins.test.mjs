@@ -24,5 +24,10 @@ test('an Orca file cites a version or an open check only in the pin lines', () =
     'It stays open (observed in a live run).',
     'Claude Code v2.1.330 shows the status bar.',
   ].join('\n');
-  assert.deepEqual(provenance(text), [5, 6, 7, 8]);
+  assert.deepEqual(provenance(text, true), [5, 6, 7, 8]);
+});
+
+test('a pin line counts as a version cite outside the head of orca.md', () => {
+  assert.deepEqual(provenance('# Orca watch\n\nChecked with Orca 1.4.274.', false), [3]);
+  assert.deepEqual(provenance('# Orca commands\n\nChecked with Orca 1.4.274.\n\nText.\nChecked with Claude Code 2.1.330.', true), [6]);
 });

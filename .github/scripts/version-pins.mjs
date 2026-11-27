@@ -15,10 +15,14 @@ export const SKIP = /^plugins\/|package-lock\.json$/;
 // The Orca files of the coordinate skill: they name the versions they were checked with once, in orca.md's pin lines; an open check is an issue, not a note.
 export const ORCA_FILES = /^plugins\/cl-orchestration\/skills\/coordinate\/(orca[^/]*|automatic-start|recurring-runs|bot-catch-up)\.md$/;
 
-// The 1-based numbers of the lines that cite a version or mark a claim unverified or observed, the pin lines apart.
-export function provenance(text) {
+// The 1-based numbers of the lines that cite a version or mark a claim unverified or observed. With pinned (orca.md), the pin lines
+// in the head of the file (the title, blank lines and pin lines before any other line) are exempt; a pin line anywhere else counts.
+export function provenance(text, pinned = false) {
+  let head = pinned;
   return text.split('\n').flatMap((line, i) => {
-    if (/^Checked with (Orca|Claude Code) \d+\.\d+\.\d+( to \d+\.\d+\.\d+)?\.$/.test(line)) return [];
+    const pin = /^Checked with (Orca|Claude Code) \d+\.\d+\.\d+( to \d+\.\d+\.\d+)?\.$/.test(line);
+    head &&= pin || line === '' || /^# /.test(line);
+    if (head && pin) return [];
     return /\b(Orca|Claude Code) v?\d+\.\d+\.\d+|\b(unverified|observed)\b/i.test(line) ? [i + 1] : [];
   });
 }
@@ -44,7 +48,7 @@ if (isMain(import.meta.url)) {
   const cites = execFileSync('/usr/bin/git', ['ls-files', 'plugins/cl-orchestration/skills/coordinate/*.md'], { cwd: root, encoding: 'utf8' })
     .split('\n')
     .filter((f) => ORCA_FILES.test(f))
-    .flatMap((f) => provenance(readFileSync(`${root}/${f}`, 'utf8')).map((line) => `${f}:${line}`));
+    .flatMap((f) => provenance(readFileSync(`${root}/${f}`, 'utf8'), f.endsWith('/orca.md')).map((line) => `${f}:${line}`));
   if (cites.length) {
     console.log(`::error::a version cite or an unverified or observed note outside orca.md's pin lines in ${cites.join(', ')}: move it to an issue`);
     process.exitCode = 1;
