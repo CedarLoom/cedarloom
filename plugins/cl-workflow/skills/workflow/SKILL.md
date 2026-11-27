@@ -57,7 +57,7 @@ Every depth:
    - Reviews start then, by the depth's playbook with its remediation rounds.
    - Read-only lookups and mechanical reading (file searches, log and CI output, inventories, pull request status) run in a subagent on [map](models.md) task `gather` that edits no file (Claude Code: `cl-workflow:gather`), on `lookup` only for a bounded lookup whose whole input stays under 100,000 tokens.
    - Failed checks rerun after their fix.
-   - Waiting for pull request checks: watch them in the background (a host without a watch command: one until-loop Monitor, 30 seconds or slower).
+   - Waiting for pull request checks: watch them in the background (GitHub: `gh pr checks --watch --interval 30`; a host without a watch command: one until-loop Monitor, 30 seconds or slower).
 6. **Report done** with each check's command and result, a "steps skipped" line naming the checklist steps not run (or "none") and what was not checked. After a merge or when the next task is unrelated, suggest a new session (`/clear` in Claude Code).
 
 A session itself on `fable` also follows [fable.md](fable.md).
