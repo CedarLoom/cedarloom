@@ -10,6 +10,6 @@ Report it privately, not as a public issue: [report a vulnerability](https://git
 
 ## After a report
 
-- You get a first answer within 7 days.
+- You get a first answer within 14 days.
 - A confirmed vulnerability is fixed in a release within 90 days of the report, and the disclosure date is agreed with you.
 - The fix and the GitHub security advisory are published together.
