@@ -416,6 +416,8 @@ test('start-checks: a managed or user autoMode that widens the classifier or dro
     ['home/.claude/settings.json', 'autoMode.environment can widen what auto mode\'s classifier lets pass: ["$defaults","Every host is trusted"]'],
   ]);
   assert.deepEqual(setup({ 'home/.claude/settings.json': { autoMode: 'off' } }).run().unresolved.map((u) => u.reason), ['autoMode is no object']);
+  assert.deepEqual(setup({ 'managed/managed-settings.json': { autoMode: { classifyAllShell: true } }, 'home/.claude/settings.json': { autoMode: { classifyAllShell: false } } }).run().unresolved, []);
+  assert.deepEqual(setup({ 'home/.claude/settings.json': { autoMode: { classifyAllShell: 'true' } } }).run().unresolved.map((u) => u.reason), ['autoMode.classifyAllShell is no boolean: "true"']);
 });
 
 test('start-checks: a wrong type below permissions, or a permissions key the script does not know, is unresolved', () => {

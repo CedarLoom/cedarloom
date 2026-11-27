@@ -280,11 +280,12 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
     if (settings.allowManagedHooksOnly !== undefined && settings.allowManagedHooksOnly !== false) fail(4, file, 'allowManagedHooksOnly can turn off the role guard');
     if (plain(settings.env) && Object.hasOwn(settings.env, ROLE)) fail(4, file, `env sets ${ROLE}, which the worker must not inherit`);
     if (settings.sandbox !== undefined && !(plain(settings.sandbox) && settings.sandbox.enabled === false)) fail(4, file, 'sandbox: CedarLoom ignores the Claude Code sandbox and does not support it; set sandbox.enabled to false or remove the key');
-    // Auto mode's classifier reads autoMode from these scopes: allow and environment entries widen what it lets pass, and a list without "$defaults" drops its built-in rules.
+    // Auto mode's classifier reads autoMode from these scopes: allow and environment entries widen what it lets pass, and a list without "$defaults" drops its built-in rules. classifyAllShell only suspends shell allow rules, so either boolean keeps the bound.
     if ((scope === 'managed' || scope === 'user') && settings.autoMode !== undefined) {
       if (!plain(settings.autoMode)) cannot(file, 'autoMode is no object');
       else for (const [key, list] of Object.entries(settings.autoMode)) {
-        if (!Array.isArray(list) || !list.includes('$defaults')) cannot(file, `autoMode.${key} is no list with "$defaults", which keeps the classifier's built-in rules: ${JSON.stringify(list)}`);
+        if (key === 'classifyAllShell') { if (typeof list !== 'boolean') cannot(file, `autoMode.classifyAllShell is no boolean: ${JSON.stringify(list)}`); }
+        else if (!Array.isArray(list) || !list.includes('$defaults')) cannot(file, `autoMode.${key} is no list with "$defaults", which keeps the classifier's built-in rules: ${JSON.stringify(list)}`);
         else if ((key === 'allow' || key === 'environment') && list.some((e) => e !== '$defaults')) cannot(file, `autoMode.${key} can widen what auto mode's classifier lets pass: ${JSON.stringify(list)}`);
       }
     }
