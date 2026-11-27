@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
+import fs, { linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -134,9 +135,38 @@ test('state: a run about a pull request with 12 runs today counts one run withou
   writeState(pr, { repo: 'o/r', pr: 9, cappedOn: '2026-11-19' });
   assert.deepEqual(startRun(dir, NOW, { pr: 9 }), { go: true });
   assert.deepEqual(startRun(dir, NOW, { pr: 9 }), { go: false, limit: 'prRuns', report: true });
-  assert.deepEqual(readState(pr), { repo: 'o/r', pr: 9, cappedOn: '2026-11-20' });
+  assert.deepEqual(readState(pr), { repo: 'o/r', pr: 9, cappedOn: '2026-11-20', version: 1 });
   assert.deepEqual(startRun(dir, NOW, { pr: 9 }), { go: false, limit: 'prRuns', report: false });
   assert.deepEqual(readState(file), { runs: 23, workerStarts: 0, catchUp: 0, prs: { 9: 12 } });
+});
+
+test('state: a capped run writes cappedOn under the write lock, so a write that comes between its read and its write is neither lost nor set back', () => {
+  const dir = folder(), path = join(dir, 'pr-9.json');
+  writeState(join(dir, 'counts-2026-11-20.json'), { runs: 0, workerStarts: 0, catchUp: 0, prs: { 9: 12 } });
+  writeState(path, { repo: 'o/r', pr: 9, version: 5 });
+  // Another run writes held, read at version 5, at the moment the capped run reads pr-9.json.
+  const read = fs.readFileSync;
+  let fired = false, other;
+  fs.readFileSync = (file, ...rest) => {
+    const body = read(file, ...rest);
+    if (file === path && !fired) {
+      fired = true;
+      try { other = update(path, { version: 5, held: 'owner question' }, { sleep: () => {} }); } catch (e) { other = e; }
+    }
+    return body;
+  };
+  syncBuiltinESMExports();
+  try {
+    assert.deepEqual(startRun(dir, NOW, { pr: 9 }), { go: false, limit: 'prRuns', report: true });
+  } finally {
+    fs.readFileSync = read;
+    syncBuiltinESMExports();
+  }
+  assert.deepEqual(readState(path), { repo: 'o/r', pr: 9, version: 6, cappedOn: '2026-11-20' });
+  assert.match(String(other?.message), /pr-9\.json is locked by another write/);
+  assert.deepEqual(update(path, { version: 5, held: 'owner question' }), { written: false, version: 6 });
+  assert.deepEqual(update(path, { version: 6, held: 'owner question' }), { written: true, version: 7 });
+  assert.deepEqual(readState(path), { repo: 'o/r', pr: 9, version: 7, cappedOn: '2026-11-20', held: 'owner question' });
 });
 
 test('state: a worker starts below 120 worker starts and counts itself, and none at 120', () => {
@@ -222,6 +252,13 @@ test('state: unlock removes a stale lock only, naming its holder', () => {
 test('state: the command line answers a missing state file with exit 1, adds an answered key once, and refuses a decide that names an id it does not decide', () => {
   const dir = folder(), answered = join(dir, 'answered.json');
   assert.deepEqual(main(['read', join(dir, 'pr-9.json')], NOW), { out: { rebuild: 'missing' }, code: 1 });
+  // A new pull request's first write: version 0 creates the file, no version writes nothing.
+  writeFileSync(join(dir, 'new.json'), JSON.stringify({ repo: 'o/r', pr: 9, round: 1 }));
+  assert.throws(() => main(['write', join(dir, 'pr-9.json'), join(dir, 'new.json')], NOW), /new\.json names no version/);
+  assert.equal(readState(join(dir, 'pr-9.json')), null);
+  writeFileSync(join(dir, 'new.json'), JSON.stringify({ repo: 'o/r', pr: 9, round: 1, version: 0 }));
+  assert.deepEqual(main(['write', join(dir, 'pr-9.json'), join(dir, 'new.json')], NOW), { out: { written: true, version: 1 }, code: 0 });
+  assert.deepEqual(readState(join(dir, 'pr-9.json')), { repo: 'o/r', pr: 9, round: 1, version: 1 });
   assert.deepEqual(main(['write', answered, '--add', '#4 2026-11-20T10:00:00Z'], NOW), { out: { added: true }, code: 0 });
   assert.deepEqual(main(['write', answered, '--add', '#4 2026-11-20T10:00:00Z'], NOW), { out: { added: false }, code: 0 });
   assert.deepEqual(readState(answered), ['#4 2026-11-20T10:00:00Z']);

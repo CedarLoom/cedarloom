@@ -72,7 +72,7 @@ export function writeState(path, value) {
 
 const day = (now) => now.toISOString().slice(0, 10);
 
-// A project bot run's start: none at the daily limit of runs or worker starts. A run about pull request pr that had LIMITS.prRuns runs today counts { runs: 1 } and stops, and sets that pull request's cappedOn to the day; report is true unless cappedOn named the day already. Else it counts { runs: 1, pr, catchUp }.
+// A project bot run's start: none at the daily limit of runs or worker starts. A run about pull request pr that had LIMITS.prRuns runs today counts { runs: 1 } and stops, and sets that pull request's cappedOn to the day (change, which decides report too); report is true unless cappedOn named the day already. Else it counts { runs: 1, pr, catchUp }.
 export function startRun(state, now, { pr, catchUp = false } = {}) {
   const counts = count(state, now);
   if (counts.runs >= LIMITS.runs) return { go: false, limit: 'runs' };
@@ -83,11 +83,12 @@ export function startRun(state, now, { pr, catchUp = false } = {}) {
     return { go: true };
   }
   count(state, now, add);
-  const path = join(state, `pr-${pr}.json`), current = load(path);
-  if (!isRecord(current)) return { go: false, limit: 'prRuns', report: true };
-  if (current.cappedOn === day(now)) return { go: false, limit: 'prRuns', report: false };
-  writeState(path, { ...current, cappedOn: day(now) });
-  return { go: false, limit: 'prRuns', report: true };
+  let report = true;
+  change(join(state, `pr-${pr}.json`), (current) => {
+    if (current?.cappedOn === day(now)) report = false;
+    return current && report ? { ...current, cappedOn: day(now) } : null;
+  });
+  return { go: false, limit: 'prRuns', report };
 }
 
 // One worker start or role bot run: none at LIMITS.workerStarts today, else it counts { workerStarts: 1 }.
