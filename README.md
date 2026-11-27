@@ -8,6 +8,10 @@
 # CedarLoom
 
 [![Sponsor](https://img.shields.io/badge/Sponsor-eikelandin-db61a2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/eikelandin)
+[![Checks](https://github.com/CedarLoom/cedarloom/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/CedarLoom/cedarloom/actions/workflows/checks.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/CedarLoom/cedarloom/badge)](https://scorecard.dev/viewer/?uri=github.com/CedarLoom/cedarloom)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](REUSE.toml)
+[![Release](https://img.shields.io/github/v/release/CedarLoom/cedarloom?sort=semver)](https://github.com/CedarLoom/cedarloom/releases/latest)
 
 CedarLoom gives Claude Code a workflow: it sizes the planning, checks and review of each task to its risk, sets up and maintains your repositories for agents, and runs issue work across several projects from one coordinator session. It installs as plugins from a marketplace; there is no app or package to run.
 
