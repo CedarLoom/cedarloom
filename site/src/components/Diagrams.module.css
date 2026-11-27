@@ -91,7 +91,7 @@
   background: var(--ifm-color-primary);
   color: var(--ifm-background-color);
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: var(--cl-font-weight-strong);
   line-height: 1;
 }
 
@@ -106,7 +106,7 @@
   padding: 0.7rem 1rem 0.8rem;
   border: 1px solid var(--cl-line);
   border-radius: 0.75rem;
-  background: var(--cl-surface);
+  background: var(--cl-raised);
   box-shadow: var(--cl-shadow);
 }
 
@@ -116,7 +116,7 @@
   gap: 0.5rem;
   align-items: center;
   margin: 0;
-  font-weight: 700;
+  font-weight: var(--cl-font-weight-strong);
 }
 
 .youTag {
@@ -128,7 +128,7 @@
   border-radius: 1rem;
   color: var(--ifm-color-primary);
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: var(--cl-font-weight-strong);
 }
 
 .text {
@@ -162,12 +162,12 @@
 }
 
 .go svg {
-  color: var(--cl-go);
+  color: var(--cl-accent);
 }
 
 .owner svg,
 .drop svg {
-  color: var(--cl-warn);
+  color: var(--cl-danger);
 }
 
 @container (min-width: 50rem) {
@@ -222,7 +222,7 @@
   margin: 0;
   color: var(--cl-ink-2);
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: var(--cl-font-weight-strong);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -240,9 +240,9 @@
   padding: 0.45rem 0.9rem;
   border: 1px solid var(--cl-line);
   border-radius: 2rem;
-  background: var(--cl-surface);
+  background: var(--cl-raised);
   box-shadow: var(--cl-shadow);
-  font-weight: 600;
+  font-weight: var(--cl-font-weight-strong);
   white-space: nowrap;
 }
 
@@ -270,7 +270,7 @@
   padding: 0.6rem 0.85rem;
   border: 1px solid var(--cl-line);
   border-radius: 0.75rem;
-  background: var(--cl-surface);
+  background: var(--cl-raised);
   box-shadow: var(--cl-shadow);
 }
 
@@ -328,7 +328,7 @@
   grid-template-columns: repeat(4, 1fr);
   margin-bottom: 0.5rem;
   font-size: 0.875rem;
-  font-weight: 700;
+  font-weight: var(--cl-font-weight-strong);
   text-align: center;
 }
 

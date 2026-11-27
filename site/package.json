@@ -4,7 +4,7 @@
   "description": "The CedarLoom GitHub Pages site, built with Docusaurus.",
   "scripts": {
     "start": "docusaurus start",
-    "build": "docusaurus build",
+    "build": "node ../brand/build-tokens.mjs --check && docusaurus build",
     "serve": "docusaurus serve",
     "clear": "docusaurus clear",
     "typecheck": "tsc",
