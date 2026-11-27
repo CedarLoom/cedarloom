@@ -20,6 +20,7 @@ Arguments: $ARGUMENTS, a repository path, then at most one verb. Any other argum
    - `ORCA bot list`, `ORCA automations list --json` and, for each automation of `cl-<repo>`, `ORCA automations runs --id <id> --limit 1 --json`.
    - `node <skill folder>/state.mjs read` on the files in `<state>`: each `pr-<n>.json` with a `held` reason, `red-main.json`, today's `counts-<day>.json`, and `lock/holder.json` when the lock is older than 15 minutes.
    - The open approvals: `node <skill folder>/approval.mjs queue` in `<project home>`, and `gh issue list -R <owner/repo> --label cl:needs-human --state open`.
+   - The held issues: `gh issue list -R <owner/repo> --label cl:in-progress --state open --limit 1000 --json number`. Report each with no open pull request (a fork's does not count, as in [Start](bot-pick.md#start)) and no prompt file `<repo>-<n>-*.md` in `<project home>/prompts`, with `gh issue edit <number> -R <owner/repo> --remove-label cl:in-progress` for the user to run once no worker holds it.
    - Report what waits for the user and which bots and automations are missing, and point to `setup` for them. Without `cedarloom.json` on the default branch setup creates no automations, so report them as waiting for it.
 4. **`setup`:** take the steps of [Setup](setup-bots.md#setup) (Which bots, Read only, Plan, Apply).
 5. **`pick`, `catch-up`, `reconcile`, `maintain`** (a nudge): run the project bot's existing automation of that name now.
