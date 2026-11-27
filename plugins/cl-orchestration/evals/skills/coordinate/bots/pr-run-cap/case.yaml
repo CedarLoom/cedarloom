@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: coord-bots-pr-run-cap
-description: 'A project bot run about a pull request that already had 12 runs this UTC day counts only { runs: 1 }, sets cappedOn to the day and ends, naming the cap in the run''s report and never in an approval issue. The case starts the skill, then has the session take SOUL.md and bot-project.md, the procedure an automation''s prompt names for a project bot run. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/bot-project.md:8. Needs --scaffold.'
+description: 'A project bot run about a pull request counts itself with state.mjs count and --pr; when that answers the pull request''s daily cap it ends, naming the cap in the run''s report and never in an approval issue. The case starts the skill, then has the session take SOUL.md and bot-project.md, the procedure an automation''s prompt names for a project bot run. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/bot-project.md:8. Needs --scaffold.'
 tags: [cl-orchestration, coord-bots]
 context:
   scaffold_script: setup.sh
@@ -11,30 +11,25 @@ execution:
     This session stands for one run of the project bot of example-org/widget, started by its `ci_passed` event rule for pull request 31, not for a coordinator run: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure. It is a dry run: run no command and write no file. Decide step 2 (Count) from these facts only.
 
     - UTC now is 2026-11-25T14:05:00Z. Step 1 made the run folder.
-    - `count(<state>, new Date())` reads today's counts: 141 project bot runs, 37 worker starts, and 12 runs for pull request 31.
-    - `pr-31.json` has `"cappedOn": "2026-11-24"` and `"held": null`.
+    - The count command of step 2, run for this run, prints `{"go":false,"limit":"prRuns","report":true}` and exits 1.
 
-    Write exactly these four lines:
+    Write exactly these three lines, with `<state>` for the state folder:
+    Command: <the count command line step 2 runs>
     Decision: <go on | end>
-    Count: <the third argument you pass to count() for this run, or none>
-    cappedOn: <the value you write to pr-31.json, or unchanged>
     Cap named in: <the run's report | an approval issue | nowhere>
     then stop.
   max_turns: 12
   disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
 graders:
   - type: regex
+    name: counts-with-the-pull-request
+    pattern: 'Command:\s*[`*_]*\s*(node\s+(?:<[^>\n]*>|\S)*state\.mjs|state)\s+count\s+\S+\s+--pr\s+31\b'
+  - type: regex
     name: run-ends
     pattern: 'Decision:\s*[`*_]*\s*end\b'
     flags: i
   - type: regex
-    name: counts-one-run-only
-    pattern: 'Count:\s*[`*_]*\s*\{\s*"?runs"?\s*:\s*1\s*\}'
-  - type: regex
-    name: capped-today
-    pattern: 'cappedOn:\s*[`*_"]*\s*2026-11-25'
-  - type: regex
     name: cap-in-report
     pattern: 'Cap named in:\s*[`*_]*\s*(the\s+)?(run''s\s+)?report'
     flags: i
-expected_outcome: 'Decision: end; Count: { runs: 1 } (no pr, no workerStarts); cappedOn: 2026-11-25; Cap named in: the run''s report, never an approval issue.'
+expected_outcome: 'Command: node <skill folder>/state.mjs count <state> --pr 31; Decision: end; Cap named in: the run''s report, never an approval issue.'

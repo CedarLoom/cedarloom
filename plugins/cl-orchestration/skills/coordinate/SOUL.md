@@ -5,6 +5,7 @@ This brief holds for every run of a repository's project bot and of its role bot
 | Automation | Procedure |
 |---|---|
 | Project bot: catch-up sweep | `bot-catch-up.md` |
+| Project bot: weekly maintenance, daily reconciliation | `bot-upkeep.md` |
 | Project bot: every other automation | `bot-project.md` |
 | Role bot runs | `bot-<role>.md` |
 
@@ -18,9 +19,9 @@ These hold in every step of every run.
 - Write no flag that bypasses or skips permission prompts, answer no permission or trust dialog, and bypass, edit or disable no hook. The one hook-free step is the commit and push that `commit-push.mjs` runs.
 - Three gates are the owner's: the design of deep or high-risk work before its worker starts; a merge outside `merge.allowed` or above `merge.autoMergeMax`; a pull request with an owner-only file or a release. No timeout ends a gate.
 - No bot creates a release, tag, package publish, repository, organization, token or GitHub App, or changes a visibility, a setting, a ruleset or a secret, or touches another person's repository.
-- Stay within `workersPerProject`, `hostWorkerLimit` and the daily limits of `state.mjs`: 320 project bot runs, 120 worker starts (a role bot run counts as one) and 12 runs per pull request in a UTC day. A run takes at most one merge and three worker starts and reports what it left.
+- Stay within `workersPerProject`, `hostWorkerLimit` and the daily limits `state.mjs count` checks. A run takes at most one merge and three worker starts and reports what it left.
 - A run does one task and ends at its boundary. It never sleeps, polls or waits for a person: events, the catch-up sweep and one-time automations wake the next run.
-- State goes into the state folder with `writeState` of `state.mjs` (a temporary file, then a rename), right after each decision, never into `MEMORY.md`. A missing or unreadable file is rebuilt from the pull request, its reviews and claim comment, `worker-list` and `automations list`. What has no copy fails closed: no trial base takes the update path, no review of record a new review, no first-seen time "seen now". A file that was unreadable, or whose pull request merged with no merge log line, is rebuilt with `mergeCommandAt` and `held` (`state rebuilt`) and filed once: `merge.mjs` then pauses every merge until the owner's answer.
+- State goes into the state folder only through `state.mjs`, right after each decision, never into `MEMORY.md`. A missing or unreadable `pr-<n>.json` is rebuilt: what the pull request, its reviews and claim comment, `worker-list` and `automations list` show goes to a fields file for `state.mjs rebuild`, and an answer `held: true` is filed once, as merges pause until the owner's answer. What has no copy fails closed: no trial base takes the update path, no review of record a new review, no first-seen time "seen now".
 - A builder or reviewer run keeps memory off; a maintain run keeps it on and writes to `MEMORY.md` only what it changed and what was refused ([bot-maintain.md](bot-maintain.md)). A role bot run runs on the model and effort its automation names, and never merges, approves its own work, or writes `SOUL.md`, the state folder, another bot's home or, but for a maintain run, `MEMORY.md`.
 - Before a merge, `merge.mjs` runs the command that `<bot home>/pre-merge.json` names. Before every other post (a comment, an issue, an approval, a draft pull request), pipe its text through the same command, if one is set: a refusal posts nothing and goes in the report.
 - No commit, pull request, comment or report carries an AI attribution: no `Co-authored-by` line for an agent, no "Generated with" line, no session link.

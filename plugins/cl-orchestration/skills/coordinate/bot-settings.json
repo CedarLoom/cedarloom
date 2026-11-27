@@ -1,0 +1,34 @@
+{
+  "role": {
+    "env": { "CEDARLOOM_ROLE": "<role>-bot" },
+    "permissions": {
+      "deny": [
+        "Bash(gh pr merge *)", "WebFetch", "WebSearch", "mcp__*",
+        "Edit(/<home>/*.md)", "Edit(/<home>/.mcp.json)", "Edit(/<home>/state/**)", "Edit(/<home>/.claude/**)",
+        "Edit(/<home>/clones/CLAUDE.md)", "Edit(/<home>/clones/CLAUDE.local.md)", "Edit(/<home>/clones/.claude/**)",
+        "Edit(/<other home>/**)", "Edit(/<host lock folder>/**)"
+      ]
+    }
+  },
+  "maintain": {
+    "env": { "CEDARLOOM_ROLE": "maintain-bot" },
+    "permissions": {
+      "deny": [
+        "Bash(gh pr merge *)", "WebFetch", "WebSearch", "mcp__*", "Edit", "MultiEdit", "NotebookEdit",
+        "Edit(/<home>/SOUL.md)", "Edit(/<home>/CLAUDE.md)", "Edit(/<home>/CLAUDE.local.md)", "Edit(/<home>/AGENTS.md)",
+        "Edit(/<home>/.mcp.json)", "Edit(/<home>/state/**)", "Edit(/<home>/.claude/**)",
+        "Edit(/<home>/clones/CLAUDE.md)", "Edit(/<home>/clones/CLAUDE.local.md)", "Edit(/<home>/clones/.claude/**)",
+        "Edit(/<other home>/**)", "Edit(/<host lock folder>/**)"
+      ]
+    }
+  },
+  "project": {
+    "env": { "CEDARLOOM_ROLE": "project-bot" },
+    "permissions": {
+      "deny": [
+        "Bash(gh pr merge *)",
+        "Edit(/<home>/SOUL.md)", "Edit(/<home>/MEMORY.md)", "Edit(/<home>/.claude/**)", "Edit(/<home>/pre-merge.json)"
+      ]
+    }
+  }
+}

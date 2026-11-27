@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: coord-bots-handled-event
-description: 'A project bot run ends when the state''s handled entry names the event''s head with an action that already answers the event (fix for a red head), goes on for a green event on a head handled as fix, and starts one builder fix run for a conflict on a head handled does not name. The case starts the skill, then has the session take SOUL.md and bot-project.md, the procedure an automation''s prompt names for a project bot run. Constructed for the rules at plugins/cl-orchestration/skills/coordinate/bot-project.md:9 and bot-project.md:37. Needs --scaffold.'
+description: 'A project bot run ends when the state''s handled entry names the event''s head with an action that already answers the event (fix for a red head), goes on for a green event on a head handled as fix, and starts one builder fix run for a conflict on a head handled does not name. The case starts the skill, then has the session take SOUL.md and bot-project.md, the procedure an automation''s prompt names for a project bot run. Constructed for the rules at plugins/cl-orchestration/skills/coordinate/bot-project.md:9 and bot-project.md:30. Needs --scaffold.'
 tags: [cl-orchestration, coord-bots]
 context:
   scaffold_script: setup.sh
