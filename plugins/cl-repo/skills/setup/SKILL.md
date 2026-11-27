@@ -3,7 +3,7 @@ name: setup
 description: "Sets up or updates a repository's agent setup for Claude Code and Codex: the CedarLoom rules block, the coordinator policy file, the devcontainer configuration and where the agent runs, the project parts of AGENTS.md, the coordinator's bots, other project configuration to remove. Use when the user asks to set up, onboard, update, or audit a project's agent setup."
 disable-model-invocation: true
 metadata:
-  writes: "After you approve its plan: the CedarLoom block (repository rules, where commands run) in `AGENTS.md`, or in `CLAUDE.local.md` for a local setup; `AGENTS.md` (commands, first-class targets, footgun docs, pointers) and `CLAUDE.md` with only `@AGENTS.md`, both committed, where `AGENTS.md` is new or holds the block (into a committed `AGENTS.md` without the block, only the parts you pick, and `CLAUDE.md` stays as it is); where the cl-orchestration plugin is installed and they are absent, the coordinator's `cedarloom.json` and an empty `docs/agents/worker-rules.md`, committed; the CedarLoom labels the repository lacks; `.github/ISSUE_TEMPLATE/work.md` where the repository has no issue templates; with Claude Code, where nothing says how to run the app, `.claude/skills/verify/SKILL.md`, committed; with the coordinator's bots, a committed `docs/agents/bots.md`, the files in each bot's home, its clone and automations (you press Create bot for each bot); the dev container configuration; short footgun docs under `docs/agents/`; and the removals you confirm when the skill lists other agent configuration: skills, plugin and marketplace entries, MCP servers, hooks, other agent rules files and tool folders."
+  writes: "After you approve its plan: the CedarLoom block (repository rules, where commands run) in `AGENTS.md`, or in `CLAUDE.local.md` for a local setup; `AGENTS.md` (commands, first-class targets, footgun docs, pointers) and `CLAUDE.md` with only `@AGENTS.md`, both committed, where `AGENTS.md` is new or holds the block (into a committed `AGENTS.md` without the block, only the parts you pick, and `CLAUDE.md` stays as it is); where the cl-orchestration plugin is installed: the coordinator's `cedarloom.json` and an empty `docs/agents/worker-rules.md` where they are absent, and `.github/ISSUE_TEMPLATE/work.md` where the repository has no issue templates, committed, and the CedarLoom labels the repository lacks; with Claude Code, where nothing says how to run the app, `.claude/skills/verify/SKILL.md`, committed; with the coordinator's bots, a committed `docs/agents/bots.md`, the files in each bot's home, its clone and automations (you press Create bot for each bot); the dev container configuration; short footgun docs under `docs/agents/`; and the removals you confirm when the skill lists other agent configuration: skills, plugin and marketplace entries, MCP servers, hooks, other agent rules files and tool folders."
 ---
 
 # Setting up projects
@@ -66,25 +66,7 @@ A repository that commits an `AGENTS.md` without the block: merge nothing into i
 
 ## 5. Coordinator policy
 
-The coordinator (`cl-orchestration:coordinate`) starts and merges nothing in a project without `cedarloom.json` at the root of its default branch. Where the cl-orchestration plugin is installed and the file is absent, propose it as a plan item with these answers (ask, recommending the first value named), and an empty `docs/agents/worker-rules.md` (extra rules for the coordinator's workers) when that is absent too. Both are committed in a shared and in a local setup, and from then on both are the owner's to edit: never propose a change to an existing one.
-
-- `startLabel`: the label that lets the coordinator start an issue, `cl:ready-for-agent` unless the user names another.
-- `merge.allowed`: `false`, the user merges; `true` lets the coordinator merge a reviewed pull request. With `true`, `merge.requiredChecks` lists check names that run on pull requests, taken from a recent one (`gh pr checks <n> --json name --jq '.[].name'`), never a job that runs only on pushes to the default branch, and only those the user keeps.
-- `closeIssue`: `true`, a worker's pull request closes its issue when merged, by anyone, and the coordinator closes one left open; `false` leaves that to the user.
-- `trustedAuthors`: none, or the review bots the user names whose comments workers may follow.
-
-Write `{"$schema": "https://cedarloom.github.io/cedarloom/schema/cedarloom.json", "schemaVersion": 3}` with these fields, two-space indented and with a final newline, and leave every other field to its default: the Policy section of `cl-orchestration:coordinate` (the cl-orchestration plugin, when installed) lists each field and its default.
-
-The label set, with the policy's `startLabel` (an existing file's, else the answer above when one was asked) in place of `cl:ready-for-agent`. `<owner/repo>` below is the repository `git remote get-url origin` names, so a fork's clone never reaches its upstream. Read only lists the repository's labels (`gh label list -R <owner/repo> --limit 1000 --json name`); each missing one is a plan item, and Apply creates the approved ones with `gh label create <name> -R <owner/repo> --description "<meaning>"` (GitHub takes 100 characters or fewer: [create a label](https://docs.github.com/rest/issues/labels#create-a-label)), naming one it could not create in the report with that command:
-- `cl:plan`: CedarLoom may read and plan the issue and ask on it; it does not start work.
-- `cl:ready-for-agent`: the coordinator may start the issue.
-- `cl:needs-human`: a question or approval waits for the owner.
-- `cl:in-progress`: a worker holds the issue, so it never starts twice.
-- `cl:deferred`: the owner parked it: it does not start and the question queue skips it.
-- `cl:follow-up`: found during other work, sized for one pull request; the owner chooses whether it starts.
-- `cl:triage`: filed through the issue template; the owner reads it before adding another label.
-
-Where the repository has no `.github/ISSUE_TEMPLATE` folder and its owner has no default issue templates (`gh api repos/<owner>/.github/contents/.github/ISSUE_TEMPLATE` answers 404), propose [issue-templates/work.md](issue-templates/work.md) as `.github/ISSUE_TEMPLATE/work.md` as a plan item (the policy's, where that one is proposed), committed. It labels a new issue `cl:triage`, never `startLabel`: on a public repository anyone can file through it.
+Where the cl-orchestration plugin is installed, follow [policy.md](policy.md): the coordinator's policy file, the CedarLoom labels and the issue template. Its `<skill folder>` is this skill's folder (Claude Code: `${CLAUDE_SKILL_DIR}`). Otherwise skip the step, naming why.
 
 ## 6. Bots (ask)
 
@@ -110,14 +92,14 @@ After the apply step, give the diff (`git diff` against the default branch plus 
 - Statements in `AGENTS.md` that the run checked (commands, test status, build output, reproducibility) match what the checks showed.
 - Each link in a touched `AGENTS.md` resolves. An `AGENTS.md` that holds the block has Commands, the block, Every change considers and Pointers in that order, and `CLAUDE.md` is exactly `@AGENTS.md`. A committed `AGENTS.md` without the block: its diff holds only the parts the user picked, and `CLAUDE.md` is unchanged.
 - The text between the block's markers is the one [project-rules.md](project-rules.md) gives for the chosen answer, and the block appears once in the file. A local `CLAUDE.local.md` is ignored by git.
-- A new `cedarloom.json` is valid JSON and holds `$schema`, `schemaVersion` 3 and only the fields above, with the values the user approved.
 - A new `docs/agents/bots.md` holds no local path, and each bot home file is valid JSON or the text `setup-bots.md` gives.
 - A folder `AGENTS.md` or `CLAUDE.md` added inside a docs or site source folder is excluded from that build (for example `exclude_docs` in MkDocs).
 - Each removal left no folder or lock entry.
+- Where step 5 followed [policy.md](policy.md), its Review and report checks.
 - The branch merges cleanly into the default branch. Otherwise merge the default branch in and resolve the conflicts before pushing.
 
 Fix the findings within the approved plan. Report the others.
 
 ## 9. Report
 
-Give a table of each changed file, the items removed, and steps skipped with the reason. Include the container launch result and the project checks run inside it. Report MCP/browser connections as verified, unavailable, skipped, or untested. Then give launch commands for selected host agents and the container command prefix. With a new policy file: once it is on the default branch, `node <coordinate skill folder>/policy.mjs .` prints the policy the coordinator will use. With bots: each bot created or waiting for Create bot, the role bot test run's result and each automation created or held back, with the reason.
+Give a table of each changed file, the items removed, and steps skipped with the reason. Include the container launch result and the project checks run inside it. Report MCP/browser connections as verified, unavailable, skipped, or untested. Then give launch commands for selected host agents and the container command prefix. With bots: each bot created or waiting for Create bot, the role bot test run's result and each automation created or held back, with the reason. Where step 5 followed [policy.md](policy.md), its Review and report items.

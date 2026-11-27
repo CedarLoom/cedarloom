@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: skill-debloat-budget-out-of-reach
-description: 'With a budget only protected text could meet, debloat keeps every Never rule, reports the minimum it can reach and stops. Constructed: plugins/cl-repo/skills/debloat/SKILL.md:18 and 20. Needs --scaffold.'
+description: 'With a budget only protected text could meet, debloat keeps every Never rule, reports the minimum it can reach and stops. Constructed: plugins/cl-repo/skills/debloat/SKILL.md:19 and 21. Needs --scaffold.'
 tags: [cl-repo, skill-debloat]
 context:
   scaffold_script: setup.sh
