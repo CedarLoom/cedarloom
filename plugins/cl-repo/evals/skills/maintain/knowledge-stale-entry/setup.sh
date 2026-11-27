@@ -43,6 +43,7 @@ cat > .cedarloom/knowledge/verdicts.json <<EOF
   "name": "padLeft",
   "verdict": "kept",
   "reason": "src/table.js imports it",
+  "revisit": "src/table.js stops importing it",
   "commit": "0000000000000000000000000000000000000000",
   "date": "$(date -u +%Y-%m-%d)",
   "tree": "1111111111111111111111111111111111111111",

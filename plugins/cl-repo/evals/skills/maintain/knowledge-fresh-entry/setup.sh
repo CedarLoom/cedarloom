@@ -44,6 +44,7 @@ cat > .cedarloom/knowledge/verdicts.json <<EOF
   "name": "padLeft",
   "verdict": "kept",
   "reason": "public API: package.json exports src/format.js",
+  "revisit": "package.json no longer exports src/format.js",
   "commit": "$(git rev-parse HEAD)",
   "date": "$(date -u +%Y-%m-%d)",
   "tree": "$(git rev-parse 'HEAD^{tree}')",
