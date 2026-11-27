@@ -92,6 +92,12 @@ const TRIGGERS = new Map([
   ['--command', 'launch-env'],
 ]);
 const KNOWN = new Set(['gh', 'git', 'orca']);
+// A gh, git, orca or agent word after a program the guard does not list may be a command that program runs (caffeinate, find -exec).
+const runsKnown = (words, at) => words.slice(at + 1).some((w) => KNOWN.has(program(w)) || LAUNCHERS.has(launcher(w)));
+function unlistedRules(words, at, refuse) {
+  if (KNOWN.has(program(words[at])) || LAUNCHERS.has(launcher(words[at]))) return;
+  for (const w of words) if (TRIGGERS.has(w)) refuse(TRIGGERS.get(w), `a command of a program the guard does not list, on a line that runs text as commands or before a gh, git, orca or agent word, holds ${w}: write the program out`);
+}
 
 // A word the guard cannot read where an option may stand: one that expands, unless it is the value of the option before it
 // (--worktree "$p") or an option's own value after = (--subject="$s").
@@ -232,6 +238,8 @@ function orcaRules(words, at, refuse) {
         if (expands(launch[p])) refuse('launch-env', 'an Orca launch line whose program the guard cannot read: write it out');
         // An agent behind another program (npx @anthropic-ai/claude-code, caffeinate claude, zsh -lc claude) inherits the role too.
         else if (launch.slice(p).some((w) => LAUNCHERS.has(launcher(w))) && !unsetsRole(launch.slice(0, p))) refuse('launch-env', `a launch line starts an agent without env -u ${ROLE} in front, so the session would inherit the coordinator's role: start it as orca.md writes it`);
+        // The new terminal runs the launch line (caffeinate gh pr merge 12); Orca's other quoted arguments are text.
+        if (runsKnown(launch, p)) unlistedRules(launch, p, refuse);
       }
     }
   });
@@ -295,16 +303,14 @@ function commandRules(command, cwd, powershell) {
       if (at < 0 && xa >= 0 && c.words.slice(xa + 1).some((w) => WRAPPERS.has(program(w)))) refuse('unreadable-program', 'xargs runs a program it reads from a file or stdin, which the guard cannot check: write the program out');
       if (name === undefined) continue;
       if (xa >= 0 && name === 'orca') refuse('launch-env', 'orca run by xargs takes words the guard cannot read, a launch line or --force among them: write them out');
-      // A gh, git, orca or agent word after a program the guard does not list may be a command that program runs (caffeinate, find -exec).
-      const behind = c.owner === undefined && c.words.slice(at + 1).some((w) => KNOWN.has(program(w)) || LAUNCHERS.has(launcher(w)));
+      // A quoted argument of another program (a commit title, an Orca message) is text; orcaRules reads the Orca launch line.
+      const behind = c.owner === undefined && runsKnown(c.words, at);
       // A lone $ is where a substitution starts ($(...), $((...))); its commands are read on their own.
       // PowerShell runs a leading variable that no assignment operator follows (& $gh pr merge), which programIndex skips as a target.
       const called = powershell && /^\$[^=]*$/.test(c.words[0]) && !/^(\?\?|[-+*/%])?=$/.test(c.words[1] ?? '');
       if (called) refuse('unreadable-program', `the program ${c.words[0]} is a variable, so the guard cannot check it against its rules: write the program out`);
       else if (expands(words[at]) && words[at] !== '$') refuse('unreadable-program', `the program ${words[at].length > 40 ? 'of a command' : words[at]} is a variable, a command substitution or an xargs replace string, so the guard cannot check it against its rules: write the program out`);
-      else if ((hidden || behind) && !KNOWN.has(name) && !LAUNCHERS.has(launcher(c.words[at]))) {
-        for (const w of c.words) if (TRIGGERS.has(w)) refuse(TRIGGERS.get(w), `a command of a program the guard does not list, on a line that runs text as commands or before a gh, git, orca or agent word, holds ${w}: write the program out`);
-      }
+      else if (hidden || behind) unlistedRules(c.words, at, refuse);
       if (CHANGE_DIR.has(name)) places = changeDir(places, c.words, at);
       else if (name === 'git') gitRules(words, at, places, refuse);
       else if (name === 'gh') ghRules(words, at, refuse);
@@ -320,11 +326,29 @@ function xargsWords(words, from, at) {
   let replace;
   for (let i = from + 1; i < at; i++) {
     const w = words[i];
-    if (w === '-I' || w === '-J') replace = words[++i];
-    else if (/^-[IJ]./.test(w)) replace = w.slice(2);
-    else if (w === '-i' || w === '--replace') replace = '{}';
-    else if (/^-i./.test(w)) replace = w.slice(2);
+    if (w === '--replace') replace = '{}';
     else if (w.startsWith('--replace=')) replace = w.slice('--replace='.length);
+    else if (/^-[^-]/.test(w)) {
+      // A cluster of short options, as getopt reads it (-0I{}): -I and -J take the rest of the word or the next word, -i the rest
+      // or {}; an option with a value ends the cluster and takes the next word when nothing follows it; -e and -l end it.
+      for (let k = 1; k < w.length; k++) {
+        const ch = w[k];
+        const rest = w.slice(k + 1);
+        if (ch === 'I' || ch === 'J') {
+          replace = rest || words[++i];
+          break;
+        }
+        if (ch === 'i') {
+          replace = rest || '{}';
+          break;
+        }
+        if ('adELnPsRS'.includes(ch)) {
+          if (!rest) i++;
+          break;
+        }
+        if (ch === 'e' || ch === 'l') break;
+      }
+    }
   }
   // The replace string can stand in the program word too (xargs -I x env x).
   const p = Math.max(at, 0);
