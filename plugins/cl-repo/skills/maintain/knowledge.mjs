@@ -4,7 +4,7 @@
 // read prints { reuse, recheck, ignored }; write takes { <kind>: [entry, ...] } on stdin and prints { written, dropped, excluded }. Exit 0 ok, 1 refused (a link in the base's path, a tracked base), 2 bad input, 3 any other failure (git, the file system).
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GIT, gitEnv } from '../debloat/token-budget.mjs';
@@ -30,9 +30,30 @@ const gitArgs = (root, args) => {
   return [GIT, ['-c', 'core.fsmonitor=false', '-C', root, ...args]];
 };
 const git = (root, ...args) => execFileSync(...gitArgs(root, args), { ...gitOptions, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-const sha256 = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
-// A regular file, not a link (which could lead out of the repository) and not a FIFO (a read would wait).
-const isFile = (path) => { try { return lstatSync(path).isFile(); } catch { return false; } };
+const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+// Reads a regular file without following a link (which could lead out of the repository) or waiting on a FIFO, checked on the open file: { bytes }, or missing, other (no regular file) or large.
+function readRegular(path, maxBytes = Infinity) {
+  let fd;
+  try {
+    fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+  } catch (e) {
+    if (e.code === 'ENOENT' || e.code === 'ENOTDIR') return { missing: true };
+    if (e.code === 'ELOOP') return { other: true };
+    throw e;
+  }
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) return { other: true };
+    if (stat.size > maxBytes) return { large: true };
+    return { bytes: readFileSync(fd) };
+  } finally {
+    closeSync(fd);
+  }
+}
+
+// HEAD^{tree} stands for the files only while nothing outside the base differs from HEAD.
+const clean = (root) => git(root, 'status', '--porcelain', '--untracked-files=all', '--', '.', `:(exclude)${BASE}`) === '';
 const isPlainObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const nonEmpty = (v) => typeof v === 'string' && v.trim() !== '';
 
@@ -61,7 +82,7 @@ function verdictProblem(e) {
 function storedProblem(kind, e) {
   if (!isPlainObject(e) || !nonEmpty(e.id)) return 'no id';
   if (!OBJECT.test(e.commit ?? '') || !DATE.test(e.date ?? '')) return 'no commit or date';
-  if (e.files === undefined && e.tree === undefined) return 'neither files nor tree';
+  if (e.tree === undefined && !(isPlainObject(e.files) && Object.keys(e.files).length)) return 'neither files nor tree';
   if (e.files !== undefined && !(isPlainObject(e.files) && Object.entries(e.files).every(([p, h]) => insidePath(p) && SHA256.test(h)))) return 'files is not path to sha256';
   if (e.tree !== undefined && !OBJECT.test(e.tree)) return 'tree is no object name';
   return kind === 'verdicts' ? verdictProblem(e) : '';
@@ -69,26 +90,27 @@ function storedProblem(kind, e) {
 
 // The entries of one kind's file, or the reason the whole file is ignored.
 function load(root, kind) {
-  const path = join(root, BASE, `${kind}.json`);
-  if (!existsSync(path)) return { entries: [] };
-  if (!isFile(path)) return { ignored: `${kind}.json is no regular file` };
-  if (lstatSync(path).size > MAX_BYTES) return { ignored: `${kind}.json is larger than 1 MiB` };
+  const file = readRegular(join(root, BASE, `${kind}.json`), MAX_BYTES);
+  if (file.missing) return { entries: [] };
+  if (file.other) return { ignored: `${kind}.json is no regular file` };
+  if (file.large) return { ignored: `${kind}.json is larger than 1 MiB` };
   let data;
-  try { data = JSON.parse(readFileSync(path, 'utf8')); } catch { return { ignored: `${kind}.json does not parse` }; }
+  try { data = JSON.parse(file.bytes.toString('utf8')); } catch { return { ignored: `${kind}.json does not parse` }; }
   if (!isPlainObject(data) || !Array.isArray(data.entries)) return { ignored: `${kind}.json has no entries list` };
   return { entries: data.entries };
 }
 
 // Why a stored entry must be re-checked against the repository now, or '' when it can be reused.
-function staleness(root, kind, e, tree, now) {
+function staleness(root, kind, e, tree, isClean, now) {
   const problem = storedProblem(kind, e);
   if (problem) return `invalid: ${problem}`;
   if (e.verdict === 'rejected' && now.getTime() - Date.parse(e.date) > REJECTED_DAYS * DAY_MS) return `rejected more than ${REJECTED_DAYS} days ago`;
   if (e.tree !== undefined && e.tree !== tree) return 'the tree changed';
+  if (e.tree !== undefined && !isClean) return 'the working tree differs from HEAD';
   for (const [p, hash] of Object.entries(e.files ?? {})) {
-    const path = join(root, p);
-    if (!isFile(path)) return `${p} is missing or no regular file`;
-    if (sha256(path) !== hash) return `${p} changed`;
+    const { bytes } = readRegular(join(root, p));
+    if (!bytes) return `${p} is missing or no regular file`;
+    if (sha256(bytes) !== hash) return `${p} changed`;
   }
   return '';
 }
@@ -96,6 +118,7 @@ function staleness(root, kind, e, tree, now) {
 export function readBase(root, now) {
   refuseLinks(root);
   const tree = git(root, 'rev-parse', 'HEAD^{tree}');
+  const isClean = clean(root);
   const out = { reuse: {}, recheck: {}, ignored: [] };
   for (const kind of KINDS) {
     const { entries, ignored } = load(root, kind);
@@ -103,7 +126,7 @@ export function readBase(root, now) {
     out.reuse[kind] = [];
     out.recheck[kind] = [];
     for (const e of entries) {
-      const why = staleness(root, kind, e, tree, now);
+      const why = staleness(root, kind, e, tree, isClean, now);
       if (why) out.recheck[kind].push({ id: isPlainObject(e) && nonEmpty(e.id) ? e.id : null, why });
       else out.reuse[kind].push(e);
     }
@@ -118,10 +141,11 @@ function stored(root, kind, e, context) {
   if (e.files !== undefined && !(Array.isArray(e.files) && e.files.every(insidePath))) throw new BadInput(`${where}: files must list paths inside the repository`);
   if (e.tree !== undefined && e.tree !== true) throw new BadInput(`${where}: tree must be true or left out`);
   if (!e.files?.length && e.tree !== true) throw new BadInput(`${where}: needs files or tree, else nothing shows it is still current`);
+  if (e.tree === true && !context.isClean) throw new BadInput(`${where}: tree needs a working tree that matches HEAD; commit or stash the changes, or give files`);
   const files = e.files?.length ? Object.fromEntries(e.files.map((p) => {
-    const path = join(root, p);
-    if (!isFile(path)) throw new BadInput(`${where}: ${p} is no regular file`);
-    return [p, sha256(path)];
+    const { bytes } = readRegular(join(root, p));
+    if (!bytes) throw new BadInput(`${where}: ${p} is no regular file`);
+    return [p, sha256(bytes)];
   })) : undefined;
   const entry = { ...e, commit: context.commit, date: context.date };
   delete entry.files;
@@ -135,23 +159,38 @@ function stored(root, kind, e, context) {
   return entry;
 }
 
-// Keeps the newest MAX_ENTRIES by date; among equal dates the later written stay.
+const serialized = (entries) => `${JSON.stringify({ entries }, null, 2)}\n`;
+// An entry's bytes in serialized(): its lines indented by four spaces, plus the separating comma and newline.
+const entryBytes = (e) => Buffer.byteLength(JSON.stringify(e, null, 2).replace(/^/gm, '    ')) + 2;
+// The bytes of serialized() beyond its entries.
+const FRAME = Buffer.byteLength(serialized([0])) - entryBytes(0);
+
+// Drops the oldest entries by date (among equal dates the earlier written) until at most MAX_ENTRIES remain and the file stays within MAX_BYTES, which load() reads.
 function capped(entries) {
-  const drop = Math.max(0, entries.length - MAX_ENTRIES);
-  if (!drop) return { entries, dropped: 0 };
-  const oldest = new Set(entries.map((e, i) => [String(e.date), i]).sort(([a, i], [b, j]) => (a < b ? -1 : a > b ? 1 : i - j)).slice(0, drop).map(([, i]) => i));
-  return { entries: entries.filter((_, i) => !oldest.has(i)), dropped: drop };
+  const oldestFirst = entries.map((e, i) => [String(e.date), i]).sort(([a, i], [b, j]) => (a < b ? -1 : a > b ? 1 : i - j)).map(([, i]) => i);
+  const sizes = entries.map(entryBytes);
+  let bytes = FRAME + sizes.reduce((sum, n) => sum + n, 0);
+  const drop = new Set();
+  for (const i of oldestFirst) {
+    if (entries.length - drop.size <= MAX_ENTRIES && bytes <= MAX_BYTES) break;
+    drop.add(i);
+    bytes -= sizes[i];
+  }
+  return { entries: entries.filter((_, i) => !drop.has(i)), dropped: drop.size };
 }
 
-// Adds .cedarloom/knowledge/ to the repository's info/exclude unless git already ignores the base; returns whether it added the line.
+// Adds .cedarloom/knowledge/ to the repository's info/exclude unless git already ignores every file of the base; returns whether it added the line.
 function keepLocal(root) {
-  const check = spawnSync(...gitArgs(root, ['check-ignore', '-q', '--', `${BASE}/verdicts.json`]), { ...gitOptions, stdio: 'ignore' });
-  if (check.status === 0) return false;
-  if (check.status !== 1) throw new Error(`git check-ignore failed with status ${check.status}`);
+  const paths = KINDS.map((k) => `${BASE}/${k}.json`);
+  // check-ignore prints each ignored path and exits 0 when it printed one, 1 when none.
+  const check = spawnSync(...gitArgs(root, ['check-ignore', '--', ...paths]), { ...gitOptions, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  if (check.status !== 0 && check.status !== 1) throw new Error(`git check-ignore failed: ${check.error?.message ?? check.stderr.trim()}`);
+  if (check.stdout.split('\n').filter(Boolean).length === paths.length) return false;
   // --git-path answers relative to the repository root, or absolute in a linked worktree.
   const exclude = resolve(root, git(root, 'rev-parse', '--git-path', 'info/exclude'));
   mkdirSync(dirname(exclude), { recursive: true });
-  const text = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
+  let text = '';
+  try { text = readFileSync(exclude, 'utf8'); } catch (e) { if (e.code !== 'ENOENT') throw e; }
   appendFileSync(exclude, `${text && !text.endsWith('\n') ? '\n' : ''}${BASE}/\n`);
   return true;
 }
@@ -164,7 +203,7 @@ export function writeBase(root, input, now) {
   }
   refuseLinks(root);
   if (git(root, 'ls-files', '--', BASE)) throw new Refused(`${BASE} holds tracked files`);
-  const context = { commit: git(root, 'rev-parse', 'HEAD'), tree: git(root, 'rev-parse', 'HEAD^{tree}'), date: now.toISOString().slice(0, 10) };
+  const context = { commit: git(root, 'rev-parse', 'HEAD'), tree: git(root, 'rev-parse', 'HEAD^{tree}'), isClean: clean(root), date: now.toISOString().slice(0, 10) };
   // Every entry is checked before the first write, so bad input changes nothing.
   const incoming = Object.fromEntries(Object.entries(input).map(([kind, list]) => [kind, list.map((e) => stored(root, kind, e, context))]));
   const excluded = keepLocal(root);
@@ -179,7 +218,7 @@ export function writeBase(root, input, now) {
     // A new file renamed over the old one replaces a link there instead of writing through it.
     const path = join(dir, `${kind}.json`);
     const temp = `${path}.${process.pid}.tmp`;
-    writeFileSync(temp, `${JSON.stringify({ entries }, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
+    writeFileSync(temp, serialized(entries), { mode: 0o600, flag: 'wx' });
     renameSync(temp, path);
     chmodSync(path, 0o600);
     out.written[kind] = entries.length;

@@ -45,6 +45,7 @@ test('read: reuses only entries whose files and tree still match, re-checks the 
     verdict({ id: 'rejected-long-ago', verdict: 'rejected', date: '2026-03-01' }),
     verdict({ id: 'no-revisit', verdict: 'kept', reason: 'public API' }),
     verdict({ id: 'outside', verdict: 'open', files: { '../a.js': A_SHA } }),
+    verdict({ id: 'no-proof', verdict: 'open', files: {} }),
     'not an entry',
   ] });
   store(root, 'tests', '{ "entries": [');
@@ -60,6 +61,7 @@ test('read: reuses only entries whose files and tree still match, re-checks the 
     { id: 'rejected-long-ago', why: 'rejected more than 30 days ago' },
     { id: 'no-revisit', why: 'invalid: a kept verdict needs reason and revisit' },
     { id: 'outside', why: 'invalid: files is not path to sha256' },
+    { id: 'no-proof', why: 'invalid: neither files nor tree' },
     { id: null, why: 'invalid: no id' },
   ]);
   assert.deepEqual(out.ignored, ['tests.json does not parse', 'architecture.json is larger than 1 MiB', 'tools.json has no entries list']);
@@ -81,6 +83,36 @@ test('write: stores entries local-only with hashes, tree, commit and date, repla
   assert.equal(statSync(join(root, '.cedarloom/knowledge')).mode & 0o777, 0o700);
   assert.equal(statSync(join(root, '.cedarloom/knowledge/verdicts.json')).mode & 0o777, 0o600);
   assert.deepEqual(readBase(root, NOW).reuse.verdicts, [expected]);
+});
+
+test('read and write: a working tree that differs from HEAD proves no tree-backed entry', () => {
+  const { root, git } = repo();
+  writeBase(root, { tools: [{ id: 'knip', tree: true }], verdicts: [{ id: 'v', part: 'cleanup', file: 'a.js', name: 'a', verdict: 'open', files: ['a.js'] }] }, NOW);
+  writeFileSync(join(root, 'b.js'), 'export const b = 3;\n');
+  const out = readBase(root, NOW);
+  assert.deepEqual(out.recheck.tools, [{ id: 'knip', why: 'the working tree differs from HEAD' }]);
+  assert.deepEqual(out.reuse.verdicts.map((e) => e.id), ['v']);
+  assert.throws(() => writeBase(root, { tools: [{ id: 'knip', tree: true }] }, NOW), BadInput);
+  assert.equal(git('status', '--porcelain'), 'M b.js');
+});
+
+test('write: an ignore rule for one base file still gets the whole base excluded', () => {
+  const { root } = repo();
+  writeFileSync(join(root, '.git/info/exclude'), '.cedarloom/knowledge/verdicts.json');
+  const out = writeBase(root, { tools: [{ id: 'knip', tree: true }] }, NOW);
+  assert.equal(out.excluded, true);
+  assert.equal(readFileSync(join(root, '.git/info/exclude'), 'utf8'), '.cedarloom/knowledge/verdicts.json\n.cedarloom/knowledge/\n');
+});
+
+test('write: drops the oldest entries until the file stays within 1 MiB', () => {
+  const { root } = repo();
+  const old = Array.from({ length: 3 }, (_, i) => ({ id: `q${i}`, text: 'x'.repeat(340 * 1024), commit: 'c'.repeat(40), date: `2026-01-0${i + 1}`, tree: '1'.repeat(40) }));
+  store(root, 'questions', { entries: old });
+  const out = writeBase(root, { questions: [{ id: 'new', text: 'y'.repeat(10 * 1024), tree: true }] }, NOW);
+  assert.deepEqual(out.dropped, { questions: 1 });
+  const path = join(root, '.cedarloom/knowledge/questions.json');
+  assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')).entries.map((e) => e.id), ['q1', 'q2', 'new']);
+  assert.ok(statSync(path).size <= 1024 * 1024);
 });
 
 test('write: keeps the newest 500 entries of a file, dropping the oldest by date', () => {
