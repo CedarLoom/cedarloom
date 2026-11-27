@@ -6,6 +6,7 @@
         "Bash(gh pr merge *)", "WebFetch", "WebSearch", "mcp__*",
         "Edit(/<home>/*.md)", "Edit(/<home>/.mcp.json)", "Edit(/<home>/state/**)", "Edit(/<home>/.claude/**)",
         "Edit(/<home>/clones/CLAUDE.md)", "Edit(/<home>/clones/CLAUDE.local.md)", "Edit(/<home>/clones/.claude/**)",
+        "Edit(/<home>/results/CLAUDE.md)", "Edit(/<home>/results/CLAUDE.local.md)", "Edit(/<home>/results/.claude/**)",
         "Edit(/<other home>/**)", "Edit(/<host lock folder>/**)"
       ]
     }
@@ -18,6 +19,7 @@
         "Edit(/<home>/SOUL.md)", "Edit(/<home>/CLAUDE.md)", "Edit(/<home>/CLAUDE.local.md)", "Edit(/<home>/AGENTS.md)",
         "Edit(/<home>/.mcp.json)", "Edit(/<home>/state/**)", "Edit(/<home>/.claude/**)",
         "Edit(/<home>/clones/CLAUDE.md)", "Edit(/<home>/clones/CLAUDE.local.md)", "Edit(/<home>/clones/.claude/**)",
+        "Edit(/<home>/results/CLAUDE.md)", "Edit(/<home>/results/CLAUDE.local.md)", "Edit(/<home>/results/.claude/**)",
         "Edit(/<other home>/**)", "Edit(/<host lock folder>/**)"
       ]
     }

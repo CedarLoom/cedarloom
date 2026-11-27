@@ -48,7 +48,7 @@ export function count(state, now, add = {}) {
   const file = join(state, `counts-${now.toISOString().slice(0, 10)}.json`);
   let counts = { runs: 0, workerStarts: 0, catchUp: 0, prs: {} };
   try { counts = JSON.parse(readFileSync(file, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw new Error(`${basename(file)} is unreadable`); }
-  if (!COUNTED.every((k) => countable(counts?.[k])) || typeof counts.prs !== 'object' || !counts.prs || !Object.values(counts.prs).every(countable)) throw new Error(`${basename(file)} holds no counts`);
+  if (!COUNTED.every((k) => countable(counts?.[k])) || typeof counts.prs !== 'object' || !counts.prs || Array.isArray(counts.prs) || !Object.values(counts.prs).every(countable)) throw new Error(`${basename(file)} holds no counts`);
   if (!Object.keys(add).length) return counts;
   const added = { ...counts, prs: { ...counts.prs } };
   for (const k of COUNTED) added[k] += add[k] ?? 0;
