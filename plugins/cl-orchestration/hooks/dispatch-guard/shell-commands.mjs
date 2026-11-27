@@ -188,7 +188,7 @@ const READERS = new Set(['grep', 'egrep', 'fgrep', 'rg']);
 const RUNNERS = new Set(['eval', 'xargs', 'sh', 'bash', 'zsh', 'dash', 'ksh', 'source', '.']);
 // The line runs text as commands that the guard may not read as such, what a reading program prints among it: a backtick or
 // $( substitution, or a runner.
-const runsText = (parsed, source, powershell) =>
+export const runsText = (parsed, source, powershell) =>
   source.includes('$(') || (!powershell && source.includes('`')) || parsed.some(({ words }) => words.some((w, j) => RUNNERS.has(program(w)) && runs(words, j, powershell)));
 
 // The readers and the filters, programs that print what they read and run none of it, each with its long options that name

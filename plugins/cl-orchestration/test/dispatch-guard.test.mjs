@@ -126,6 +126,8 @@ test('bypass-flag: a flag that bypasses or skips permission prompts is refused i
     'claude $FLAGS',
     'claude "$(cat flags)"',
     'orca terminal create --command "env -u CEDARLOOM_ROLE claude --dangerously-skip-permissions" --json',
+    'npx @openai/codex -a never',
+    'printf x | xargs claude',
   ]);
   refused('bypass-flag', ['claude --dangerously-skip-permissions'], 'PowerShell');
   passed(['claude --permission-mode auto --model opus', 'codex -a on-request', 'rg -n bypassPermissions docs', 'grep -rn "skip permissions" docs', 'jq .permissions.disableBypassPermissionsMode settings.json']);
@@ -141,6 +143,9 @@ test('launch-env: an Orca launch line that starts an agent without env -u of the
     `orca terminal create --command "bash -c 'claude --permission-mode auto'"`,
     'orca terminal create --command "$LAUNCH"',
     'orca terminal create --command "$CLAUDE --permission-mode auto"',
+    'orca terminal create --command "npx @anthropic-ai/claude-code --model opus"',
+    'orca terminal create --command "caffeinate -i claude"',
+    'orca terminal create --command "zsh -lc claude"',
   ]);
   passed([
     "orca terminal create --worktree path:/w --title 12-x --command \"env -u CEDARLOOM_ROLE CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false '/usr/local/bin/claude' --autocompact 200k --model 'opus' --effort high --permission-mode auto\" --json",
@@ -162,6 +167,11 @@ test('worktree-force: a forced worktree removal is refused, through Orca and git
     'cd /p && (git worktree remove \\\n --force /w)',
     'git worktree remove $OPTS /w',
     'git worktree $VERB --force /w',
+    'echo --force | xargs git worktree remove /w/x',
+    'xargs -a /tmp/args git',
+    'git $sub /w/x',
+    'orca $sub --worktree path:/w/x',
+    'xargs -a /tmp/args orca',
   ]);
   passed(['orca worktree rm --worktree path:/w --run-hooks --json', 'orca worktree rm --worktree "path:$W" --json', 'git worktree remove /w', 'git -C /p worktree list --porcelain']);
 });
@@ -182,6 +192,13 @@ test('direct-merge: a gh pr merge without the reviewed head pinned, or one the g
     'gh pr $VERB 12',
     'gh pr merge 12 $OPTS',
     'gh pr merge 12 --squash --body -h',
+    `echo --admin | xargs gh pr merge 12 --match-head-commit ${SHA}`,
+    'xargs -a /tmp/args gh',
+    'xargs gh pr < /tmp/args',
+    'caffeinate -i gh pr merge 12 --squash',
+    'find /dev/null -maxdepth 0 -exec gh pr merge 12 --squash ;',
+    'echo gh pr merge 12 --squash | sh',
+    'bash <(echo gh pr merge 12 --squash)',
   ]);
   refused('direct-merge', ['gh pr merge 12 --squash'], 'PowerShell');
   passed([
@@ -192,6 +209,8 @@ test('direct-merge: a gh pr merge without the reviewed head pinned, or one the g
     'gh pr view 12 --json state',
     'rg -n "gh pr merge 12" docs',
     'echo "$(git log -1)" | grep merge',
+    "gh pr list -R o/r --json number -q '.[].number' | xargs -n1 gh pr view -R o/r",
+    "gh pr list -R o/r --json number -q '.[].number' | xargs -I{} gh pr view {} -R o/r",
   ]);
 });
 
@@ -204,10 +223,10 @@ test('no-admin, no-auto and no-delete-branch: gh pr merge refuses each flag, als
 });
 
 test('unreadable-program: a command whose program is a variable or command substitution is refused', () => {
-  refused('unreadable-program', ['$RUN', 'GH=gh; $GH pr merge 12 --squash', '"$ORCA" terminal create --command claude', '"$(which gh)" pr view 12'], 'Bash');
+  refused('unreadable-program', ['$RUN', 'GH=gh; $GH pr merge 12 --squash', '"$ORCA" terminal create --command claude', '"$(which gh)" pr view 12', "env -S'gh pr merge 1 --squash'", "env --split-string='gh pr merge 1 --squash'"], 'Bash');
   refused('unreadable-program', ['& $gh pr merge 12'], 'PowerShell');
   passed(['$r = gh pr view 12'], 'PowerShell');
-  passed(['echo "$(date)"', 'head=$(git rev-parse HEAD)', 'echo $((1 + 2))']);
+  passed(['echo "$(date)"', 'head=$(git rev-parse HEAD)', 'echo $((1 + 2))', 'env LC_ALL=C sort -S50% /tmp/list']);
 });
 
 test('update-branch-rebase: gh pr update-branch with --rebase, or an option the guard cannot read, is refused', () => {

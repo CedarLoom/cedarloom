@@ -10,7 +10,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { ansiC } from '../ansi-c-quote.mjs';
-import { CHANGE_DIR, LAUNCHERS, launcher, plain, program, programIndex, readings } from './shell-commands.mjs';
+import { CHANGE_DIR, LAUNCHERS, launcher, plain, program, programIndex, readings, runsText } from './shell-commands.mjs';
 
 // The command's own and its short form, as cl-workflow's role guard reads them.
 const QUESTIONS = /(^|[^\w-])\/(cl-workflow:)?away\s+off(?![\w.-])/i;
@@ -151,6 +151,7 @@ function gitRules(words, at, places, refuse) {
   }
   const sub = words[i];
   if (sub === undefined) return;
+  if (expands(sub)) refuse('worktree-force', 'a git command the guard cannot read (a variable, a substitution or words xargs adds), which could be a forced worktree removal: write it out');
   if (sub === 'worktree' && (words[i + 1] === 'remove' || expands(words[i + 1] ?? ''))) {
     const rest = words.slice(i + 2);
     if (rest.some(forces)) refuse('worktree-force', 'git worktree remove --force deletes a worktree with its changes and untracked files: remove it without --force, or through commit-push.mjs remove');
@@ -213,6 +214,7 @@ function ghRules(words, at, refuse) {
 function orcaRules(words, at, refuse) {
   const rest = words.slice(at + 1);
   const subs = rest.filter((w) => !w.startsWith('-')).slice(0, 2);
+  if (subs[0] !== undefined && expands(subs[0])) refuse('worktree-force', 'an orca command the guard cannot read, which could be a forced worktree removal: write it out');
   if (subs[0] === 'worktree' && (subs[1] === 'rm' || subs[1] === 'remove' || (subs[1] !== undefined && expands(subs[1])))) {
     if (rest.some(forces)) refuse('worktree-force', 'orca worktree rm --force deletes a worktree with its changes and untracked files: remove it without --force (orca-clean-up.md)');
     else if (rest.some((_, k) => unreadOption(rest, k)) || expands(subs[1])) refuse('worktree-force', 'an orca worktree rm the guard cannot read: write its options out');
@@ -228,7 +230,8 @@ function orcaRules(words, at, refuse) {
         const p = programIndex(launch, false);
         if (p < 0) continue;
         if (expands(launch[p])) refuse('launch-env', 'an Orca launch line whose program the guard cannot read: write it out');
-        else if (LAUNCHERS.has(launcher(launch[p])) && !unsetsRole(launch.slice(0, p))) refuse('launch-env', `a launch line starts an agent without env -u ${ROLE} in front, so the session would inherit the coordinator's role: start it as orca.md writes it`);
+        // An agent behind another program (npx @anthropic-ai/claude-code, caffeinate claude, zsh -lc claude) inherits the role too.
+        else if (launch.slice(p).some((w) => LAUNCHERS.has(launcher(w))) && !unsetsRole(launch.slice(0, p))) refuse('launch-env', `a launch line starts an agent without env -u ${ROLE} in front, so the session would inherit the coordinator's role: start it as orca.md writes it`);
       }
     }
   });
@@ -248,7 +251,9 @@ function unsetsRole(before) {
 }
 
 function bypassRules(words, at, refuse) {
-  const name = at < 0 ? undefined : launcher(words[at]);
+  const first = at < 0 ? undefined : launcher(words[at]);
+  // Codex behind another program (npx @openai/codex) reads -a never as well.
+  const name = LAUNCHERS.has(first) ? first : words.slice(at + 1).map(launcher).find((w) => LAUNCHERS.has(w)) ?? first;
   for (let k = 0; k < words.length; k++) {
     const w = words[k];
     if (BYPASS.test(w)) refuse('bypass-flag', `${w.length > 60 ? 'a word' : w} bypasses or skips permission prompts; no session writes such a flag, for any agent (the guard reads text only: take a message that names one from a file, git commit -F, gh --body-file)`);
@@ -268,8 +273,9 @@ function handoffRules({ words, targets }, at, places, powershell, refuse) {
 function commandRules(command, cwd, powershell) {
   const reasons = new Set();
   const refuse = (rule, why) => reasons.add(`${rule}: ${why}.`);
-  const substituted = command.includes('$(') || (!powershell && command.includes('`'));
   for (const parsed of readings(command, powershell)) {
+    // Text the line runs as commands (a substitution, eval, a shell, source, xargs), as the role guard reads it.
+    const hidden = runsText(parsed, command, powershell);
     let places = new Set([typeof cwd === 'string' && isAbsolute(cwd) ? cwd : null]);
     // readings() keeps a reader's quoted arguments only where text of the line may run as commands, a substitution among them.
     for (const c of parsed) {
@@ -278,23 +284,47 @@ function commandRules(command, cwd, powershell) {
       handoffRules(c, at, places, powershell, refuse);
       // A plain reader or filter (grep, cat) runs none of its words.
       if (plain(c, powershell)) continue;
-      bypassRules(c.words, at, refuse);
+      // env -S with its value joined (-S'...', --split-string=...) runs that value as a command; only env's own options count.
+      const head = at < 0 ? c.words : c.words.slice(0, at);
+      if (head.some((w, j) => /^(-[A-Za-z]*S.|--split-string=)/.test(w) && head.slice(0, j).some((x) => program(x) === 'env'))) refuse('unreadable-program', 'env -S with a joined value runs text the guard does not read as a command: write the command out');
+      // xargs runs the program with words the guard never sees: read them as words that expand, which every rule refuses where it reads one.
+      const xa = head.findLastIndex((w) => program(w) === 'xargs');
+      const words = xa < 0 ? c.words : xargsWords(c.words, xa, at);
+      bypassRules(words, at, refuse);
       if (name === undefined) continue;
+      if (xa >= 0 && name === 'orca') refuse('launch-env', 'orca run by xargs takes words the guard cannot read, a launch line or --force among them: write them out');
+      // A gh, git, orca or agent word after a program the guard does not list may be a command that program runs (caffeinate, find -exec).
+      const behind = c.owner === undefined && c.words.slice(at + 1).some((w) => KNOWN.has(program(w)) || LAUNCHERS.has(launcher(w)));
       // A lone $ is where a substitution starts ($(...), $((...))); its commands are read on their own.
       // PowerShell runs a leading variable that no assignment operator follows (& $gh pr merge), which programIndex skips as a target.
       const called = powershell && /^\$[^=]*$/.test(c.words[0]) && !/^(\?\?|[-+*/%])?=$/.test(c.words[1] ?? '');
       if (called) refuse('unreadable-program', `the program ${c.words[0]} is a variable, so the guard cannot check it against its rules: write the program out`);
       else if (expands(c.words[at]) && c.words[at] !== '$') refuse('unreadable-program', `the program ${c.words[at].length > 40 ? 'of a command' : c.words[at]} is a variable or command substitution, so the guard cannot check it against its rules: write the program out`);
-      else if (substituted && !KNOWN.has(name) && !LAUNCHERS.has(launcher(c.words[at]))) {
-        for (const w of c.words) if (TRIGGERS.has(w)) refuse(TRIGGERS.get(w), `a command after a command substitution, whose program the guard cannot read, holds ${w}: write the program out`);
+      else if ((hidden || behind) && !KNOWN.has(name) && !LAUNCHERS.has(launcher(c.words[at]))) {
+        for (const w of c.words) if (TRIGGERS.has(w)) refuse(TRIGGERS.get(w), `a command of a program the guard does not list, on a line that runs text as commands or before a gh, git, orca or agent word, holds ${w}: write the program out`);
       }
       if (CHANGE_DIR.has(name)) places = changeDir(places, c.words, at);
-      else if (name === 'git') gitRules(c.words, at, places, refuse);
-      else if (name === 'gh') ghRules(c.words, at, refuse);
-      else if (name === 'orca') orcaRules(c.words, at, refuse);
+      else if (name === 'git') gitRules(words, at, places, refuse);
+      else if (name === 'gh') ghRules(words, at, refuse);
+      else if (name === 'orca') orcaRules(words, at, refuse);
     }
   }
   return [...reasons];
+}
+
+// The words xargs runs: one it appends, and with a replace string (-I {}, -i, --replace, -J) each word that holds it, as words that expand.
+const UNSEEN = '$XARGS';
+function xargsWords(words, from, at) {
+  let replace;
+  for (let i = from + 1; i < at; i++) {
+    const w = words[i];
+    if (w === '-I' || w === '-J') replace = words[++i];
+    else if (/^-[IJ]./.test(w)) replace = w.slice(2);
+    else if (w === '-i' || w === '--replace') replace = '{}';
+    else if (/^-i./.test(w)) replace = w.slice(2);
+    else if (w.startsWith('--replace=')) replace = w.slice('--replace='.length);
+  }
+  return [...words.slice(0, at + 1), ...words.slice(at + 1).map((w) => (replace && w.includes(replace) ? UNSEEN : w)), UNSEEN];
 }
 
 // The handoff file as a Write, Edit or MultiEdit call leaves it, in characters (code points): null where the guard cannot work it out.
