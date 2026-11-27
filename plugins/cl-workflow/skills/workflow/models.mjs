@@ -114,11 +114,15 @@ const source = (v) => `${v.row} (${v.file})${v.role ? `, ${v.role} (${v.roleFile
 
 const rank = (v) => MODELS.indexOf(v.model) * EFFORTS.length + EFFORTS.indexOf(v.effort);
 
-// One task's value: its tasks row, then the depth row, which may lower or raise it, then each risk row, which only raises it.
+// The files in order, each overriding the ones before it.
+const FILES = ['default', 'user', 'repository'];
+
+// One task's value: its tasks row, then the depth row from the same file or a later one, which may lower or raise it, then each risk row, which only raises it.
 function lookup(map, task, depth, risk) {
   let value = valueOf(map, map.tasks[task], `tasks.${task}`);
   const lowered = map.depth[depth]?.[task];
-  if (lowered) value = valueOf(map, lowered, `depth.${depth}.${task}`);
+  // An earlier file's depth row would undo a later file's tasks value.
+  if (lowered && FILES.indexOf(lowered.file) >= FILES.indexOf(map.tasks[task].file)) value = valueOf(map, lowered, `depth.${depth}.${task}`);
   for (const name of RISK_ROWS[risk]) {
     const raised = map.risk[name]?.[task];
     if (!raised) continue;

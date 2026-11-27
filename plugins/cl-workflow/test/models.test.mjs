@@ -40,6 +40,16 @@ test('models: a depth row lowers a task, and the risk row after it only raises',
   assert.deepEqual([pick(plan), plan.row], ['sonnet medium', 'depth.quick.plan']);
 });
 
+test('models: a repository tasks value holds at deep depth over the defaults depth row', () => {
+  const review = resolveMap({ ...setup({ repository: { models: { tasks: { review: { model: 'fable', effort: 'high' } } } } }), depth: 'deep' }).tasks.review;
+  assert.deepEqual([pick(review), review.row, review.file], ['fable high', 'tasks.review', 'repository']);
+});
+
+test('models: a repository tasks value holds at quick depth over the defaults depth row', () => {
+  const plan = resolveMap({ ...setup({ repository: { models: { tasks: { plan: { model: 'fable', effort: 'high' } } } } }), depth: 'quick' }).tasks.plan;
+  assert.deepEqual([pick(plan), plan.row, plan.file], ['fable high', 'tasks.plan', 'repository']);
+});
+
 test('models: rank compares the model first, then the effort', () => {
   const at = setup({
     user: {
