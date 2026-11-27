@@ -10,15 +10,17 @@ The `cl-orchestration` dispatch guard refuses the commands that would let a coor
 | `direct-merge` | `gh pr merge` without `--match-head-commit` and the full 40-character head (`--disable-auto` alone passes) |
 | `no-admin`, `no-auto`, `no-delete-branch` | those flags of `gh pr merge`, `-d` included |
 | `update-branch-rebase` | `gh pr update-branch --rebase` |
-| `clone-checkout` | `git checkout`, `switch`, `restore` and `worktree` in a scratch clone: a folder in `clones/` of a run folder or of a bot home, other than a `trial-` clone |
+| `clone-checkout` | `git checkout`, `switch`, `restore` and `worktree` in a scratch clone: a folder in `clones/` of a run folder or of a bot home. A clone that needs files (a trial merge, the policy pull request) lies in `checkouts/` |
 | `handoff-size` | a handoff file (`.cedarloom/runs/handoff.md`) over 8,000 characters, and a Bash write to it |
+| `unreadable-program` | a command whose program is a variable or command substitution (`$RUN`, `"$(which gh)" pr view`, PowerShell's `& $gh`) |
 | `away-off` | an `orca` command that holds `/cl-workflow:away off` |
 
 ## How it reads a command
 
 - It reads the command as the shell splits it, as the `cl-workflow` role guard does ([plugins.md](plugins.md#role-guard)): quotes, escapes, line continuations, `$'...'`, wrappers (`command`, `env`, `sudo`, `timeout`), subshells and the text of `bash -c` or `eval`.
 - Flags count in every spelling the program accepts: `--flag=value`, a short-flag cluster (`-sd`), and git's abbreviations (`--forc`).
-- Fail closed: a command it cannot read for a rule (a program, flag, folder or head commit in a variable or command substitution, `--git-dir`, `cd -`, a redirection into a variable) is refused under that rule. Every refusal names its rule and says what to write instead.
+- Fail closed: a command it cannot read for a rule (a flag, folder or head commit in a variable or command substitution, `--git-dir`, `cd -`, a redirection into a variable) is refused under that rule. A folder change counts as maybe failed, so the folder before it still counts for the commands after it. Every refusal names its rule and says what to write instead.
+- Like the role guard, it reads every line of a here-document and an input redirection's target as it reads a command: a body that holds a refused command, or `< .cedarloom/runs/handoff.md`, is refused too.
 - A refused text that only mentions a flag, such as a commit message, goes in a file: `git commit -F`, `gh --body-file`.
 
 ## What it does not bound

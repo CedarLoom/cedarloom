@@ -110,24 +110,24 @@ const real = (path) => {
   }
 };
 // A scratch clone: a folder in clones/ of a run folder (.cedarloom/runs/<run id>/clones/) or of a bot home (which holds
-// .cedarloom/runs/), other than a trial clone, whose name starts with trial- (trial-merge.md).
+// .cedarloom/runs/). A clone with files, as a trial's, lies in checkouts/ instead (trial-merge.md).
 function inClone(path) {
   const parts = real(path).split(/[/\\]/);
   return parts.some((part, i) => {
-    if (part !== 'clones' || !parts[i + 1] || parts[i + 1].startsWith('trial-')) return false;
+    if (part !== 'clones' || !parts[i + 1]) return false;
     const home = parts.slice(0, i).join('/') || '/';
     return (parts[i - 2] === 'runs' && parts[i - 3] === '.cedarloom') || existsSync(join(home, '.cedarloom', 'runs'));
   });
 }
 const isHandoff = (path) => real(path).replaceAll('\\', '/').toLowerCase().endsWith(HANDOFF);
 
-// The folders a command may run in, null for one the guard cannot read. A folder change in a subshell or a quoted text adds its
-// folder to the ones before, since the guard does not follow where the subshell ends.
-function changeDir(places, words, at, nested) {
+// The folders a command may run in, null for one the guard cannot read. A folder change adds its folder to the ones before: it
+// may fail with the next command still running (cd x; git ...), or run in a subshell that ends before that command.
+function changeDir(places, words, at) {
   const name = program(words[at]);
   const arg = words.slice(at + 1).find((w) => !/^-\w/.test(w));
-  const next = new Set([...places].map((p) => (p === null || !arg || arg === '-' || expands(arg) || name === 'popd' || name === 'pop-location' ? null : resolve(p, arg))));
-  return nested ? new Set([...places, ...next]) : next;
+  const next = [...places].map((p) => (p === null || !arg || arg === '-' || expands(arg) || name === 'popd' || name === 'pop-location' ? null : resolve(p, arg)));
+  return new Set([...places, ...next]);
 }
 
 function gitRules(words, at, places, refuse) {
@@ -147,7 +147,11 @@ function gitRules(words, at, places, refuse) {
   }
   const sub = words[i];
   if (sub === undefined) return;
-  if (sub === 'worktree' && words[i + 1] === 'remove' && words.slice(i + 2).some(forces)) refuse('worktree-force', 'git worktree remove --force deletes a worktree with its changes and untracked files: remove it without --force, or through commit-push.mjs remove');
+  if (sub === 'worktree' && (words[i + 1] === 'remove' || expands(words[i + 1] ?? ''))) {
+    const rest = words.slice(i + 2);
+    if (rest.some(forces)) refuse('worktree-force', 'git worktree remove --force deletes a worktree with its changes and untracked files: remove it without --force, or through commit-push.mjs remove');
+    else if (expands(words[i + 1]) || rest.some(expands)) refuse('worktree-force', 'a git worktree remove the guard cannot read (a variable or command substitution): write it out');
+  }
   if (!CHECKOUTS.has(sub) && !expands(sub) && !alias) return;
   const folders = unread ? [null] : dirs;
   if (folders.includes(null)) refuse('clone-checkout', `git ${sub} in a folder the guard cannot read (a variable, cd -, --git-dir, GIT_DIR): name the folder as a path`);
@@ -185,7 +189,8 @@ function ghRules(words, at, refuse) {
       else if (name === 'admin') refuse('no-admin', 'gh pr merge --admin passes over the branch rules and their required checks');
       else if (name === 'auto') refuse('no-auto', 'gh pr merge --auto merges later, also a head pushed after the review');
       else if (name === 'delete-branch') refuse('no-delete-branch', 'gh pr merge --delete-branch deletes the branch and its local copy; Clean up deletes a merged branch by the policy (delete-branch.mjs)');
-      else if (name === 'disable-auto' || name === 'help') disable = true;
+      // A boolean flag holds only without a value or with true (--disable-auto=false merges).
+      else if (name === 'disable-auto' || name === 'help') disable ||= !w.includes('=') || /=true$/i.test(w);
       else if (expands(name)) refuse('direct-merge', 'a gh pr merge option the guard cannot read: write it out');
     } else if (w === '-h') disable = true;
     else if (/^-[A-Za-z]/.test(w)) {
@@ -260,8 +265,8 @@ function commandRules(command, cwd, powershell) {
   const substituted = command.includes('$(') || (!powershell && command.includes('`'));
   for (const parsed of readings(command, powershell)) {
     let places = new Set([typeof cwd === 'string' && isAbsolute(cwd) ? cwd : null]);
+    // readings() keeps a reader's quoted arguments only where text of the line may run as commands, a substitution among them.
     for (const c of parsed) {
-      if (c.data) continue;
       const at = programIndex(c.words, powershell);
       const name = at < 0 ? undefined : program(c.words[at]);
       handoffRules(c, at, places, powershell, refuse);
@@ -269,10 +274,15 @@ function commandRules(command, cwd, powershell) {
       if (plain(c, powershell)) continue;
       bypassRules(c.words, at, refuse);
       if (name === undefined) continue;
-      if (expands(c.words[at]) || (substituted && !KNOWN.has(name) && !LAUNCHERS.has(launcher(c.words[at])))) {
-        for (const w of c.words) if (TRIGGERS.has(w)) refuse(TRIGGERS.get(w), `a command whose program the guard cannot read (a variable or command substitution) holds ${w}: write the program out`);
+      // A lone $ is where a substitution starts ($(...), $((...))); its commands are read on their own.
+      // PowerShell runs a leading variable that no assignment operator follows (& $gh pr merge), which programIndex skips as a target.
+      const called = powershell && /^\$[^=]*$/.test(c.words[0]) && !/^(\?\?|[-+*/%])?=$/.test(c.words[1] ?? '');
+      if (called) refuse('unreadable-program', `the program ${c.words[0]} is a variable, so the guard cannot check it against its rules: write the program out`);
+      else if (expands(c.words[at]) && c.words[at] !== '$') refuse('unreadable-program', `the program ${c.words[at].length > 40 ? 'of a command' : c.words[at]} is a variable or command substitution, so the guard cannot check it against its rules: write the program out`);
+      else if (substituted && !KNOWN.has(name) && !LAUNCHERS.has(launcher(c.words[at]))) {
+        for (const w of c.words) if (TRIGGERS.has(w)) refuse(TRIGGERS.get(w), `a command after a command substitution, whose program the guard cannot read, holds ${w}: write the program out`);
       }
-      if (CHANGE_DIR.has(name)) places = changeDir(places, c.words, at, c.nested);
+      if (CHANGE_DIR.has(name)) places = changeDir(places, c.words, at);
       else if (name === 'git') gitRules(c.words, at, places, refuse);
       else if (name === 'gh') ghRules(c.words, at, refuse);
       else if (name === 'orca') orcaRules(c.words, at, refuse);

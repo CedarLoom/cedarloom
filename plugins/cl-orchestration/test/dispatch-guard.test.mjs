@@ -141,7 +141,6 @@ test('launch-env: an Orca launch line that starts an agent without env -u of the
     `orca terminal create --command "bash -c 'claude --permission-mode auto'"`,
     'orca terminal create --command "$LAUNCH"',
     'orca terminal create --command "$CLAUDE --permission-mode auto"',
-    'ORCA=orca; $ORCA terminal create --command "claude"',
   ]);
   passed([
     "orca terminal create --worktree path:/w --title 12-x --command \"env -u CEDARLOOM_ROLE CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false '/usr/local/bin/claude' --autocompact 200k --model 'opus' --effort high --permission-mode auto\" --json",
@@ -161,6 +160,8 @@ test('worktree-force: a forced worktree removal is refused, through Orca and git
     'git worktree remove -ff /w',
     'command git worktree remove --force /w',
     'cd /p && (git worktree remove \\\n --force /w)',
+    'git worktree remove $OPTS /w',
+    'git worktree $VERB --force /w',
   ]);
   passed(['orca worktree rm --worktree path:/w --run-hooks --json', 'orca worktree rm --worktree "path:$W" --json', 'git worktree remove /w', 'git -C /p worktree list --porcelain']);
 });
@@ -171,7 +172,8 @@ test('direct-merge: a gh pr merge without the reviewed head pinned, or one the g
     'gh pr merge 12 --squash --match-head-commit "$HEAD"',
     'gh pr merge 12 --squash --match-head-commit abc123',
     'gh pr merge 12 --squash --match-head-commit=$(git rev-parse HEAD)',
-    'GH=gh; $GH pr merge 12 --squash',
+    'gh pr merge 12 --squash --disable-auto=false',
+    'grep "$(gh pr merge 12)" notes.md',
     '$(echo gh) pr merge 12',
     'env GH_TOKEN=x gh pr merge 12',
     '(gh pr merge 12)',
@@ -201,6 +203,13 @@ test('no-admin, no-auto and no-delete-branch: gh pr merge refuses each flag, als
   passed([pinned, `${pinned} --body "--admin --auto"`, `${pinned} -t "-d"`]);
 });
 
+test('unreadable-program: a command whose program is a variable or command substitution is refused', () => {
+  refused('unreadable-program', ['$RUN', 'GH=gh; $GH pr merge 12 --squash', '"$ORCA" terminal create --command claude', '"$(which gh)" pr view 12'], 'Bash');
+  refused('unreadable-program', ['& $gh pr merge 12'], 'PowerShell');
+  passed(['$r = gh pr view 12'], 'PowerShell');
+  passed(['echo "$(date)"', 'head=$(git rev-parse HEAD)', 'echo $((1 + 2))']);
+});
+
 test('update-branch-rebase: gh pr update-branch with --rebase, or an option the guard cannot read, is refused', () => {
   refused('update-branch-rebase', ['gh pr update-branch 12 -R o/r --rebase', 'gh pr update-branch 12 --rebase=true', 'gh pr update-branch 12 $OPT', "sh -c 'gh pr update-branch 12 --rebase'"]);
   passed(['gh pr update-branch 12 -R o/r']);
@@ -219,17 +228,18 @@ test('clone-checkout: checkout, switch, restore and worktree in a scratch clone,
     'cd - && git checkout main',
     'git --git-dir=x checkout main',
   ]);
-  refused('clone-checkout', ['git checkout main'], 'Bash', `${CWD}/${CLONE}`);
+  // A folder change that fails leaves the next command in the clone.
+  refused('clone-checkout', ['git checkout main', 'cd /tmp/gone; git checkout main'], 'Bash', `${CWD}/${CLONE}`);
   // A bot home holds .cedarloom/runs/ and its clones beside it.
   const home = mkdtempSync(join(tmpdir(), 'bot-'));
   mkdirSync(join(home, '.cedarloom', 'runs'), { recursive: true });
   try {
-    refused('clone-checkout', [`git -C ${home}/clones/app-12-1 checkout main`]);
+    refused('clone-checkout', ['git -C clones/app-12-1 checkout main', 'git -C clones/trial-app-12-1 checkout main'], 'Bash', home);
   } finally {
     rmSync(home, { recursive: true });
   }
   passed([
-    `git -C .cedarloom/runs/r1/clones/trial-app-12-1 checkout --force --detach ${SHA}`,
+    `git -C .cedarloom/runs/r1/checkouts/app-12-2 checkout --force --detach ${SHA}`,
     `git -C ${CLONE} diff --no-ext-diff --no-textconv a..b`,
     'git switch -c feat/12-x',
     `git -C ${CLONE} rev-parse --git-dir`,
