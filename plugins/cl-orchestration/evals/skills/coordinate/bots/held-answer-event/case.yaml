@@ -1,0 +1,44 @@
+schema_version: "1.1"
+name: coord-bots-held-answer-event
+description: 'An owner answer to a held pull request that arrives with a pull request event is taken once, by the catch-up sweep: the event run ends at step 3 (State) without reading or applying the answer, and the catch-up run applies it with approval.mjs apply and lists its key in answered.json. The case starts the skill, then has the session take SOUL.md, bot-project.md and bot-catch-up.md, the procedures an automation''s prompt names for a project bot run. Constructed for the rules at plugins/cl-orchestration/skills/coordinate/bot-project.md:9 and bot-catch-up.md:18. Needs --scaffold.'
+tags: [cl-orchestration, coord-bots]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This session stands for two separate runs of the project bot of example-org/widget, not for a coordinator run: run E, started by its `ci_passed` event rule for pull request 31, takes `SOUL.md`, then `bot-project.md`; run S, a catch-up sweep run that starts a few seconds earlier, takes `SOUL.md`, then `bot-catch-up.md`. All three files are in this skill's folder. It is a dry run: run no command and write no file. Decide each run from these facts only.
+
+    - `pr-31.json`: `"handled": { "head": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678", "action": "merge" }`, `"held": "merge stop at a1b2c3d4"`, `"mergeCommandAt": null`.
+    - Run E's event names head `a1b2c3d4e5f60718293a4b5c6d7e8f9012345678`.
+    - Approval issue #3 asks the owner about pull request 31. The owner commented `Owner answer (a): Release the hold.` at 2026-11-27T10:00:00Z. `answered.json` does not list `#3 2026-11-27T10:00:00Z`.
+    - Run S's precheck line: `{"start":true,"condition":3,"reason":"#3 has an answer","probe":false}`.
+    - Both runs read `answered.json` before either writes it. The daily counts leave room for every run.
+
+    Write exactly these four lines:
+    Run E: <end | go on>
+    Run E runs approval.mjs apply: <yes | no>
+    Run S runs approval.mjs apply: <yes | no>
+    Key listed in answered.json by: <run E | run S | both | neither>
+    then stop.
+  max_turns: 12
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: event-run-ends
+    pattern: 'Run E:\s*[`*_]*\s*end\b'
+    flags: i
+  - type: regex
+    name: event-run-takes-no-answer
+    pattern: 'Run E runs approval\.mjs apply:\s*[`*_]*\s*no\b'
+    flags: i
+  - type: regex
+    name: sweep-takes-the-answer
+    pattern: 'Run S runs approval\.mjs apply:\s*[`*_]*\s*yes\b'
+    flags: i
+  - type: regex
+    name: one-key-writer
+    pattern: 'Key listed in answered\.json by:\s*[`*_]*\s*run S\b'
+    flags: i
+expected_outcome: 'Run E: end (a held pull request ends at step 3; catch-up condition 3 takes the answer). Run E runs approval.mjs apply: no. Run S runs approval.mjs apply: yes. Key listed in answered.json by: run S, so the answer is taken once.'

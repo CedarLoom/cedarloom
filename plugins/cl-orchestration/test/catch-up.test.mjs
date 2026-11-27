@@ -119,6 +119,9 @@ test('catch-up 3: each owner answer not acted on starts a run, whether or not it
   // An answer without a time has no key: it is reported, never acted on at every pass.
   github({ asked: [{ ...OWNER_ANSWER, comments: [{ ...OWNER_ANSWER.comments[0], body: 'Owner answer (soon): Yes.', createdAt: undefined }] }] });
   assert.deepEqual(check(stateWith()), { start: true, condition: 'failed', reason: 'the answer on #3 has no time', probe: false });
+  // A question still open starts none: no comment yet, or only one without write access.
+  github({ asked: [{ ...OWNER_ANSWER, comments: [] }] });
+  assert.deepEqual(check(stateWith()), NOTHING);
   github({ asked: [{ ...OWNER_ANSWER, comments: [{ ...OWNER_ANSWER.comments[0], authorAssociation: 'NONE' }] }] });
   assert.deepEqual(check(stateWith()), NOTHING);
   const queue = () => [{ file: 'q1.md', status: 'answered', option: 'Yes', text: '', at: '2026-11-20' }, { file: 'q2.md', status: 'open' }];
