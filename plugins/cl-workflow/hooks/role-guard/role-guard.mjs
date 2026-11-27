@@ -140,22 +140,23 @@ function commands(source, powershell, nested = false, mode = 'bash') {
   const out = [];
   const escape = powershell ? '`' : '\\';
   const s = source.replace(powershell ? /`\r?\n/g : /\\\r?\n/g, '');
-  let words = [], targets = [], word = '', started = false, quoted = false, quote = null, redirect = false, depth = 0, backticks = false;
+  let words = [], targets = [], word = '', started = false, quoted = false, quote = null, redirect = false, depth = 0, backticks = false, piped = false;
   // Per open brace in PowerShell, whether it opened a script block.
   const blocks = [];
   const endWord = () => {
     if (started) {
       // An argument of a program that only reads (grep "gh release create" f) is marked data: readings() drops it where no
       // text of the line runs as commands.
-      const at = powershell || redirect ? -1 : programIndex(words, false);
-      const data = at >= 0 && READERS.has(program(words[at]));
+      const at = redirect ? -1 : programIndex(words, powershell);
+      const owner = at >= 0 ? program(words[at]) : undefined;
+      const data = !powershell && READERS.has(owner);
       if (redirect) {
         redirect = false;
         targets.push(word);
       } else words.push(word);
       if (quoted && /[\s;&|()`<>]/.test(word)) {
         const inner = powershell ? commands(word, true, true) : nestedCommands(word);
-        out.push(...(data ? inner.map((c) => ({ ...c, data: true })) : inner));
+        out.push(...inner.map((c) => ({ ...c, owner: c.owner ?? owner, ...(data && { data: true }) })));
       }
     }
     word = '';
@@ -164,7 +165,10 @@ function commands(source, powershell, nested = false, mode = 'bash') {
   const endCommand = (subshell = false) => {
     endWord();
     const inner = nested || subshell || depth > 0 || backticks;
-    if (words.length || targets.length) out.push({ words, targets, nested: inner });
+    if (words.length || targets.length) {
+      out.push({ words, targets, nested: inner, piped });
+      piped = false;
+    }
     if (powershell) {
       // Where no word after the = is one the guard acts on, the reading keeps only the word joined to it, a path the command may reach.
       const last = words.findLastIndex(acted);
@@ -211,6 +215,8 @@ function commands(source, powershell, nested = false, mode = 'bash') {
     } else if (c === '\n' || ';&|()'.includes(c) || (c === '`' && !powershell)) {
       // A command before a single | or & runs in a subshell: a pipeline part or a background job.
       endCommand('|&'.includes(c) && s[i + 1] !== c);
+      // The next command reads this one's output: a single | or |& (not ||), also across the empty command before a (, & or line break.
+      if (c === '|' && s[i + 1] !== '|' && s[i - 1] !== '|') piped = true;
       if (c === '(') depth++;
       else if (c === ')' && depth) depth--;
       else if (c === '`') backticks = !backticks;
@@ -246,9 +252,27 @@ const runsText = (parsed, source, powershell) =>
 // The commands of a command text in each reading a shell may give it: PowerShell's, or those of current bash, bash 3.2 and zsh,
 // which differ only in ANSI-C quoting and a NUL; every check runs on each. A reading program's quoted arguments are left out
 // only in one line (a comment or a here-document on another line could end its quote) that runs no text as commands.
+// Programs that print what they read and run none of it.
+const FILTERS = new Set(['head', 'tail', 'wc', 'sort', 'uniq', 'cut']);
+const programOf = ({ words }, powershell) => {
+  const at = programIndex(words, powershell);
+  return at < 0 ? undefined : program(words[at]);
+};
+// Some command of the line may run what a reader prints: one that is no reader or filter (an unknown program fails closed), or a redirect.
+const opaque = (parsed, powershell) =>
+  parsed.some((c) => !c.data && (c.targets.length || (c.words.length && !READERS.has(programOf(c, powershell)) && !FILTERS.has(programOf(c, powershell)))));
+// The builder bot's git may be filled in or run by a program the guard does not read: git behind a program or in a quoted word
+// of one that is neither git nor a reader (caffeinate xargs git, fish -c 'git ...'), or a pipe into anything but a reader or filter.
+const hidesGit = (parsed, powershell) =>
+  parsed.some((c) => {
+    const own = c.owner ?? programOf(c, powershell);
+    if (c.words.some((w) => program(w) === 'git') && own !== 'git' && !READERS.has(own)) return true;
+    const piped = c.owner === undefined ? programOf(c, powershell) : undefined;
+    return c.piped && c.owner === undefined && !READERS.has(piped) && !FILTERS.has(piped);
+  });
 function readings(source, powershell) {
   const all = powershell ? [commands(source, true)] : shellReadings(source, false);
-  return all.map((parsed) => (source.includes('\n') || runsText(parsed, source, powershell) ? parsed : parsed.filter((c) => !c.data)));
+  return all.map((parsed) => (source.includes('\n') || runsText(parsed, source, powershell) || opaque(parsed, powershell) ? parsed : parsed.filter((c) => !c.data)));
 }
 
 // The readings of a POSIX shell text. A quoted word read again as commands gets every reading too: the shell that runs it
@@ -577,8 +601,8 @@ function reason({ tool_name: tool, tool_input: toolInput }, cwd, role) {
   const gitDir = /\bGIT_DIR\s*=/i.test(source);
   // Text run as commands may hide the builder bot's push or its refspec from the guard (sh -c 'git push origin `echo main`'),
   // also behind an apostrophe in a comment or a here-document, which the guard reads as a quote.
-  if (OWN_BRANCH.has(role) && all.some((parsed) => runsText(parsed, cmd, powershell) && parsed.some(({ words }) => words.some((w) => program(w) === 'git')))) {
-    return 'git in a line that runs text as commands (a backtick or $( substitution, eval, a shell, source or xargs)';
+  if (OWN_BRANCH.has(role) && all.some((parsed) => parsed.some(({ words }) => words.some((w) => program(w) === 'git')) && (runsText(parsed, cmd, powershell) || hidesGit(parsed, powershell)))) {
+    return 'git in a line that may run text as commands (a backtick or $( substitution, eval, a shell, source, xargs, git behind or quoted under another program, or a pipe into a program that is no reader or filter)';
   }
   for (const parsed of all) {
     const why = checks(parsed, cmd, cwd, role, powershell, source, gitDir);

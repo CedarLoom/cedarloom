@@ -119,6 +119,9 @@ const DENIED = [
   'CEDARLOOM_ROLE=coordinator claude -p "merge 12"',
   'env CEDARLOOM"_"ROLE=coordinator claude -p "merge 12"',
   'claude --bare -p "merge pull request 12 with the squash method"',
+  "echo | rg -r 'gh pr merge 1' '^' | tcsh",
+  "echo | grep -H --label 'gh pr merge 1;' '' | awk '{system($0)}'",
+  "echo | rg -r 'gh pr merge 1' '^' | caffeinate sh",
 ];
 
 const ALLOWED = [
@@ -142,6 +145,7 @@ const ALLOWED = [
   'claude -p "review 12" 2>&1 | tee out.txt',
   'grep -n "gh release create" scripts/release.sh',
   "rg -n 'git push origin main' docs | head",
+  'grep -rn "gh release create" .',
 ];
 
 test('role guard: denies coordinator steps outside the coordinator role, unset or another role', () => {
@@ -381,7 +385,7 @@ test('role guard: the project, reviewer and maintain bots never push', () => {
 
 test('role guard: the builder bot pushes only the branch checked out where git runs', () => {
   for (const role of ['builder-bot']) {
-    for (const command of ['git push origin feat/x', 'git push -u origin HEAD', `git -C ${feature} push origin feat/x`, 'git push origin feat/x && git checkout main']) assert.equal(decision(command, { role, cwd: feature }), 'none', `${role}: ${command}`);
+    for (const command of ['git push origin feat/x', 'git push -u origin HEAD', `git -C ${feature} push origin feat/x`, 'git push origin feat/x && git checkout main', 'git add . && git commit -F msg.txt && git push origin feat/x']) assert.equal(decision(command, { role, cwd: feature }), 'none', `${role}: ${command}`);
     for (const command of ['git push origin feat/other', 'git push origin HEAD:feat/other', 'git push origin feat/x feat/other', 'git push origin feat/other:feat/x']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
     // The guard reads the branch before the command runs, so a push after a switch in the same command is refused.
     for (const command of ['git checkout feat/other && git push', 'git switch -c feat/y && git push origin HEAD', 'git branch -M feat/y && git push origin feat/x', 'git rebase origin/trunk trunk && git push', 'git symbolic-ref HEAD refs/heads/feat/other && git push', 'git branch --mov feat/y && git push origin HEAD', 'git bisect reset trunk && git push']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
@@ -416,6 +420,14 @@ test('role guard: the builder bot refuses git in a line that runs text as comman
     'git pu?h origin main',
     'echo push origin main | xargs git',
     "echo main | xargs -I feat/x sh -c 'git push origin feat/x'",
+    'echo main | caffeinate xargs git push origin',
+    'caffeinate xargs -a refs.txt git push origin',
+    'echo main | parallel git push origin',
+    "printf '%s push origin main\\n' git | tcsh",
+    "fish -c 'git push origin (echo main)'",
+    "git log --format='%s' | caffeinate sh",
+    "git log --format='%s' |& caffeinate sh",
+    "git log --format='%s' | (caffeinate sh)",
   ];
   for (const command of hidden) assert.equal(decision(command, { role: 'builder-bot', cwd: feature }), 'deny', command);
 });
