@@ -27,6 +27,7 @@ test('start-checks: settings with no command and no entry that defeats a bound p
   assert.deepEqual(s.run(), {
     failed: [], read: [], unresolved: [],
     allowRules: [{ source: join(s.dir, 'home/.claude/settings.json'), rule: 'Bash(ls *)' }, { source: join(s.dir, 'home/.claude/settings.json'), rule: 'WebFetch(domain:raw.githubusercontent.com)' }],
+    classifyAllShell: [],
   });
 });
 
@@ -400,9 +401,9 @@ test('start-checks: a hook of another type than command is listed to read, in th
   const http = { type: 'http', url: 'https://example.com/hook' }, prompt = { type: 'prompt', prompt: 'Is src/a.js safe?' };
   const s = setup({ 'wt/.claude/settings.json': { hooks: { PostToolUse: [{ matcher: 'Edit', hooks: [http, { type: 'command', command: '/opt/bin/audit' }] }], Stop: [{ hooks: [prompt] }] } } });
   const committed = join(s.dir, 'wt/.claude/settings.json');
-  assert.deepEqual(s.run(), { failed: [], read: [{ source: committed, command: '{"type":"http","url":"https://example.com/hook"}' }, { source: committed, command: '{"type":"prompt","prompt":"Is src/a.js safe?"}' }, { source: committed, command: '/opt/bin/audit' }], unresolved: [], allowRules: [] });
+  assert.deepEqual(s.run(), { failed: [], read: [{ source: committed, command: '{"type":"http","url":"https://example.com/hook"}' }, { source: committed, command: '{"type":"prompt","prompt":"Is src/a.js safe?"}' }, { source: committed, command: '/opt/bin/audit' }], unresolved: [], allowRules: [], classifyAllShell: [] });
   const r = withPlugin({ source: './fmt' }, { 'home/.claude/plugins/cache/m/fmt/1/hooks/hooks.json': { hooks: { Stop: [{ hooks: [http] }] } }, 'home/.claude/plugins/cache/m/fmt/1/.mcp.json': { mcpServers: { docs: { type: 'http', url: 'https://example.com/mcp' } } } });
-  assert.deepEqual(r, { failed: [], read: [{ source: 'plugin fmt@m', command: '{"type":"http","url":"https://example.com/hook"}' }], unresolved: [], allowRules: [] });
+  assert.deepEqual(r, { failed: [], read: [{ source: 'plugin fmt@m', command: '{"type":"http","url":"https://example.com/hook"}' }], unresolved: [], allowRules: [], classifyAllShell: [] });
 });
 
 test('start-checks: a managed or user autoMode that widens the classifier or drops its built-in rules is unresolved', () => {
@@ -417,6 +418,11 @@ test('start-checks: a managed or user autoMode that widens the classifier or dro
     ['home/.claude/settings.json', 'autoMode.environment can widen what auto mode\'s classifier lets pass: ["$defaults","Every host is trusted"]'],
   ]);
   assert.deepEqual(setup({ 'home/.claude/settings.json': { autoMode: 'off' } }).run().unresolved.map((u) => u.reason), ['autoMode is no object']);
+  const shell = setup({ 'managed/managed-settings.json': { autoMode: { classifyAllShell: true } }, 'home/.claude/settings.json': { autoMode: { classifyAllShell: false } } });
+  const { unresolved, classifyAllShell } = shell.run();
+  assert.deepEqual(unresolved, []);
+  assert.deepEqual(classifyAllShell.map((c) => [c.source.slice(shell.dir.length + 1), c.value]), [['managed/managed-settings.json', true], ['home/.claude/settings.json', false]]);
+  assert.deepEqual(setup({ 'home/.claude/settings.json': { autoMode: { classifyAllShell: 'true' } } }).run().unresolved.map((u) => u.reason), ['autoMode.classifyAllShell is no boolean: "true"']);
 });
 
 test('start-checks: a wrong type below permissions, or a permissions key the script does not know, is unresolved', () => {

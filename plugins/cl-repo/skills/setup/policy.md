@@ -2,10 +2,11 @@
 
 The coordinator (`cl-orchestration:coordinate`) starts and merges nothing in a project without `cedarloom.json` at the root of its default branch. Where the file is absent, propose it as a plan item with these answers (ask, recommending the first value named), and an empty `docs/agents/worker-rules.md` (extra rules for the coordinator's workers) when that is absent too. Both are committed in a shared and in a local setup, and from then on both are the owner's to edit: never propose a change to an existing one.
 
-- `startLabel`: the label that lets the coordinator start an issue, `cl:ready-for-agent` unless the user names another.
+- `startLabel`: the label that lets the coordinator start an issue, `cl:ready-for-agent` unless the user names another; the coordinator refuses any other CedarLoom label.
 - `merge.allowed`: `false`, the user merges; `true` lets the coordinator merge a reviewed pull request. With `true`, `merge.requiredChecks` lists check names that run on pull requests, taken from a recent one (`gh pr checks <n> --json name --jq '.[].name'`), never a job that runs only on pushes to the default branch, and only those the user keeps.
 - `closeIssue`: `true`, a worker's pull request closes its issue when merged, by anyone, and the coordinator closes one left open; `false` leaves that to the user.
 - `trustedAuthors`: none, or the review bots the user names whose comments workers may follow.
+- `merge.ownerOnlyPaths`: the trigger paths of each deploy-on-merge workflow the user keeps owner-only ([AGENTS.md and CLAUDE.md](SKILL.md#4-agentsmd-and-claudemd)), left out when there is none. An existing policy file gets no change: name those paths in the report for the owner to add.
 
 Write `{"$schema": "https://cedarloom.github.io/cedarloom/schema/cedarloom.json", "schemaVersion": 3}` with these fields, two-space indented and with a final newline, and leave every other field to its default: the Policy section of `cl-orchestration:coordinate` lists each field and its default.
 

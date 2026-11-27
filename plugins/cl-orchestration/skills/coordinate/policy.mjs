@@ -101,9 +101,13 @@ export function validate(doc) {
   if (kind(doc) !== 'object') return [{ rule: 'not-object', path: '', message: 'must be a JSON object' }];
   const errors = [];
   check(supported(inlined(shipped('./cedarloom.schema.json'))), doc, '', errors);
+  const taken = typeof doc.startLabel === 'string' && OTHER_LABELS.find((label) => label === doc.startLabel.toLowerCase());
+  if (taken) errors.push({ rule: 'refused', path: 'startLabel', message: `is refused: ${taken} is another CedarLoom label, and every issue that carries it would start` });
   return errors.map((e) => (e.rule !== 'unknown-key' ? e : e.path === 'issues.repository' ? REFUSED_REPOSITORY : e.path === 'sandbox' ? REFUSED_SANDBOX : e));
 }
 
+// The CedarLoom labels that may not start work: the issue form puts cl:triage on, a filed follow-up cl:follow-up. GitHub matches labels without case.
+const OTHER_LABELS = ['cl:plan', 'cl:needs-human', 'cl:deferred', 'cl:in-progress', 'cl:follow-up', 'cl:triage'];
 const REFUSED_REPOSITORY = { rule: 'refused', path: 'issues.repository', message: 'is refused: a policy file names no other repository; the tracker is the project repository' };
 // Policies written for earlier releases hold sandbox.allowedDomains, which mode: automatic required.
 const REFUSED_SANDBOX = { rule: 'refused', path: 'sandbox', message: 'is refused: CedarLoom does not support the Claude Code sandbox; remove the key' };
