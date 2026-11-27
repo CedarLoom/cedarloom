@@ -15,7 +15,7 @@ A decision taken on the owner's behalf names its source (file and line) where it
 
 Report each file the precheck names on stderr. A prompt file whose result file holds text is that run's report ([bot-reports.md](bot-reports.md)); one past `stallMinutes` without it is stalled: report it and delete it, unless its issue carries `cl:in-progress`, which stays for the owner. Then run the precheck again and take step 1 of the [Loop](SKILL.md#loop) on the issues it prints, three starts at most, with the spec of [spec-template.md](spec-template.md). A deep issue, or one that leaves its approach open, first gets a plan run unless a plan run's report or an answered `design` approval holds its plan. `cl:in-progress` goes on right before a start.
 
-An automatic worker starts after check 2 of [Automatic start](automatic-start.md) and a passed probe of the UTC day in `<state>/probe-<day>.json`; without one the project runs supervised that day where [orca.md](orca.md#fallback-to-supervised) offers it, else starts nothing.
+Each automatic worker starts after checks 2 to 4 of [Automatic start](automatic-start.md) and a passed probe of the UTC day (`<state>/probe-<day>.json`); without one the project runs supervised that day where [orca.md](orca.md#fallback-to-supervised) offers it, else starts nothing.
 
 ## Start
 
