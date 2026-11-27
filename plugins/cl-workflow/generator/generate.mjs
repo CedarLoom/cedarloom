@@ -174,7 +174,7 @@ function scripted(def, scope) {
   const run = `${scope}${def.name}-run`;
   const cell = (value) => value.replaceAll('|', '\\|').replace(/\s*\n\s*/g, ' ');
   const step = {
-    settle: (phase) => `session: step 2 (Settle) of \`cl-workflow:workflow\`${phase.questions === false ? ', its questions by the questions rule of the cl-repo rules block' : ''}`,
+    settle: (phase) => `session: step 2 (Settle) of \`cl-workflow:workflow\`${phase.questions === false ? ', its questions routed as that step says without terminal questions' : ''}`,
     'pull-request': () => 'session: the pull request by step 3 of `cl-workflow:workflow`, with the Minor findings of the runs, then its checks watched as step 5 says',
   };
   const rule = (phase, stage) => {

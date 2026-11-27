@@ -99,9 +99,9 @@
     "plugins/cl-workflow/skills/dev/SKILL.md": 292,
     "plugins/cl-workflow/skills/full/SKILL.md": 1038,
     "plugins/cl-workflow/skills/lite/SKILL.md": 560,
-    "plugins/cl-workflow/skills/plan/SKILL.md": 551,
+    "plugins/cl-workflow/skills/plan/SKILL.md": 550,
     "plugins/cl-workflow/skills/research/SKILL.md": 290,
-    "plugins/cl-workflow/skills/workflow/SKILL.md": 2767,
+    "plugins/cl-workflow/skills/workflow/SKILL.md": 2824,
     "plugins/cl-workflow/skills/workflow/deep.md": 1100,
     "plugins/cl-workflow/skills/workflow/diagnose.md": 471,
     "plugins/cl-workflow/skills/workflow/docs.md": 523,
@@ -111,7 +111,7 @@
     "plugins/cl-workflow/skills/workflow/pull-request-template.md": 248,
     "plugins/cl-workflow/skills/workflow/research.md": 569,
     "plugins/cl-workflow/skills/workflow/risk.md": 483,
-    "plugins/cl-workflow/skills/workflow/software.md": 1587,
+    "plugins/cl-workflow/skills/workflow/software.md": 1595,
     "plugins/cl-workflow/skills/workflow/test-base.md": 323
   }
 }

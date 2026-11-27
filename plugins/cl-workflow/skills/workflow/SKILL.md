@@ -29,7 +29,7 @@ Every depth:
    - Unsure between two depths: the deeper one.
    - The work grows past its depth: say so, write a new depth line, and run the skipped steps before the next edit.
 
-2. **Settle.** Standard and deep: when goal, scope or result is open, grill the user in rounds (each question with your recommendation, all open ones per round) until goal, scope, acceptance criteria and risks are settled; a settled request skips the grill. Then explore read-only, as the plan phase where [software.md](software.md#phases) runs phases (Claude Code: in plan mode, only while terminal questions are allowed).
+2. **Settle.** Standard and deep: when goal, scope or result is open, grill the user in rounds (each question with your recommendation, all open ones per round) until goal, scope, acceptance criteria and risks are settled; a settled request skips the grill. Without terminal questions, the open questions go with your recommendations into one issue per task in the project's issue tracker, else the report; take each safe, reversible recommendation (an item without one waits) and go on. Then explore read-only, as the plan phase where [software.md](software.md#phases) runs phases (Claude Code: in plan mode, only while terminal questions are allowed).
 
    A plan or spec for this task with an acceptance table (from `/cl-workflow:plan`, a coordinator or the user) settles it: skip this step and the Plan phase and build against that plan. It never lowers the depth or the risk class, and the plan check still runs unless the plan records one.
 3. **Run the playbook.**
