@@ -38,6 +38,6 @@ Steps 1 to 5.2 of [Merge](merge.md#merge) in the newest clone, subject and body 
 - `merged`: delete the event rules, clones and branch ([Clean up](run-files.md#clean-up)), take `cl:in-progress` off the issue ([Start](bot-pick.md#start)); with `closeIssue`, check the issue closed ([Outcomes](outcomes.md)).
 - `wait`, `redMain`: end.
 - `restart`: steps 1 to 5.2 once more; a second ends the run.
-- `stop`: file the reason once, as `held` unless the script set it; with `mergedAt`, also `merged`'s cleanup. Report exit 1.
+- `stop`: [file](approvals.md) the reason once, as `held` unless the script set it; with `mergedAt`, also `merged`'s cleanup. Report exit 1.
 
 A held merge command, or one without a merge log line, pauses the repository's merges until the owner's answer; another hold blocks only its pull request.

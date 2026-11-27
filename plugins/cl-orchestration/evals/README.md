@@ -27,12 +27,12 @@ From the repository root, signed in to Claude Code:
 
 ```sh
 # one suite
-PATH="$PWD/plugins/cl-orchestration/evals/bin:$PATH" claude plugin eval plugins/cl-orchestration --allow-tools Bash Edit Write --tag coord-start --scaffold --no-publish --runs 3 --json coord-start.json
+PATH="$PWD/plugins/cl-orchestration/evals/bin:$PATH" claude plugin eval plugins/cl-orchestration --allow-tools Bash Edit Write Read --tag coord-start --scaffold --no-publish --runs 3 --json coord-start.json
 # everything
-PATH="$PWD/plugins/cl-orchestration/evals/bin:$PATH" claude plugin eval plugins/cl-orchestration --allow-tools Bash Edit Write --scaffold --no-publish --runs 3 --max-cost-usd 40 --json coord-all.json
+PATH="$PWD/plugins/cl-orchestration/evals/bin:$PATH" claude plugin eval plugins/cl-orchestration --allow-tools Bash Edit Write Read --scaffold --no-publish --runs 3 --max-cost-usd 40 --json coord-all.json
 ```
 
-Every case needs `--scaffold`. `--allow-tools` grants the gated tools for the whole run, and each case still gets only the ones its `allowed_tools` lists. Granted `Bash` runs in Claude Code's OS sandbox ([Sandboxing](https://code.claude.com/docs/en/sandboxing)).
+Every case needs `--scaffold`. `--allow-tools` grants the gated tools for the whole run, and each case still gets only the ones its `allowed_tools` lists. The commands grant `Read` because every case reads `SOUL.md` and a procedure file by path from the skill's folder, which the run otherwise denies. Granted `Bash` runs in Claude Code's OS sandbox ([Sandboxing](https://code.claude.com/docs/en/sandboxing)).
 
 ## Baseline
 
