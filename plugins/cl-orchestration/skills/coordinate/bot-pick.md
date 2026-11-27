@@ -6,11 +6,11 @@ The rules of the Pick and Start steps of [bot-project.md](bot-project.md), with 
 
 - Before the run's first start, run the visibility check of [Where it goes](approvals.md#where-it-goes) on the repository and give its warning when it is public.
 - The pickable issues are the numbers the precheck prints (its head says what counts), never a listing of your own. An issue it prints in a `several projects:` line starts nowhere: report it for the owner.
-- With a free slot, take up to `issuesPerWorker` of its numbers with no run or outcome yet, in [pick order](policy.md#pick-order). Take one only where any of them is a research issue whose map `research` task is on `fable` ([Rules](SOUL.md#rules)), or the project runs automatic. They are one run's batch ([spec-variants.md](spec-variants.md#batches)).
+- With a free slot, take up to `issuesPerWorker` of its numbers with no start or outcome yet in this run, in [pick order](policy.md#pick-order). Take one only where any of them is a research issue whose map `research` task is on `fable` ([Rules](SOUL.md#rules)), or the project runs automatic. They are one run's batch ([spec-variants.md](spec-variants.md#batches)).
 - Read the issue's thread file (`Thread:` in [spec-template.md](spec-template.md)) and milestone before its spec, never its raw comments: one that defers, supersedes, rejects or delivers the work is an outcome, so report the issue for the owner and start nothing.
 - An issue whose result you cannot state as a check from its text is an outcome too: report it for the owner and start nothing. One that is clear without naming a test starts.
 - Estimate each issue's depth and decide its risk class ([Risk class](decisions.md#risk-class)). One that is deep or high is held there, takes no slot, and is skipped while its `design` approval is open ([approvals.md](approvals.md)).
-- An issue starts once, not once per run (a failed one retries once, [Outcomes](outcomes.md)), so a verified no-change issue that stays open without `closeIssue` is not picked again.
+- An issue is built once: a plan run does not count, a failed build retries once ([Outcomes](outcomes.md)), and a verified no-change issue that stays open without `closeIssue` is not picked again.
 
 ## Start
 

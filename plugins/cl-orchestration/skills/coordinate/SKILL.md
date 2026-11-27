@@ -12,7 +12,7 @@ metadata:
 
 The project bots do the work: each repository's project bot `cl-<repo>` picks its labeled issues, starts builder and reviewer runs, routes pull request events and merges through `merge.mjs` ([setup-bots.md](setup-bots.md)). This session is their entry. It never takes a bot procedure, starts a worker or merges.
 
-Arguments: $ARGUMENTS, a repository path, then at most one verb. Any other argument starts nothing: name it to the user. `<skill folder>` is this folder, `ORCA` as [orca.md](orca.md) says, `<project home>` the project bot's home as `ORCA bot list` shows it, `<state>` its `state/` folder.
+Arguments: $ARGUMENTS, a repository path, then at most one verb. Any other argument starts nothing: name it to the user. `<skill folder>` is this folder, `ORCA` as [orca.md](orca.md) says, `<project home>` the project bot's home as `ORCA bot list` shows it, `<state>` its `state/` folder. Read nothing there when the `origin` of its `<repo>` clone is not `<owner/repo>` (as Read only in [Setup](setup-bots.md#setup) checks): stop, naming both repositories.
 
 1. **Names.** Resolve `<owner/repo>` and `<default branch>` in the repository path by [Names](brief-reference.md#names). A path that fails the check gets nothing: name it.
 2. **No Orca executable:** say so and stop. Every verb needs it, but for the Read only step of `setup`, which then skips the bots as [Setup](setup-bots.md#setup) says.

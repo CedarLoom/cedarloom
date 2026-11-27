@@ -8,7 +8,7 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
-    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure. The repository has no role bots, so each start is a fresh Orca worker.
 
     This run checks the start of the run only. The pick, the spec and the checks before a start are done, so run no precheck, policy reader, thread script, git fetch or gh command that writes. The facts:
     - Project `project` is example-org/widget, default branch `main`, mode supervised, one worker slot free on the project and on the host.

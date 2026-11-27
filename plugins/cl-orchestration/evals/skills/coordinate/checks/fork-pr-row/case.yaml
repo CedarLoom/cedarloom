@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: coord-checks-fork-pr-row
-description: 'In the branch check before a start, an open pull request row with isCrossRepository true does not count, so an issue with no branch and only a fork''s pull request under that name gets an ordinary first start in a new worktree. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/bot-project.md:33. Needs --scaffold.'
+description: 'In the branch check before a start, an open pull request row with isCrossRepository true does not count, so an issue with no branch and only a fork''s pull request under that name gets an ordinary first start in a new worktree. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/bot-pick.md:18. Needs --scaffold.'
 tags: [cl-orchestration, coord-checks]
 context:
   scaffold_script: setup.sh
@@ -8,7 +8,7 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
-    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure. The repository has no role bots, so each start is a fresh Orca worker, a supervised Claude Code one.
 
     This is a dry run: run no command and change no file. Decide from these facts and the skill's text. The Orca executable is `orca`; write the project's absolute path as `<project path>`.
 
