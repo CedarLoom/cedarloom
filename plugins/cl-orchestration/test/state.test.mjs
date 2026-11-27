@@ -167,6 +167,9 @@ test('state: a rebuild holds merges for an unreadable file or a merge without a 
   writeFileSync(path, 'null');
   assert.deepEqual(rebuild(dir, 9, fields, NOW), { held: true });
   assert.deepEqual(readState(path), { ...fields, mergeCommandAt: '2026-11-20T12:00:00.000Z', held: 'state rebuilt' });
+  writeFileSync(path, '[]');
+  assert.deepEqual(main(['read', path], NOW), { out: { rebuild: 'unreadable' }, code: 1 });
+  assert.deepEqual(rebuild(dir, 9, fields, NOW), { held: true });
   const merged = folder();
   assert.deepEqual(rebuild(merged, 9, { ...fields, mergedAt: '2026-11-20T10:00:00Z' }, NOW), { held: true });
   const logged = folder();
@@ -190,6 +193,7 @@ test('state: the command line answers a missing state file with exit 1, adds an 
   assert.deepEqual(readState(answered), ['#4 2026-11-20T10:00:00Z']);
   assert.throws(() => main(['decide', dir, '--ids', 'M1', '--approved', 'M2'], NOW), /usage/);
   assert.throws(() => main(['decide', dir, '--ids', 'M1', '--approved', 'M1', '--hold'], NOW), /usage/);
+  assert.throws(() => main(['decide', dir, '--ids', 'M1'], NOW), /usage/);
   assert.deepEqual(main(['decide', dir, '--ids', 'M1,M2', '--approved', 'M2'], NOW), { out: { decided: ['M1', 'M2'] }, code: 0 });
   assert.deepEqual(main(['count', dir, '--pr', '9'], NOW), { out: { go: true }, code: 0 });
 });

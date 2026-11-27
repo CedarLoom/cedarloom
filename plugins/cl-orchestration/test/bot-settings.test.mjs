@@ -22,6 +22,14 @@ test('bot settings: a role bot denies each other home and the lock folder, and -
   assert.match(other.stderr, /is not the settings file this script writes for those arguments/);
 });
 
+test('bot settings: a dollar sequence in a path goes into its rules as it is', () => {
+  const dir = folder(), home = join(dir, '$&r'), other = join(dir, "$'p"), lock = join(dir, '$`l');
+  assert.equal(run(['reviewer', home, '--other', other, '--lock', lock]).status, 0);
+  const deny = JSON.parse(readFileSync(join(home, '.claude', 'settings.json'), 'utf8')).permissions.deny;
+  assert.deepEqual(deny.slice(-2), [`Edit(/${dir}/$'p/**)`, `Edit(/${dir}/$\`l/**)`]);
+  assert.ok(deny.includes(`Edit(/${dir}/$&r/state/**)`));
+});
+
 test('bot settings: a path with a pattern character, a role bot without other homes and a project bot with a lock write nothing', () => {
   const dir = folder();
   for (const args of [['builder', join(dir, 'b*'), '--other', join(dir, 'p'), '--lock', join(dir, 'l')], ['builder', join(dir, 'b'), '--lock', join(dir, 'l')], ['project', join(dir, 'p'), '--lock', join(dir, 'l')]]) {

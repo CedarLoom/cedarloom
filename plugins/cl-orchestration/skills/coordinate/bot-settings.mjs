@@ -12,8 +12,9 @@ const ROLES = ['builder', 'reviewer', 'maintain', 'project'];
 // The settings of one bot from templates (bot-settings.json); paths are checked by the caller.
 export function botSettings(templates, role, { home, others = [], lock }) {
   const template = templates[role === 'builder' || role === 'reviewer' ? 'role' : role];
-  const fill = (text) => text.replaceAll('<role>', role).replaceAll('<home>', home).replaceAll('<host lock folder>', lock);
-  const deny = template.permissions.deny.flatMap((rule) => (rule.includes('<other home>') ? others.map((other) => fill(rule.replaceAll('<other home>', other))) : [fill(rule)]));
+  // Callbacks insert each path as it is: a replacement string reads $& or $' in it as a pattern.
+  const fill = (text) => text.replaceAll('<role>', role).replaceAll('<home>', () => home).replaceAll('<host lock folder>', () => lock);
+  const deny = template.permissions.deny.flatMap((rule) => (rule.includes('<other home>') ? others.map((other) => fill(rule.replaceAll('<other home>', () => other))) : [fill(rule)]));
   return { ...template, env: Object.fromEntries(Object.entries(template.env).map(([k, v]) => [k, fill(v)])), permissions: { ...template.permissions, deny } };
 }
 

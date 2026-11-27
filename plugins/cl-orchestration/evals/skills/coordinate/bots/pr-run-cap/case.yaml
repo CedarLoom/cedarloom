@@ -23,7 +23,7 @@ execution:
 graders:
   - type: regex
     name: counts-with-the-pull-request
-    pattern: 'Command:\s*[`*_]*\s*(node\s+\S*state\.mjs|state)\s+count\s+\S+\s+--pr\s+31\b'
+    pattern: 'Command:\s*[`*_]*\s*(node\s+(?:<[^>\n]*>|\S)*state\.mjs|state)\s+count\s+\S+\s+--pr\s+31\b'
   - type: regex
     name: run-ends
     pattern: 'Decision:\s*[`*_]*\s*end\b'

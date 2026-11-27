@@ -32,6 +32,8 @@ function load(path) {
   try { const value = JSON.parse(raw); return value !== null && typeof value === 'object' ? value : UNREADABLE; } catch { return UNREADABLE; }
 }
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+// pr-<n>.json holds an object: other JSON in it is UNREADABLE, so the run rebuilds it.
+const loadPr = (path) => { const value = load(path); return value === MISSING || isRecord(value) ? value : UNREADABLE; };
 
 export const unique = () => `${process.pid}-${randomBytes(6).toString('hex')}`;
 // Per project and UTC day: runs of the project bot, worker starts (a role bot run counts as one), and runs per pull request, after which the catch-up counts that pull request for no condition until the UTC day ends.
@@ -119,7 +121,7 @@ export function append(path, entry) {
 export function rebuild(state, pr, fields, now) {
   if (!Number.isInteger(pr) || pr < 1) throw new Error('rebuild: no pull request number');
   if (!isRecord(fields) || fields.pr !== pr || typeof fields.repo !== 'string' || !/^\S+\/\S+$/.test(fields.repo)) throw new Error(`rebuild: the fields name no repo and pr ${pr}`);
-  const path = join(state, `pr-${pr}.json`), current = load(path);
+  const path = join(state, `pr-${pr}.json`), current = loadPr(path);
   if (current !== MISSING && current !== UNREADABLE) throw new Error(`${basename(path)} is readable: nothing to rebuild`);
   const held = current === UNREADABLE || (fields.mergedAt != null && !logged(state, fields.repo, pr));
   writeState(path, { ...fields, ...(held && { mergeCommandAt: now.toISOString(), held: 'state rebuilt' }) });
@@ -235,7 +237,7 @@ export function main(argv, now = new Date()) {
   }
   if (command === 'read') {
     shape(1);
-    const value = load(target);
+    const value = isPrFile(basename(target)) ? loadPr(target) : load(target);
     if (value === MISSING || value === UNREADABLE) return { out: { rebuild: value === MISSING ? 'missing' : 'unreadable' }, code: 1 };
     return { out: value, code: 0 };
   }
@@ -248,7 +250,7 @@ export function main(argv, now = new Date()) {
   if (command === 'decide') {
     shape(1, 'ids', 'approved', 'hold');
     const ids = list(values.ids), approved = values.hold ? null : list(values.approved);
-    if (!ids.length || !ids.every((id) => ID.test(id)) || values.hold === (values.approved !== undefined) || (approved && !approved.every((id) => ids.includes(id)))) throw new Error(USAGE);
+    if (!ids.length || !ids.every((id) => ID.test(id)) || Boolean(values.hold) === (values.approved !== undefined) || (approved && !approved.every((id) => ids.includes(id)))) throw new Error(USAGE);
     return { out: { decided: decide(target, ids, approved) }, code: 0 };
   }
   if (command === 'rebuild') {
