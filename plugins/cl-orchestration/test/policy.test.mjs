@@ -319,15 +319,19 @@ test('policy: a repository whose own git config redirects origin or runs a comma
   const raced = project()('user.name', 't');
   assert.equal(read(raced, racing('remote.origin.uploadpack', `touch '${marker}'; git-upload-pack`)).policy.startLabel, 'go');
   assert.equal(existsSync(marker), false, 'remote.origin.uploadpack');
-  // With GIT_SSH set, the user's ssh program still beats a core.sshCommand of the repository: git ranks any core.sshCommand above GIT_SSH.
+  // With GIT_SSH set, the user's ssh program still beats a core.sshCommand of the repository: git ranks any core.sshCommand above GIT_SSH. GIT_SSH_COMMAND outranks both, so the case clears it.
   const tools = join(mkdtempSync(join(tmpdir(), 'cl-policy-')), "it's tools");
   mkdirSync(tools);
   writeFileSync(join(tools, 'ssh'), '#!/bin/sh\ntouch "$(dirname "$0")/used"\nexit 1\n', { mode: 0o755 });
   const viaSsh = project()('user.name', 't');
   origin.git('-C', viaSsh, 'remote', 'set-url', 'origin', 'ssh://example.invalid/policy.git');
-  const before = process.env.GIT_SSH;
+  const before = process.env.GIT_SSH, beforeCommand = process.env.GIT_SSH_COMMAND;
   process.env.GIT_SSH = join(tools, 'ssh');
-  try { assert.equal(read(viaSsh, racing('core.sshCommand', `touch '${marker}'; ssh`)).policy, null); } finally { if (before === undefined) delete process.env.GIT_SSH; else process.env.GIT_SSH = before; }
+  delete process.env.GIT_SSH_COMMAND;
+  try { assert.equal(read(viaSsh, racing('core.sshCommand', `touch '${marker}'; ssh`)).policy, null); } finally {
+    if (before === undefined) delete process.env.GIT_SSH; else process.env.GIT_SSH = before;
+    if (beforeCommand !== undefined) process.env.GIT_SSH_COMMAND = beforeCommand;
+  }
   assert.equal(existsSync(marker), false, 'core.sshCommand');
   assert.equal(existsSync(join(tools, 'used')), true, 'GIT_SSH');
 });
