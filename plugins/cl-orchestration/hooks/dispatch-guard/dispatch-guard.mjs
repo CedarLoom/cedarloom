@@ -57,6 +57,8 @@ function awayOff(command) {
 const ROLE = 'CEDARLOOM_ROLE';
 const HANDOFF = '/.cedarloom/runs/handoff.md';
 const HANDOFF_LIMIT = 8000;
+// The folders the guard follows in one command, as the role guard does.
+const MAX_FOLDERS = 64;
 const SHA = /^[0-9a-f]{40}$/;
 // A word the shell fills in when it runs: a variable, a command substitution or a backtick.
 const expands = (word) => /[$`]/.test(word);
@@ -127,7 +129,9 @@ function changeDir(places, words, at) {
   const name = program(words[at]);
   const arg = words.slice(at + 1).find((w) => !/^-\w/.test(w));
   const next = [...places].map((p) => (p === null || !arg || arg === '-' || expands(arg) || name === 'popd' || name === 'pop-location' ? null : resolve(p, arg)));
-  return new Set([...places, ...next]);
+  const all = new Set([...places, ...next]);
+  // Each change can double the folders; past the bound the folder is one the guard cannot read.
+  return all.size > MAX_FOLDERS ? new Set([null]) : all;
 }
 
 function gitRules(words, at, places, refuse) {
@@ -254,7 +258,8 @@ function bypassRules(words, at, refuse) {
 }
 
 function handoffRules({ words, targets }, at, places, powershell, refuse) {
-  const named = (w) => [...places].some((p) => p !== null && isHandoff(resolve(p, w)));
+  // In a folder the guard cannot read, a relative path that ends in handoff.md may be the handoff file.
+  const named = (w) => [...places].some((p) => (p === null ? !isAbsolute(w) && /(^|[/\\])handoff\.md$/i.test(w) : isHandoff(resolve(p, w))));
   if (targets.some((t) => expands(t) || named(t))) refuse('handoff-size', 'a redirection that writes the handoff file, or into a path the guard cannot read: write the handoff file with the Write or Edit tool, which this rule measures');
   else if (at >= 0 && !plain({ words }, powershell) && words.slice(at + 1).some((w) => named(w) || (expands(w) && /handoff/i.test(w)))) refuse('handoff-size', 'a command that may write the handoff file: write it with the Write or Edit tool, which this rule measures');
 }

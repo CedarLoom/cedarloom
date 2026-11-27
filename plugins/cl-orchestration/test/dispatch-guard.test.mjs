@@ -230,6 +230,12 @@ test('clone-checkout: checkout, switch, restore and worktree in a scratch clone,
   ]);
   // A folder change that fails leaves the next command in the clone.
   refused('clone-checkout', ['git checkout main', 'cd /tmp/gone; git checkout main'], 'Bash', `${CWD}/${CLONE}`);
+  // Past 64 folders the folder counts as unread: 30 changes would otherwise make 2^30 of them.
+  const changes = Array.from({ length: 30 }, (_, k) => `cd d${k}`).join('; ');
+  // From the temp folder: each path lookup under /home goes through the automounter on macOS.
+  refused('clone-checkout', [`${changes}; git checkout main`], 'Bash', tmpdir());
+  refused('handoff-size', [`${changes}; echo x > handoff.md`], 'Bash', tmpdir());
+  passed([`${changes}; git status`], 'Bash', tmpdir());
   // A bot home holds .cedarloom/runs/ and its clones beside it.
   const home = mkdtempSync(join(tmpdir(), 'bot-'));
   mkdirSync(join(home, '.cedarloom', 'runs'), { recursive: true });

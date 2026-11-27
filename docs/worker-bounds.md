@@ -19,7 +19,7 @@ The `cl-orchestration` dispatch guard refuses the commands that would let a coor
 
 - It reads the command as the shell splits it, as the `cl-workflow` role guard does ([plugins.md](plugins.md#role-guard)): quotes, escapes, line continuations, `$'...'`, wrappers (`command`, `env`, `sudo`, `timeout`), subshells and the text of `bash -c` or `eval`.
 - Flags count in every spelling the program accepts: `--flag=value`, a short-flag cluster (`-sd`), and git's abbreviations (`--forc`).
-- Fail closed: a command it cannot read for a rule (a flag, folder or head commit in a variable or command substitution, `--git-dir`, `cd -`, a redirection into a variable) is refused under that rule. A folder change counts as maybe failed, so the folder before it still counts for the commands after it. Every refusal names its rule and says what to write instead.
+- Fail closed: a command it cannot read for a rule (a flag, folder or head commit in a variable or command substitution, `--git-dir`, `cd -`, a redirection into a variable) is refused under that rule. A folder change counts as maybe failed, so the folder before it still counts for the commands after it; past 64 such folders in one command the folder counts as unreadable. Every refusal names its rule and says what to write instead.
 - Like the role guard, it reads every line of a here-document and an input redirection's target as it reads a command: a body that holds a refused command, or `< .cedarloom/runs/handoff.md`, is refused too.
 - A refused text that only mentions a flag, such as a commit message, goes in a file: `git commit -F`, `gh --body-file`.
 
