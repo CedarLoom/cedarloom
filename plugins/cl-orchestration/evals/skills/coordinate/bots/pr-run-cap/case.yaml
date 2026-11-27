@@ -8,7 +8,7 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
-    This session stands for one run of the project bot of example-org/widget, started by its `ci_passed` event rule for pull request 31, not for a coordinator run: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure. It is a dry run: run no command and write no file. Decide step 2 (Count) from these facts only.
+    This session stands for one run of the project bot of example-org/widget, started by its `ci_passed` event rule for pull request 31, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure. It is a dry run: run no command and write no file. Decide step 2 (Count) from these facts only.
 
     - UTC now is 2026-11-25T14:05:00Z. Step 1 made the run folder.
     - The count command of step 2, run for this run, prints `{"go":false,"limit":"prRuns","report":true}` and exits 1.

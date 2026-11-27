@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     This is a dry run: run no command, start nothing and write no file. Decide from the facts below and the files named.
 
     A run is open on project (example-org/widget, supervised). The worker of issue 12, a Codex worker that pushes its own commits, settled with the report `.cedarloom/runs/r-1125/report-12.md`. The rerun of the issue's thread file is `.cedarloom/runs/r-1125/thread-12.md`, and the body of its open draft pull request #57, as `gh pr view` printed it, is `.cedarloom/runs/r-1125/pr-57-body.md`.

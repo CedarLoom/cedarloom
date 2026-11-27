@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     This is a dry run of Commit and push for an automatic worker's first round: run no command and write no file. Decide from these facts only.
 
     - Project `project` at the absolute path `/srv/evals/project`, repository example-org/widget, default branch `main`. The policy reader prints `"closeIssue": true`. The pull request is not one of an approved pull request list.

@@ -1,6 +1,6 @@
 # Follow-ups
 
-A follow-up to a worker of this run, a supervised one, an automatic one released at its report ([SKILL.md](SKILL.md#loop), step 3), has its text in a file. A follow-up to a worker that runs Orca commands starts with the spec's Chat name line, its role `fixer`:
+A follow-up to a worker of this run, a supervised one, an automatic one released at its report ([Start](bot-pick.md#start)), has its text in a file. A follow-up to a worker that runs Orca commands starts with the spec's Chat name line, its role `fixer`:
 
 - A supervised worker, Claude Code or Codex, gets it as a message to its newest dispatch, a Claude Code one only while it is kept open (below). Orca makes a reported or released worker's message a follow-up task, which it reports with `worker_done` (Orca's guide):
 
@@ -14,7 +14,7 @@ A follow-up to a worker of this run, a supervised one, an automatic one released
 
   A worker still working, a batch on its next issue, gets the message when its turn ends, with no follow-up task.
 
-  A refused `send` sent nothing. Send it again after `worker_unverifiable` once `worker-show` reads the worker; after `worker_not_restartable` or `worker_workspace_gone` the follow-up is a new start by [SKILL.md](SKILL.md#loop), step 3.
-- An automatic worker was released at its report, its worktree kept ([Clean up](orca-clean-up.md)), so its follow-up is a new start: a fresh session in a new terminal of the same worktree, as at the start, with its settings file written again, checks 3 and 4 of [Automatic start](automatic-start.md) passed on that worktree (a failure makes the item BLOCKED and starts no worker), then the file read with `--check`, the follow-up file holding the filled spec, then the follow-up. Its old terminal would not take it anyway: Orca recognises a released worker's terminal for its first dispatch only. Where Workspace Cleanup removed that worktree, the follow-up is a new start by [SKILL.md](SKILL.md#loop), step 3.
+  A refused `send` sent nothing. Send it again after `worker_unverifiable` once `worker-show` reads the worker; after `worker_not_restartable` or `worker_workspace_gone` the follow-up is a new start by [Start](bot-pick.md#start).
+- An automatic worker was released at its report, its worktree kept ([Clean up](orca-clean-up.md)), so its follow-up is a new start: a fresh session in a new terminal of the same worktree, as at the start, with its settings file written again, checks 3 and 4 of [Automatic start](automatic-start.md) passed on that worktree (a failure makes the item BLOCKED and starts no worker), then the file read with `--check`, the follow-up file holding the filled spec, then the follow-up. Its old terminal would not take it anyway: Orca recognises a released worker's terminal for its first dispatch only. Where Workspace Cleanup removed that worktree, the follow-up is a new start by [Start](bot-pick.md#start).
 
-A worker on `fable` that already reported gets no follow-up: release it and start a fresh worker on the branch ([SKILL.md](SKILL.md#rules)) by [SKILL.md](SKILL.md#loop), step 3. Such a follow-up counts like a start ([Host limit](orca.md#host-limit)).
+A worker on `fable` that already reported gets no follow-up: release it and start a fresh worker on the branch ([Rules](SOUL.md#rules)) by [Start](bot-pick.md#start). Such a follow-up counts like a start ([Host limit](orca.md#host-limit)).

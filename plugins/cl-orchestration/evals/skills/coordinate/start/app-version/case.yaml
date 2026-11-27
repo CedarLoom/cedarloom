@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     Dry run of the start condition: run no command, change no file, and decide from these facts as the skill says.
     - This session is Claude Code.
     - `orca` on the PATH is the Orca executable, and `orca skills get orchestration` printed the orchestration guide and exited 0.

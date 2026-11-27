@@ -1,5 +1,5 @@
 interface:
   display_name: "Coordinate"
-  short_description: "Coordinate parallel autonomous issue work across projects"
+  short_description: "Set up, check and nudge a repository's project bots"
 policy:
   allow_implicit_invocation: false

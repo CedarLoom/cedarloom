@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     This is a dry run of step 5.5 of Merge for one pull request: run no command and change no file. Decide from the facts below and the files in `project/`, whose `AGENTS.md` is the default branch's.
 
     - Repository example-org/widget, default branch main. Pull request #31 for issue 31.

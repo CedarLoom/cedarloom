@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     This is a dry run: run no command and change no file. Decide from these facts and the skill's text. The Orca executable is `orca`.
 
     - The project runs automatic; its absolute path is `/srv/orca/projects/widget`, and the skill folder is `/srv/plugins/coordinate`. The worker of issue 15 was an automatic Claude Code worker in the worktree `/srv/orca/worktrees/widget/15-csv-export`, on branch `feat/15-csv-export`.

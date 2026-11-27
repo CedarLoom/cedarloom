@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     This is a dry run of the review step for one pull request: run no command and start no subagent; decide from these facts and the skill's files.
 
     - Pull request 14 of example-org/widget, default branch `main`, head `9d2b7c4e1a6f3b8d0c5e2a7f4b9c1d6e3a8f0b52`, from the worker of issue 14 on branch `fix/14-retry-delay`. Mergeable, every check green. You run in Claude Code with the plugin, in the working directory `/srv/coord`.

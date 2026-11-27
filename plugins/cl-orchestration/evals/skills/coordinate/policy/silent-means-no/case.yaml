@@ -1,12 +1,14 @@
 schema_version: "1.1"
 name: coord-policy-silent-means-no
-description: 'The coordinator reruns the policy reader before an issue close and a branch deletion, and a policy that is silent on either means no, even where the run-start policy allowed it. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/SKILL.md:24. Needs --scaffold.'
+description: 'The coordinator reruns the policy reader before an issue close and a branch deletion, and a policy that is silent on either means no, even where the run-start policy allowed it. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/SOUL.md:18. Needs --scaffold.'
 tags: [cl-orchestration, coord-policy]
 context:
   scaffold_script: setup.sh
 execution:
   prompt: |
     /cl-orchestration:coordinate project
+
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
 
     Dry run of one step after a merge: run no command and change no file; decide from the facts below and the files they name.
 

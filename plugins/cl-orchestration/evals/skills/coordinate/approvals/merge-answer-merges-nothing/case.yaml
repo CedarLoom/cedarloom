@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-catch-up.md`, both in this skill's folder, as the procedure.
+
     Dry run of one wake-up: run no command and change no file; decide from the facts below and the files they name.
 
     - The run is under way in supervised mode; `project` is example-org/widget, default branch `main`. Its policy is `project/cedarloom.json` as committed (the reader prints it with the defaults filled in).

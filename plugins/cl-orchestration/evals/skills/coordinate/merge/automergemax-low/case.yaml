@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     This is a dry run of step 1 of Merge for one pull request: run no command and change no file. Decide from the facts below and the files in `project/`, whose `cedarloom.json` is the policy as the default branch has it (the reader prints it with its defaults filled in).
 
     - Repository example-org/widget, default branch main. Pull request #31 for issue 31 is ready: its review left no Blocking or Important finding, the review of record is posted, `ci` is green, no review thread is unresolved and the body passes.

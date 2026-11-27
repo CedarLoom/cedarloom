@@ -1,12 +1,14 @@
 schema_version: "1.1"
 name: coord-pick-reader-before-pick
-description: 'The coordinator runs the policy reader again before each pick and acts on what it prints now, so a policy change merged during the run that lowers workersPerProject leaves no free slot. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/SKILL.md:24 (with policy.md:3). Needs --scaffold.'
+description: 'The coordinator runs the policy reader again before each pick and acts on what it prints now, so a policy change merged during the run that lowers workersPerProject leaves no free slot. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/SOUL.md:18 (with policy.md:3). Needs --scaffold.'
 tags: [cl-orchestration, coord-pick]
 context:
   scaffold_script: setup.sh
 execution:
   prompt: |
     /cl-orchestration:coordinate project
+
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
 
     This is a dry run of the return to Pick after a worker finished: run no command and write no file. Decide from these facts only.
 

@@ -1,12 +1,14 @@
 schema_version: "1.1"
 name: coord-approvals-timeout-stays-held
-description: 'A design gate with no owner answer never continues after a timeout: the held issue stays blocked and is listed in the report, whatever a collaborator comment or a worker''s word says. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/SKILL.md:25. Needs --scaffold.'
+description: 'A design gate with no owner answer never continues after a timeout: the held issue stays blocked and is listed in the report, whatever a collaborator comment or a worker''s word says. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/SOUL.md:20. Needs --scaffold.'
 tags: [cl-orchestration, coord-approvals]
 context:
   scaffold_script: setup.sh
 execution:
   prompt: |
     /cl-orchestration:coordinate project
+
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-catch-up.md`, both in this skill's folder, as the procedure.
 
     Dry run of one wake-up: run no command and change no file; decide from the facts below and the files they name.
 

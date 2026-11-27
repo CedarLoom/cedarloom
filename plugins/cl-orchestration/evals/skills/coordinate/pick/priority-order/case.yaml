@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     This is a dry run of one pick: run no command and write no file. Decide from these facts only.
 
     - Project `project`, repository example-org/widget, public. The policy reader prints `"workersPerProject": 1`, `"hostWorkerLimit": 2`, `"issuesPerWorker": 1`, `"mode": "supervised"`. No worker is active, no follow-up waits, and no issue has a worker or outcome in this run.

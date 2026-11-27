@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     Dry run of the run's first Pick: run no command and change no file; decide from the facts below.
 
     - `project` is example-org/widget, default branch `main`, a private repository with issues on.

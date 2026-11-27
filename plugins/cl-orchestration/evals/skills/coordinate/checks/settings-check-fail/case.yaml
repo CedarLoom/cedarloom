@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     This is a dry run: run no command and change no file. Decide from these facts and the skill's text.
 
     - The project runs automatic; the handoff's `Mode:` line says so. Checks 1, 3 and 4 and the probe of Automatic start passed earlier in this run, and the automatic worker of issue 14 is working.

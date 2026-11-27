@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     This is a dry run: run no command and change no file. Decide from these facts and the skill's text. The Orca executable is `orca`.
 
     - The worker of issue 12 is a supervised Claude Code worker on Orca: dispatch `d-12`, terminal `term-12`, worktree `/srv/orca/worktrees/widget/12-login-timeout`. The owner merged its pull request example-org/widget#31, so its clean-up is due.
