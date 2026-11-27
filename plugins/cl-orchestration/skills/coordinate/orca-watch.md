@@ -8,7 +8,7 @@ The mail types are `worker_done,escalation,question,status`. Orca wakes the coor
 
 How the coordinator waits:
 
-- **Always.** The coordinator never polls, but for the foreground wait without session crons (below), and never runs `check --wait` in the background: a background wait keeps a task alive at every turn end, so the plugin never clears an idle coordinator.
+- **Always.** The coordinator never polls, but for the foreground wait without session crons (below), and never runs `check --wait` in the background: a background wait keeps a task alive at every turn end, so the session never goes idle and a session cron cannot fire.
 - **With session crons.** End the turn after starting or messaging workers. At run start, create one recurring session cron (`CronCreate`) every 10 minutes on minutes off the hour (`3-59/10 * * * *`). Its prompt names the run id and the absolute path of this file, and lists the four wake-up checks below, so a wake runs them without reading a file and a silent worker is seen without mail.
   - The cron fires only while the session is idle and survives `/clear`.
   - It expires after 30 days, and an expired cron cannot wake the session, so name its expiry date in the report of each wake and replace it before then.

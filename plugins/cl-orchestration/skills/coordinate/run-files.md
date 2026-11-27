@@ -32,6 +32,7 @@ Models: <alias> = <concrete model>, ...
 - `Session:` holds your session id: `${CLAUDE_SESSION_ID}`, or the output of `echo "$CLAUDE_CODE_SESSION_ID"` when this skill was read from disk.
 - `Models:` has one entry per alias the run's sessions use.
 - A file that already names another session belongs to another coordinator: keep no handoff file in this folder, leave that file as it is and name it in the report, since a session that ended leaves its file behind. Only when the owner asks this session to resume that run and the start condition holds here ([Start the run](orca.md#start-the-run)), write your id into its `Session:` line, then follow [Resume](orca-resume.md).
+- After a compaction, follow [Resume](orca-resume.md).
 - Delete the file when the run closes, and only when it names your session.
 
 ## Clean up
