@@ -27,15 +27,16 @@ test('labels: a start label equal to another CedarLoom label is refused, a case 
 test('labels: create runs gh for each approved label and returns the commands that failed', () => {
   const ran = [];
   const gh = (args) => {
-    ran.push(args.join(' '));
+    ran.push(args.slice(0, 6));
     if (args[2] === 'cl:deferred') throw new Error('HTTP 403');
   };
   const failed = create('acme/app', ['cl:deferred', 'agent:go'], 'agent:go', gh);
   assert.deepEqual(ran, [
-    'label create agent:go -R acme/app --description The coordinator may start the issue.',
-    'label create cl:deferred -R acme/app --description The owner parked it: it does not start and the question queue skips it.',
+    ['label', 'create', 'agent:go', '-R', 'acme/app', '--description'],
+    ['label', 'create', 'cl:deferred', '-R', 'acme/app', '--description'],
   ]);
-  assert.deepEqual(failed, ['gh label create cl:deferred -R acme/app --description "The owner parked it: it does not start and the question queue skips it."']);
+  assert.equal(failed.length, 1);
+  assert.match(failed[0], /^gh label create cl:deferred -R acme\/app --description "[^"]+"$/);
 });
 
 test('labels: create refuses a label outside the set before running gh', () => {

@@ -66,7 +66,7 @@ A repository that commits an `AGENTS.md` without the block: merge nothing into i
 
 ## 5. Coordinator policy
 
-Where the cl-orchestration plugin is installed, follow [policy.md](policy.md): the coordinator's policy file, the CedarLoom labels and the issue template. Otherwise skip the step, naming why.
+Where the cl-orchestration plugin is installed, follow [policy.md](policy.md): the coordinator's policy file, the CedarLoom labels and the issue template. Its `<skill folder>` is this skill's folder (Claude Code: `${CLAUDE_SKILL_DIR}`). Otherwise skip the step, naming why.
 
 ## 6. Bots (ask)
 
@@ -95,10 +95,11 @@ After the apply step, give the diff (`git diff` against the default branch plus 
 - A new `docs/agents/bots.md` holds no local path, and each bot home file is valid JSON or the text `setup-bots.md` gives.
 - A folder `AGENTS.md` or `CLAUDE.md` added inside a docs or site source folder is excluded from that build (for example `exclude_docs` in MkDocs).
 - Each removal left no folder or lock entry.
+- Where step 5 followed [policy.md](policy.md), its Review and report checks.
 - The branch merges cleanly into the default branch. Otherwise merge the default branch in and resolve the conflicts before pushing.
 
 Fix the findings within the approved plan. Report the others.
 
 ## 9. Report
 
-Give a table of each changed file, the items removed, and steps skipped with the reason. Include the container launch result and the project checks run inside it. Report MCP/browser connections as verified, unavailable, skipped, or untested. Then give launch commands for selected host agents and the container command prefix. With bots: each bot created or waiting for Create bot, the role bot test run's result and each automation created or held back, with the reason.
+Give a table of each changed file, the items removed, and steps skipped with the reason. Include the container launch result and the project checks run inside it. Report MCP/browser connections as verified, unavailable, skipped, or untested. Then give launch commands for selected host agents and the container command prefix. With bots: each bot created or waiting for Create bot, the role bot test run's result and each automation created or held back, with the reason. Where step 5 followed [policy.md](policy.md), its Review and report items.

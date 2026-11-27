@@ -11,7 +11,7 @@ Write `{"$schema": "https://cedarloom.github.io/cedarloom/schema/cedarloom.json"
 
 ## Labels
 
-`labels.mjs` below is `node <skill folder>/labels.mjs` (Claude Code: `<skill folder>` is `${CLAUDE_SKILL_DIR}`); it holds the label set and each label's meaning. `<start>` is the policy's `startLabel` (an existing file's, else the answer above when one was asked). `<owner/repo>` is the repository `git remote get-url origin` names, so a fork's clone never reaches its upstream.
+`labels.mjs` below is `node <skill folder>/labels.mjs`, with `<skill folder>` as step 5 of SKILL.md names it; it holds the label set and each label's meaning. `<start>` is the policy's `startLabel` (an existing file's, else the answer above when one was asked). `<owner/repo>` is the repository `git remote get-url origin` names, so a fork's clone never reaches its upstream.
 
 - Read only: `gh label list -R <owner/repo> --limit 1000 --json name | labels.mjs missing --start <start>` prints each missing label with its meaning; each is a plan item.
 - Apply: `labels.mjs create <owner/repo> --start <start> <label>...` with the approved labels. Name each command it prints as not created in the report.
