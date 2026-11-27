@@ -1,8 +1,11 @@
 // Usage, the paths absolute, each flag once unless it says "repeated":
 //   node commit-push.mjs sync --project <path> --worktree <path> --branch <name> [--merge]
-//   node commit-push.mjs commit --project <path> --worktree <path> --repo <owner/name> --branch <name> --default-branch <name> --message <file> --file <path> (repeated) --owned <path> (repeated) [--merged <sha>] [--title <text> --body <file>]
+//   node commit-push.mjs commit --project <path> --worktree <path> --repo <owner/name> --branch <name> --default-branch <name> --message <file> --file <path> (repeated) --owned <path> (repeated) [--merged <sha>] [--title <text> --body <file> | --dry-run]
 //   node commit-push.mjs supervised --project <path> --worktree <path> --repo <owner/name> --branch <name> --default-branch <name> --commit <sha> --owned <path> (repeated) [--title <text> --body <file>]
-// Commit and push of commit-and-push.md for a worker's worktree. sync is steps 4 and 5: it merges origin's branch (with --merge, origin's default branch, without a commit) into the worktree and prints { merged, conflicts }. commit is steps 1 to 3 for an automatic worker: it checks the base and the staged files, commits from the message file, checks that commit, pushes it, opens the draft pull request when --title and --body are given (the first round) and prints { commit, pullRequest }; --merged names the sha sync merged, for a merge round. supervised checks a supervised worker's reported commit and every file it publishes, then pushes and opens the pull request the same way.
+//   node commit-push.mjs owned --clone <path> --branch <name> --default-branch <name> --owned <path> (repeated) [--origin]
+//   node commit-push.mjs remove --project <path> --worktree <path> [--force]
+// Commit and push of commit-and-push.md for a worker's worktree. sync is steps 4 and 5: it merges origin's branch (with --merge, origin's default branch, without a commit) into the worktree and prints { merged, conflicts }. commit is steps 1 to 3 for an automatic worker: it checks the base and the staged files, commits from the message file, checks that commit, pushes it (--dry-run: git push --dry-run), opens the draft pull request when --title and --body are given (the first round) and prints { commit, pullRequest }; --merged names the sha sync merged, for a merge round. supervised checks a supervised worker's reported commit and every file it publishes, then pushes and opens the pull request the same way.
+// owned checks that every file a branch of a clone publishes, against origin's default branch, is owned and outside .github/, and prints { commit, files }: the local branch, or with --origin origin's. remove removes an automatic worker's worktree of the project, after the same reads as the other modes, and prints { removed }.
 // Every refusal, and every failed command, prints one line naming its step and exits 1; nothing is pushed before every check passed.
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync } from 'node:fs';
 import { devNull } from 'node:os';
@@ -25,8 +28,11 @@ class Refused extends Error {
   }
 }
 const refuse = (step, message) => { throw new Refused(step, message); };
-// A command that fails is a refusal of the step that ran it.
-const failure = (e) => (e.stderr?.toString().trim() || e.message).split('\n')[0];
+// A command that fails is a refusal of the step that ran it, with git's own reason: a push or fetch prints its remote's URL before it.
+const failure = (e) => {
+  const lines = (e.stderr?.toString().trim() || e.message).split('\n');
+  return (lines.find((line) => /^\s*(!|error:|fatal:)/.test(line)) ?? lines[0]).trim();
+};
 const during = (step, fn) => { try { return fn(); } catch (e) { if (e instanceof Refused) throw e; return refuse(step, failure(e)); } };
 
 // Missing gives undefined; a link, a FIFO or a folder is refused, so the read neither follows nor waits. One descriptor for the check and the read: the worker can swap the path between two calls.
@@ -115,9 +121,9 @@ export function sync({ project, worktree, branch, merge = false }, gitInW = gitI
 }
 
 // The end of step 3: the checked sha pushed, never HEAD, and on the first round the draft pull request.
-function publish(git, exec, { repo, branch, defaultBranch, title, body }, sha) {
+function publish(git, exec, { repo, branch, defaultBranch, title, body, dryRun }, sha) {
   // No tag and no submodule commit beside the checked one, whatever push.followTags or push.recurseSubmodules say.
-  during('push', () => git('push', '--quiet', '--no-follow-tags', '--no-recurse-submodules', 'origin', `${sha}:refs/heads/${branch}`));
+  during('push', () => git('push', '--quiet', ...(dryRun ? ['--dry-run'] : []), '--no-follow-tags', '--no-recurse-submodules', 'origin', `${sha}:refs/heads/${branch}`));
   if (title === undefined) return { commit: sha, pullRequest: null };
   // The push is done by now, so the line names the pushed sha.
   const url = during(`pull request after the push of ${sha}`, () => exec('gh', ['pr', 'create', '-R', repo, '--draft', '--base', defaultBranch, '--head', branch, '--title', title, '--body-file', body]).trim());
@@ -163,14 +169,8 @@ export function commit(options, exec = ghOutside(options), gitInW = gitIn(option
   return publish(git, exec, options, sha);
 }
 
-// The supervised paragraph: the reported commit is the branch's, and every file any of its commits touches is owned.
-export function supervised(options, exec = ghOutside(options)) {
-  const { project, worktree, branch, defaultBranch, commit: reported, owned } = options;
-  const step = 'supervised';
-  checkWorktree(project, worktree);
-  const git = checkConfig(gitIn(worktree));
-  const sha = during(step, () => git('rev-parse', '--verify', `refs/heads/${branch}^{commit}`).trim());
-  if (sha !== reported) refuse(step, `refs/heads/${branch} is ${sha}, not the reported ${reported}`);
+// Every file a push of sha publishes against origin's default branch, each owned and none under .github/.
+function published(step, git, { defaultBranch, owned }, sha) {
   // The sha ls-remote printed, not the tracking ref, which the worker can move.
   const tip = during(step, () => remoteTip(git, defaultBranch)) ?? refuse(step, `origin has no branch ${defaultBranch}`);
   during(step, () => git('fetch', '--quiet', '--no-tags', '--no-recurse-submodules', 'origin', `refs/heads/${defaultBranch}`));
@@ -182,50 +182,90 @@ export function supervised(options, exec = ghOutside(options)) {
   ])];
   if (!files.length) refuse(step, `${sha} changes no file against origin's ${defaultBranch}`);
   ownedOnly(step, files, owned);
+  return files;
+}
+
+// The supervised paragraph: the reported commit is the branch's, and every file any of its commits touches is owned.
+export function supervised(options, exec = ghOutside(options)) {
+  const { project, worktree, branch, commit: reported } = options;
+  const step = 'supervised';
+  checkWorktree(project, worktree);
+  const git = checkConfig(gitIn(worktree));
+  const sha = during(step, () => git('rev-parse', '--verify', `refs/heads/${branch}^{commit}`).trim());
+  if (sha !== reported) refuse(step, `refs/heads/${branch} is ${sha}, not the reported ${reported}`);
+  published(step, git, options, sha);
   return publish(git, exec, options, sha);
+}
+
+// A builder's branch in its clone before its push, or origin's branch in a new clone before the draft opens: the supervised rule, without a push.
+function branchOwned(options) {
+  const { clone, branch, origin } = options;
+  const step = 'owned';
+  const git = checkConfig(gitIn(clone));
+  let sha;
+  if (origin) {
+    sha = during(step, () => remoteTip(git, branch)) ?? refuse(step, `origin has no branch ${branch}`);
+    during(step, () => git('fetch', '--quiet', '--no-tags', '--no-recurse-submodules', 'origin', `refs/heads/${branch}`));
+  } else sha = during(step, () => git('rev-parse', '--verify', `refs/heads/${branch}^{commit}`).trim());
+  return { commit: sha, files: published(step, git, options, sha) };
+}
+
+// An automatic worker's worktree, removed by git with the pins: worktree remove runs git status in it, which a hook, a monitor or a filter there would run in.
+function remove({ project, worktree, force }) {
+  checkWorktree(project, worktree);
+  const git = checkConfig(gitIn(project));
+  during('remove', () => git('worktree', 'remove', ...(force ? ['--force'] : []), worktree));
+  return { removed: worktree };
 }
 
 const FLAGS = {
   project: { type: 'string' }, worktree: { type: 'string' }, repo: { type: 'string' }, branch: { type: 'string' }, 'default-branch': { type: 'string' },
   message: { type: 'string' }, file: { type: 'string', multiple: true }, owned: { type: 'string', multiple: true }, merged: { type: 'string' },
   commit: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }, merge: { type: 'boolean' },
+  'dry-run': { type: 'boolean' }, clone: { type: 'string' }, origin: { type: 'boolean' }, force: { type: 'boolean' },
 };
 const NEEDS = {
   sync: ['project', 'worktree', 'branch'],
   commit: ['project', 'worktree', 'repo', 'branch', 'default-branch', 'message', 'file', 'owned'],
   supervised: ['project', 'worktree', 'repo', 'branch', 'default-branch', 'commit', 'owned'],
+  owned: ['clone', 'branch', 'default-branch', 'owned'],
+  remove: ['project', 'worktree'],
 };
-const ALLOWED = { sync: [...NEEDS.sync, 'merge'], commit: [...NEEDS.commit, 'merged', 'title', 'body'], supervised: [...NEEDS.supervised, 'title', 'body'] };
-const PATHS = ['project', 'worktree', 'message', 'body'];
+const ALLOWED = {
+  sync: [...NEEDS.sync, 'merge'], commit: [...NEEDS.commit, 'merged', 'title', 'body', 'dry-run'], supervised: [...NEEDS.supervised, 'title', 'body'],
+  owned: [...NEEDS.owned, 'origin'], remove: [...NEEDS.remove, 'force'],
+};
+const PATHS = ['project', 'worktree', 'message', 'body', 'clone'];
 
 // The options of one mode, each checked where it enters: a value git or gh would read as an option, or a path that is not absolute, is refused.
 export function optionsOf(argv) {
   const { values, positionals } = parseArgs({ args: argv, options: FLAGS, allowPositionals: true, strict: true });
   const usage = (message) => refuse('usage', message);
-  if (positionals.length !== 1 || !Object.hasOwn(NEEDS, positionals[0])) usage('the first argument is sync, commit or supervised');
+  if (positionals.length !== 1 || !Object.hasOwn(NEEDS, positionals[0])) usage('the first argument is sync, commit, supervised, owned or remove');
   const [mode] = positionals;
   const extra = Object.keys(values).find((k) => !ALLOWED[mode].includes(k));
   if (extra) usage(`--${extra} is no option of ${mode}`);
   const missing = NEEDS[mode].find((k) => values[k] === undefined);
   if (missing) usage(`${mode} needs --${missing}`);
   if ((values.title === undefined) !== (values.body === undefined)) usage('--title and --body go together');
+  if (values['dry-run'] && values.title !== undefined) usage('--dry-run opens no pull request, so it takes no --title');
   for (const k of PATHS) if (values[k] !== undefined && !isAbsolute(values[k])) usage(`--${k} must be an absolute path`);
   // gh runs in the folder of --body, else --message (ghOutside), and reads the git config there. Resolved folders: `..`, a link, another letter case or a trailing slash can name the worktree too.
   for (const k of ['message', 'body']) if (values[k] !== undefined && under(realpathSync.native(dirname(values[k])), realpathSync.native(values.worktree))) usage(`--${k} is under --worktree`);
   if (values.repo !== undefined && !REPO.test(values.repo)) usage('--repo must be owner/name');
   for (const k of ['branch', 'default-branch']) if (values[k] !== undefined && !BRANCH.test(values[k])) usage(`--${k} is no plain branch name`);
-  // sync --merge takes the default branch as --branch; commit and supervised push to --branch.
-  if (mode !== 'sync' && values.branch === values['default-branch']) usage(`--branch is the default branch ${values.branch}, which ${mode} never pushes to`);
+  // sync --merge takes the default branch as --branch; commit and supervised push to --branch, and owned checks a branch a worker pushes.
+  if (mode !== 'sync' && values.branch !== undefined && values.branch === values['default-branch']) usage(`--branch is the default branch ${values.branch}, which no worker pushes to`);
   for (const k of ['merged', 'commit']) if (values[k] !== undefined && !COMMIT.test(values[k])) usage(`--${k} must be a full commit id, 40 hex characters`);
   if (values.title !== undefined && !values.title.trim()) usage('--title is empty');
-  const { 'default-branch': defaultBranch, file: files, ...rest } = values;
-  return { mode, options: { ...rest, defaultBranch, files, merge: values.merge ?? false } };
+  const { 'default-branch': defaultBranch, 'dry-run': dryRun, file: files, ...rest } = values;
+  return { mode, options: { ...rest, defaultBranch, files, merge: values.merge ?? false, dryRun: dryRun ?? false } };
 }
 
 if (isMain(import.meta.url)) {
   try {
     const { mode, options } = optionsOf(process.argv.slice(2));
-    console.log(json({ sync, commit, supervised }[mode](options)));
+    console.log(json({ sync, commit, supervised, owned: branchOwned, remove }[mode](options)));
   } catch (e) {
     console.error(escaped(`${e.step ?? 'usage'}: ${e.message.split('\n')[0]}`));
     process.exitCode = 1;
