@@ -159,9 +159,9 @@ const BUDGETS = [
 const AT_SIZE = {
   'plugins/cl-orchestration/skills/coordinate/bot-project.md': 2204,
   'plugins/cl-repo/rules/project.md': 868,
-  'plugins/cl-workflow/agents/review.md': 682,
+  'plugins/cl-workflow/agents/review.md': 699,
   'plugins/cl-workflow/skills/workflow/SKILL.md': 1770,
-  'plugins/cl-workflow/skills/workflow/software.md': 1050,
+  'plugins/cl-workflow/skills/workflow/software.md': 1055,
 };
 
 // The word budget of one instruction file (path relative to the repository, with / separators) and its text.

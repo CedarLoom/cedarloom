@@ -20,6 +20,14 @@ test('workflow: a quick software change needs only SKILL.md', () => {
   assert.match(skill, /Standard and deep, and any risky change: also \[software\.md\]/);
 });
 
+test('workflow: the review agent names every risky term of the workflow skill', () => {
+  // A subagent sees only its own text, so the reviewer judges riskiness from its own copy of the list.
+  const review = readFileSync(new URL('../agents/review.md', import.meta.url), 'utf8');
+  const risky = skill.match(/^ *- Risky: ([^\n]*)\.$/m)?.[1];
+  assert.ok(risky);
+  for (const term of risky.split(', ')) assert.ok(review.includes(term), term);
+});
+
 test('workflow: the depth table keeps the change-type floors', () => {
   // The two-column rows of step 1; the steps table of step 3 has more cells.
   const when = (depth) => skill.match(new RegExp(`^ *\\| ${depth} \\| ([^|\\n]*) \\|$`, 'm'))?.[1] ?? '';
