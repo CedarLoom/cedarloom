@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
+import fs, { linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { count, decide, inspectLock, processStart, readState, removeLock, takeLock, writeState } from '../skills/coordinate/state.mjs';
+import { count, decide, inspectLock, main, processStart, readState, rebuild, removeLock, startRun, startWorker, takeLock, unlock, update, writeState } from '../skills/coordinate/state.mjs';
 
 const folder = () => mkdtempSync(join(tmpdir(), 'cl-state-'));
 const NOW = new Date('2026-11-20T12:00:00Z');
@@ -98,6 +99,9 @@ test('state: count adds to the counts of the UTC day, per pull request too, and 
   assert.deepEqual(count(dir, new Date('2026-11-21T00:00:00Z')), { runs: 0, workerStarts: 0, catchUp: 0, prs: {} });
   writeFileSync(join(dir, 'counts-2026-11-20.json'), JSON.stringify({ runs: -1, workerStarts: 0, catchUp: 0, prs: {} }));
   assert.throws(() => count(dir, NOW, { runs: 1 }), /counts-2026-11-20\.json holds no counts/);
+  // An array of counts names no pull request.
+  writeFileSync(join(dir, 'counts-2026-11-20.json'), JSON.stringify({ runs: 1, workerStarts: 0, catchUp: 0, prs: [3] }));
+  assert.throws(() => count(dir, NOW), /counts-2026-11-20\.json holds no counts/);
 });
 
 test('state: count refuses to add what is no count, and writes nothing', () => {
@@ -115,4 +119,155 @@ test('state: a Hold decides no maintain finding, so each stays open; another ans
   writeState(path, { M0: { approved: true, issue: 41 } });
   assert.deepEqual(decide(dir, ['M0', 'M1', 'M2'], ['M0', 'M2']), ['M0', 'M1', 'M2']);
   assert.deepEqual(readState(path), { M0: { approved: true, issue: 41 }, M1: { approved: false }, M2: { approved: true } });
+});
+
+test('state: a run starts below 320 runs and 120 worker starts and counts itself; at either limit it starts and counts nothing', () => {
+  const dir = folder(), file = join(dir, 'counts-2026-11-20.json');
+  writeState(file, { runs: 319, workerStarts: 119, catchUp: 0, prs: {} });
+  assert.deepEqual(startRun(dir, NOW, { catchUp: true }), { go: true });
+  assert.deepEqual(readState(file), { runs: 320, workerStarts: 119, catchUp: 1, prs: {} });
+  assert.deepEqual(startRun(dir, NOW), { go: false, limit: 'runs' });
+  writeState(file, { runs: 3, workerStarts: 120, catchUp: 0, prs: {} });
+  assert.deepEqual(startRun(dir, NOW, { pr: 9 }), { go: false, limit: 'workerStarts' });
+  assert.deepEqual(readState(file), { runs: 3, workerStarts: 120, catchUp: 0, prs: {} });
+});
+
+test('state: a run about a pull request with 12 runs today counts one run without it, caps it once a day, and reports the cap once', () => {
+  const dir = folder(), file = join(dir, 'counts-2026-11-20.json'), pr = join(dir, 'pr-9.json');
+  writeState(file, { runs: 20, workerStarts: 0, catchUp: 0, prs: { 9: 11 } });
+  writeState(pr, { repo: 'o/r', pr: 9, cappedOn: '2026-11-19' });
+  assert.deepEqual(startRun(dir, NOW, { pr: 9 }), { go: true });
+  assert.deepEqual(startRun(dir, NOW, { pr: 9 }), { go: false, limit: 'prRuns', report: true });
+  assert.deepEqual(readState(pr), { repo: 'o/r', pr: 9, cappedOn: '2026-11-20', version: 1 });
+  assert.deepEqual(startRun(dir, NOW, { pr: 9 }), { go: false, limit: 'prRuns', report: false });
+  assert.deepEqual(readState(file), { runs: 23, workerStarts: 0, catchUp: 0, prs: { 9: 12 } });
+});
+
+test('state: a capped run writes cappedOn under the write lock, so a write that comes between its read and its write is neither lost nor set back', () => {
+  const dir = folder(), path = join(dir, 'pr-9.json');
+  writeState(join(dir, 'counts-2026-11-20.json'), { runs: 0, workerStarts: 0, catchUp: 0, prs: { 9: 12 } });
+  writeState(path, { repo: 'o/r', pr: 9, version: 5 });
+  // Another run writes held, read at version 5, at the moment the capped run reads pr-9.json.
+  const read = fs.readFileSync;
+  let fired = false, other;
+  fs.readFileSync = (file, ...rest) => {
+    const body = read(file, ...rest);
+    if (file === path && !fired) {
+      fired = true;
+      try { other = update(path, { version: 5, held: 'owner question' }, { sleep: () => {} }); } catch (e) { other = e; }
+    }
+    return body;
+  };
+  syncBuiltinESMExports();
+  try {
+    assert.deepEqual(startRun(dir, NOW, { pr: 9 }), { go: false, limit: 'prRuns', report: true });
+  } finally {
+    fs.readFileSync = read;
+    syncBuiltinESMExports();
+  }
+  assert.deepEqual(readState(path), { repo: 'o/r', pr: 9, version: 6, cappedOn: '2026-11-20' });
+  assert.match(String(other?.message), /pr-9\.json is locked by another write/);
+  assert.deepEqual(update(path, { version: 5, held: 'owner question' }), { written: false, version: 6 });
+  assert.deepEqual(update(path, { version: 6, held: 'owner question' }), { written: true, version: 7 });
+  assert.deepEqual(readState(path), { repo: 'o/r', pr: 9, version: 7, cappedOn: '2026-11-20', held: 'owner question' });
+});
+
+test('state: a worker starts below 120 worker starts and counts itself, and none at 120', () => {
+  const dir = folder(), file = join(dir, 'counts-2026-11-20.json');
+  writeState(file, { runs: 1, workerStarts: 119, catchUp: 0, prs: {} });
+  assert.deepEqual(startWorker(dir, NOW), { go: true });
+  assert.deepEqual(startWorker(dir, NOW), { go: false, limit: 'workerStarts' });
+  assert.deepEqual(readState(file), { runs: 1, workerStarts: 120, catchUp: 0, prs: {} });
+});
+
+test('state: an update sets only its fields on the file as it is now, and refuses an unreadable file', () => {
+  const dir = folder(), path = join(dir, 'pr-9.json');
+  update(path, { round: 1 });
+  writeState(path, { round: 1, mergeCommandAt: '2026-11-20T11:00:00Z' });
+  update(path, { round: 2, held: null });
+  assert.deepEqual(readState(path), { round: 2, mergeCommandAt: '2026-11-20T11:00:00Z', held: null, version: 1 });
+  writeFileSync(path, '{');
+  assert.throws(() => update(path, { round: 3 }), /pr-9\.json is unreadable: rebuild it first/);
+  assert.equal(readFileSync(path, 'utf8'), '{');
+});
+
+test('state: two runs that read one pull request state and each add a run: the later write is refused until it reads again, so no run entry is lost, also across a rebuild', () => {
+  const dir = folder(), path = join(dir, 'pr-9.json'), fieldsFile = (name, fields) => { writeFileSync(join(dir, name), JSON.stringify(fields)); return join(dir, name); };
+  const run = (head) => ({ startedAt: '2026-11-20T12:00:00Z', head, role: 'reviewer', resultFile: `/r/${head}.md`, result: null });
+  rebuild(dir, 9, { repo: 'o/r', pr: 9, runs: [] }, NOW);
+  const read = main(['read', path], NOW).out;
+  assert.equal(read.version, 1795176000001);
+  assert.deepEqual(main(['write', path, fieldsFile('a.json', { version: read.version, runs: [...read.runs, run('a')] })], NOW), { out: { written: true, version: 1795176000002 }, code: 0 });
+  assert.deepEqual(main(['write', path, fieldsFile('b.json', { version: read.version, runs: [...read.runs, run('b')] })], NOW), { out: { written: false, version: 1795176000002 }, code: 1 });
+  const again = main(['read', path], NOW).out;
+  assert.deepEqual(main(['write', path, fieldsFile('b.json', { version: again.version, runs: [...again.runs, run('b')] })], NOW), { out: { written: true, version: 1795176000003 }, code: 0 });
+  assert.deepEqual(readState(path).runs.map((r) => r.head), ['a', 'b']);
+  assert.throws(() => main(['write', path, fieldsFile('c.json', { held: 'x' })], NOW), /c\.json names no version/);
+  // A read from before the file became unreadable and was rebuilt names a version the rebuilt file never has.
+  writeFileSync(path, '{');
+  rebuild(dir, 9, { repo: 'o/r', pr: 9, runs: [] }, minutesAfter(NOW, 1));
+  assert.equal(main(['write', path, fieldsFile('d.json', { version: read.version, runs: [run('d')] })], NOW).code, 1);
+  assert.deepEqual(readState(path).runs, []);
+});
+
+test('state: a write or rebuild waits while a live writer holds the state file, and takes the lock once its holder is gone', () => {
+  const dir = folder(), path = join(dir, 'pr-9.json');
+  const hold = (file, pid, start) => { mkdirSync(`${file}.lock`, { recursive: true }); writeFileSync(join(`${file}.lock`, 'token'), JSON.stringify({ pid, start })); };
+  writeState(path, { pr: 9, version: 3 });
+  hold(path, process.pid, processStart(process.pid) ?? null);
+  assert.throws(() => update(path, { held: 'x' }, { sleep: () => {} }), /pr-9\.json is locked by another write/);
+  assert.deepEqual(readState(path), { pr: 9, version: 3 });
+  hold(join(dir, 'pr-8.json'), process.pid, processStart(process.pid) ?? null);
+  assert.throws(() => rebuild(dir, 8, { repo: 'o/r', pr: 8 }, NOW, { sleep: () => {} }), /pr-8\.json is locked by another write/);
+  assert.equal(readState(join(dir, 'pr-8.json')), null);
+  hold(path, spawnSync(process.execPath, ['-e', '']).pid, null);
+  assert.deepEqual(update(path, { held: 'x' }), { written: true, version: 4 });
+  assert.deepEqual(readdirSync(dir).sort(), ['pr-8.json.lock', 'pr-9.json']);
+});
+
+test('state: a rebuild holds merges for an unreadable file or a merge without a log line, else writes the fields, and never replaces a readable file', () => {
+  const dir = folder(), path = join(dir, 'pr-9.json');
+  const fields = { repo: 'o/r', pr: 9, branch: 'fix/1-a' };
+  assert.deepEqual(rebuild(dir, 9, fields, NOW), { held: false });
+  assert.deepEqual(readState(path), { ...fields, version: 1795176000001 });
+  assert.throws(() => rebuild(dir, 9, fields, NOW), /pr-9\.json is readable: nothing to rebuild/);
+  writeFileSync(path, 'null');
+  assert.deepEqual(rebuild(dir, 9, fields, NOW), { held: true });
+  assert.deepEqual(readState(path), { ...fields, version: 1795176000001, mergeCommandAt: '2026-11-20T12:00:00.000Z', held: 'state rebuilt' });
+  writeFileSync(path, '[]');
+  assert.deepEqual(main(['read', path], NOW), { out: { rebuild: 'unreadable' }, code: 1 });
+  assert.deepEqual(rebuild(dir, 9, fields, NOW), { held: true });
+  const merged = folder();
+  assert.deepEqual(rebuild(merged, 9, { ...fields, mergedAt: '2026-11-20T10:00:00Z' }, NOW), { held: true });
+  const logged = folder();
+  writeFileSync(join(logged, 'merge-log.md'), '2026-11-20T10:00:00Z o/r #9 merged abc\n');
+  assert.deepEqual(rebuild(logged, 9, { ...fields, mergedAt: '2026-11-20T10:00:00Z' }, NOW), { held: false });
+});
+
+test('state: unlock removes a stale lock only, naming its holder', () => {
+  const dir = folder(), holder = { pid: process.pid, start: processStart(process.pid) ?? null, pr: 9, head: 'abc', takenAt: NOW.toISOString() };
+  holderAt(dir, holder);
+  assert.deepEqual(unlock(dir, minutesAfter(NOW, 1)), { removed: false, holder });
+  assert.deepEqual(unlock(dir, minutesAfter(NOW, 16)), { removed: true, holder });
+  assert.equal(inspectLock(dir), null);
+});
+
+test('state: the command line answers a missing state file with exit 1, adds an answered key once, and refuses a decide that names an id it does not decide', () => {
+  const dir = folder(), answered = join(dir, 'answered.json');
+  assert.deepEqual(main(['read', join(dir, 'pr-9.json')], NOW), { out: { rebuild: 'missing' }, code: 1 });
+  // A new pull request's first write: version 0 creates the file, no version writes nothing.
+  writeFileSync(join(dir, 'new.json'), JSON.stringify({ repo: 'o/r', pr: 9, round: 1 }));
+  assert.throws(() => main(['write', join(dir, 'pr-9.json'), join(dir, 'new.json')], NOW), /new\.json names no version/);
+  assert.equal(readState(join(dir, 'pr-9.json')), null);
+  writeFileSync(join(dir, 'new.json'), JSON.stringify({ repo: 'o/r', pr: 9, round: 1, version: 0 }));
+  assert.deepEqual(main(['write', join(dir, 'pr-9.json'), join(dir, 'new.json')], NOW), { out: { written: true, version: 1 }, code: 0 });
+  assert.deepEqual(readState(join(dir, 'pr-9.json')), { repo: 'o/r', pr: 9, round: 1, version: 1 });
+  assert.deepEqual(main(['write', answered, '--add', '#4 2026-11-20T10:00:00Z'], NOW), { out: { added: true }, code: 0 });
+  assert.deepEqual(main(['write', answered, '--add', '#4 2026-11-20T10:00:00Z'], NOW), { out: { added: false }, code: 0 });
+  assert.deepEqual(readState(answered), ['#4 2026-11-20T10:00:00Z']);
+  assert.throws(() => main(['decide', dir, '--ids', 'M1', '--approved', 'M2'], NOW), /usage/);
+  assert.throws(() => main(['decide', dir, '--ids', 'M1', '--approved', 'M1', '--hold'], NOW), /usage/);
+  assert.throws(() => main(['decide', dir, '--ids', 'M1'], NOW), /usage/);
+  assert.deepEqual(main(['decide', dir, '--ids', 'M1,M2', '--approved', 'M2'], NOW), { out: { decided: ['M1', 'M2'] }, code: 0 });
+  assert.deepEqual(main(['count', dir, '--pr', '9'], NOW), { out: { go: true }, code: 0 });
 });

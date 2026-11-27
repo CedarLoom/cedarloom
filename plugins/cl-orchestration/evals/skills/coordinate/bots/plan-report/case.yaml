@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: coord-bots-plan-report
-description: 'At a builder plan report the project bot first checks the spec''s branch on origin: an absent branch (exit 2) lets the plan go on and takes cl:in-progress off the issue, an existing one makes the item BLOCKED for the owner and starts no build. The case starts the skill, then has the session take SOUL.md and bot-project.md, the procedure the pick sweep''s prompt names. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/bot-project.md:31. Needs --scaffold.'
+description: 'At a builder plan report the project bot first checks the spec''s branch on origin: an absent branch (exit 2) lets the plan go on and takes cl:in-progress off the issue, an existing one makes the item BLOCKED for the owner and starts no build. The case starts the skill, then has the session take SOUL.md and bot-project.md, the procedure the pick sweep''s prompt names. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/bot-reports.md:8. Needs --scaffold.'
 tags: [cl-orchestration, coord-bots]
 context:
   scaffold_script: setup.sh

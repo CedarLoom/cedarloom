@@ -4,7 +4,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { escaped, isMain } from './policy.mjs';
 
 // A character the permission rule syntax reads as a pattern or a bracket would widen or break every rule with the path in it.
-const PLAIN = /^\/[^*?[\]{}()\\\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^/*?[\]{}()\\\p{Cc}\p{Cf}\p{Zl}\p{Zp}]$/u;
+export const PLAIN = /^\/[^*?[\]{}()\\\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^/*?[\]{}()\\\p{Cc}\p{Cf}\p{Zl}\p{Zp}]$/u;
 
 const within = (folder, path) => {
   const inside = relative(folder, path);
@@ -49,7 +49,7 @@ function refuseHardLink(fd, file) {
 }
 
 // A link or another kind of file would let the text read differ from the file Claude Code loads; O_NONBLOCK, so a FIFO does not hang the open.
-function readRegular(file) {
+export function readRegular(file) {
   let fd;
   try {
     fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
