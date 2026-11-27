@@ -57,6 +57,11 @@ export default async (): Promise<Config> => ({
   themeConfig: {
     image: 'cedarloom-light-1280x640.png',
     colorMode: {respectPrefersColorScheme: true},
+    // the browser bar takes the page surface, light and dark
+    metadata: [
+      {name: 'theme-color', content: '#f6f5f3', media: '(prefers-color-scheme: light)'},
+      {name: 'theme-color', content: '#121416', media: '(prefers-color-scheme: dark)'},
+    ],
     navbar: {
       title: 'CedarLoom',
       logo: {alt: '', src: 'cedarloom-icon.svg'},

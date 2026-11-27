@@ -46,13 +46,14 @@ function fontFamily(family) {
 }
 
 function tokensCss(tokens) {
+  const [family, ...fallbacks] = tokens.font.family.$value;
   const weights = Object.entries(tokens.font.weight)
     .filter(([name]) => !name.startsWith('$'))
     .map(([name, token]) => `  --cl-font-weight-${name}: ${token.$value};`);
   const faces = subsets.flatMap(([subset, range]) =>
     ['normal', 'italic'].map(
       (style) => `@font-face {
-  font-family: "${tokens.font.family.$value[0]}";
+  font-family: "${family}";
   font-style: ${style};
   font-weight: 100 900;
   font-display: swap;
@@ -62,13 +63,23 @@ function tokensCss(tokens) {
 }`,
     ),
   );
+  // Arial (Liberation Sans has its metrics) scaled to Albert Sans, so text keeps its size and lines when the web font swaps in.
+  // From the regular faces: average width 463/1000 and 913/2048 em, ascent 950 and descent 250 per 1000 em (@capsizecss/metrics).
+  const fallbackFace = `@font-face {
+  font-family: "${family} Fallback";
+  src: local("Arial"), local("Liberation Sans");
+  size-adjust: 103.86%;
+  ascent-override: 91.47%;
+  descent-override: 24.07%;
+  line-gap-override: 0%;
+}`;
   const light = declarations(tokens, 'light');
   const dark = declarations(tokens, 'dark');
   return `/* Generated from brand/tokens.json by brand/build-tokens.mjs: edit the JSON, then run node brand/build-tokens.mjs. */
-${faces.join('\n\n')}
+${[...faces, fallbackFace].join('\n\n')}
 
 :root {
-  --cl-font-family: ${fontFamily(tokens.font.family.$value)};
+  --cl-font-family: ${fontFamily([family, `${family} Fallback`, ...fallbacks])};
 ${weights.join('\n')}
 ${light}
 }

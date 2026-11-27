@@ -46,14 +46,15 @@ html[data-theme] {
   --ifm-navbar-shadow: none;
   --docusaurus-highlighted-code-line-bg: color-mix(in srgb, var(--cl-ink) 10%, transparent);
   /* Site tokens: lines, raised surfaces and the tinted bands of headers and inline code. */
-  --cl-line: color-mix(in srgb, var(--cl-ink) 16%, var(--cl-surface));
-  --cl-raised: color-mix(in srgb, var(--cl-surface), white 60%);
+  --cl-line: oklch(0.88 0.004 250);
+  --cl-raised: oklch(0.94 0.003 95);
   --cl-accent-soft: color-mix(in srgb, var(--cl-accent) 10%, var(--cl-surface));
   --cl-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 html[data-theme='dark'] {
-  --cl-raised: color-mix(in srgb, var(--cl-surface), var(--cl-ink) 5%);
+  --cl-line: oklch(0.31 0.005 250);
+  --cl-raised: oklch(0.23 0.004 250);
   --cl-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
