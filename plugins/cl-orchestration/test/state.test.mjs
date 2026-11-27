@@ -98,6 +98,9 @@ test('state: count adds to the counts of the UTC day, per pull request too, and 
   assert.deepEqual(count(dir, new Date('2026-11-21T00:00:00Z')), { runs: 0, workerStarts: 0, catchUp: 0, prs: {} });
   writeFileSync(join(dir, 'counts-2026-11-20.json'), JSON.stringify({ runs: -1, workerStarts: 0, catchUp: 0, prs: {} }));
   assert.throws(() => count(dir, NOW, { runs: 1 }), /counts-2026-11-20\.json holds no counts/);
+  // An array of counts names no pull request.
+  writeFileSync(join(dir, 'counts-2026-11-20.json'), JSON.stringify({ runs: 1, workerStarts: 0, catchUp: 0, prs: [3] }));
+  assert.throws(() => count(dir, NOW), /counts-2026-11-20\.json holds no counts/);
 });
 
 test('state: count refuses to add what is no count, and writes nothing', () => {
