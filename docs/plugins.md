@@ -5,7 +5,7 @@ Hooks and their settings, workflow definitions, Code Mode and the filter for unt
 | Plugin | Hooks | Settings |
 |---|---|---|
 | `cl-workflow` | [Terminal questions](#terminal-questions), [role guard](#role-guard) | `mode` |
-| `cl-orchestration` | [Coordinator context rotation](#coordinator-context-rotation) | `rotateAtTokens`, `rotateAtPercent` |
+| `cl-orchestration` | [Coordinator context rotation](#coordinator-context-rotation), [dispatch guard](worker-bounds.md) | `rotateAtTokens`, `rotateAtPercent` |
 | `cl-repo` | none | none |
 
 Every hook runs `node`, so Node.js must be on the PATH. Codex runs neither the terminal-questions hooks nor the role guard. Set options with `/plugin` (Installed tab, Configure options) or under `pluginConfigs` in `$HOME/.claude/settings.json`, then start a new session.

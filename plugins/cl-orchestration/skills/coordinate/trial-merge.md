@@ -2,7 +2,7 @@
 
 Read this file only in `merge.mode` `disjoint`, when the verdict's `next` is `trial` at step 3 of [Merge](merge.md#merge). `<owner/repo>`, `<n>`, `<head>`, `<default branch>`, `<scratch path>` and `AGENTS.md` are the names of [review.md](review.md#names).
 
-The trial is the one step that checks files out and runs the pull request's code, so it gets a fresh clone of its own: `<trial path>`, a new folder beside the scratch clone. It serves nothing after, and no session reads a file there or starts there. The trial merge is never pushed.
+The trial is the one step that checks files out and runs the pull request's code, so it gets a fresh clone of its own: `<trial path>`, a new folder beside the scratch clone whose name starts with `trial-`. It serves nothing after, and no session reads a file there or starts there. The trial merge is never pushed.
 
 The trial passes when `merge` exits 0 and the project's changed-files check passes in the trial clone, run as `AGENTS.md` says. Anything else, a trial that cannot run included, takes the `strict` step (`update` in step 3 of [Merge](merge.md#merge)). Steps 5 and 6 follow every trial that ran `devcontainer up`, whatever its result (a failed start can leave a container).
 

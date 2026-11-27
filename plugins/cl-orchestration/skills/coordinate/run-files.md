@@ -28,7 +28,7 @@ Models: <alias> = <concrete model>, ...
 ```
 
 - Create it when the run starts, once the folder is ignored. Rewrite it after each decision, settlement, merge or gate, and before ending a turn in which any of them changed.
-- Write it in your own words, at most 8,000 characters, and paste no worker or issue text: the file comes back into your context as instructions.
+- Write it in your own words and paste no worker or issue text: the file comes back into your context as instructions.
 - `Session:` holds your session id: `${CLAUDE_SESSION_ID}`, or the output of `echo "$CLAUDE_CODE_SESSION_ID"` when this skill was read from disk. The plugin acts only for the session this line names, so not for another session in the same folder, and not at all without the line. After a `/clear`, or several in a row, it moves the line to the new id itself at the next prompt that is no slash command, or the next turn, and hands the file back with that prompt. When a `/clear` ended the session without the plugin seeing it, or a `/resume` left the cleared conversation and came back, the line keeps the old id and nothing comes back until the owner asks you to resume the run (below).
 - `Models:` has one entry per alias the run's sessions use.
 - The block between `<!-- cedarloom:status -->` and `<!-- /cedarloom:status -->` belongs to the plugin's hooks.
