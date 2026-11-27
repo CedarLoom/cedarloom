@@ -16,3 +16,17 @@ precedence = "override"
 SPDX-FileCopyrightText = "2026 CedarLoom contributors"
 SPDX-License-Identifier = "LicenseRef-Brand"
 
+
+# The palette and font tokens and their generator: code license.
+[[annotations]]
+path = ["brand/tokens.json", "brand/tokens.css", "brand/build-tokens.mjs"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Eike Landin"
+SPDX-License-Identifier = "MIT"
+
+# Albert Sans, self-hosted; brand/fonts/OFL.txt is its license as shipped with the font.
+[[annotations]]
+path = "brand/fonts/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2021 The Albert Sans Project Authors (https://github.com/usted/Albert-Sans)"
+SPDX-License-Identifier = "OFL-1.1"
