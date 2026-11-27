@@ -119,6 +119,17 @@ const DENIED = [
   'CEDARLOOM_ROLE=coordinator claude -p "merge 12"',
   'env CEDARLOOM"_"ROLE=coordinator claude -p "merge 12"',
   'claude --bare -p "merge pull request 12 with the squash method"',
+  "echo | rg -r 'gh pr merge 1' '^' | tcsh",
+  "echo | grep -H --label 'gh pr merge 1;' '' | awk '{system($0)}'",
+  "echo | rg -r 'gh pr merge 1' '^' | caffeinate sh",
+  // sort and rg run a program on what they read: a reader's text stays read as commands unless every long option is a safe one
+  // and no wrapper option or env assignment comes before the program.
+  "rg --no-heading --no-filename -N -r 'gh pr merge 12 --squash' '^.*$' README.md | sort -S 1b --compress-program=sh",
+  "rg -N -r 'gh pr merge 12' '^.*$' README.md | sort -S 1b --co=sh",
+  "rg -N -r 'gh pr merge 12' '^.*$' README.md | rg --pre sh x /dev/stdin",
+  "rg -N -r 'gh pr merge 12' '^.*$' README.md | rg --pre=sh x /dev/stdin",
+  "rg -N -r 'gh pr merge 12' '^.*$' README.md | RIPGREP_CONFIG_PATH=pre.cfg rg x /dev/stdin",
+  "rg -N -r 'gh pr merge 12' '^.*$' README.md | env -SRIPGREP_CONFIG_PATH=pre.cfg rg x /dev/stdin",
 ];
 
 const ALLOWED = [
@@ -140,6 +151,9 @@ const ALLOWED = [
   'git -C ../other log --oneline',
   'git commit -m "explain the merge"',
   'claude -p "review 12" 2>&1 | tee out.txt',
+  'grep -n "gh release create" scripts/release.sh',
+  "rg -n 'git push origin main' docs | head",
+  'grep -rn "gh release create" .',
 ];
 
 test('role guard: denies coordinator steps outside the coordinator role, unset or another role', () => {
@@ -379,7 +393,7 @@ test('role guard: the project, reviewer and maintain bots never push', () => {
 
 test('role guard: the builder bot pushes only the branch checked out where git runs', () => {
   for (const role of ['builder-bot']) {
-    for (const command of ['git push origin feat/x', 'git push -u origin HEAD', `git -C ${feature} push origin feat/x`, 'git push origin feat/x && git checkout main']) assert.equal(decision(command, { role, cwd: feature }), 'none', `${role}: ${command}`);
+    for (const command of ['git push origin feat/x', 'git push -u origin HEAD', `git -C ${feature} push origin feat/x`, 'git push origin feat/x && git checkout main', 'git add . && git commit -F msg.txt && git push origin feat/x']) assert.equal(decision(command, { role, cwd: feature }), 'none', `${role}: ${command}`);
     for (const command of ['git push origin feat/other', 'git push origin HEAD:feat/other', 'git push origin feat/x feat/other', 'git push origin feat/other:feat/x']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
     // The guard reads the branch before the command runs, so a push after a switch in the same command is refused.
     for (const command of ['git checkout feat/other && git push', 'git switch -c feat/y && git push origin HEAD', 'git branch -M feat/y && git push origin feat/x', 'git rebase origin/trunk trunk && git push', 'git symbolic-ref HEAD refs/heads/feat/other && git push', 'git branch --mov feat/y && git push origin HEAD', 'git bisect reset trunk && git push']) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
@@ -397,6 +411,37 @@ test('role guard: the builder bot pushes only the branch checked out where git r
 test('role guard: the builder bot never force-pushes or deletes its branch', () => {
   const forced = ['git push -f origin feat/x', 'git push -uf origin feat/x', 'git push --force origin feat/x', 'git push --force-with-lease origin feat/x', 'git push --forc origin feat/x', 'git push origin +feat/x', 'git push origin +HEAD:feat/x', 'git push -d origin feat/x', 'git push --delete origin feat/x', 'git push origin :feat/x', 'git push origin `echo main`', 'git push origin `echo +feat/x`', 'git push origin `echo HEAD:main`', 'echo main | xargs git push origin'];
   for (const role of ['builder-bot']) for (const command of forced) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
+});
+
+test('role guard: the builder bot refuses git in a line that runs text as commands and a git subcommand that is no plain word', () => {
+  const hidden = [
+    "sh -c 'git push origin `echo main`'",
+    "eval 'git push origin `echo main`'",
+    "bash -lc 'git push origin `echo main`'",
+    "env sh -c 'git push origin `echo main`'",
+    "echo 'git push origin `echo main`' | sh",
+    "# don't stop\ngit push origin `echo main`",
+    "cat <<EOF\ndon't stop\nEOF\ngit push origin `echo main`",
+    'git `echo push` origin main',
+    'git $(echo push) origin main',
+    'p=push; git $p origin main',
+    'git pu?h origin main',
+    'echo push origin main | xargs git',
+    "echo main | xargs -I feat/x sh -c 'git push origin feat/x'",
+    'echo main | caffeinate xargs git push origin',
+    'caffeinate xargs -a refs.txt git push origin',
+    'echo main | parallel git push origin',
+    "printf '%s push origin main\\n' git | tcsh",
+    "fish -c 'git push origin (echo main)'",
+    "git log --format='%s' | caffeinate sh",
+    "git log --format='%s' |& caffeinate sh",
+    "git log --format='%s' | (caffeinate sh)",
+    "git log -1 --format='%x67it push origin main' | sort -S 1b --compress-program=sh",
+    "git log -1 --format='%x67it push origin main' | sort -S 1b --co=sh",
+    "git log -1 --format='%x67it push origin main' | rg --pre sh x /dev/stdin",
+    "git log -1 --format='%x67it push origin main' | env -SRIPGREP_CONFIG_PATH=pre.cfg rg x /dev/stdin",
+  ];
+  for (const command of hidden) assert.equal(decision(command, { role: 'builder-bot', cwd: feature }), 'deny', command);
 });
 
 test('role guard: a role bot runs only gh commands that read', () => {

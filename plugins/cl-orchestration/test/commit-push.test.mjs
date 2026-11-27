@@ -398,16 +398,94 @@ test('commit-push: options that are relative paths, no plain branch name or the 
   const usage = (argv, message) => assert.throws(() => optionsOf(argv), (e) => e.step === 'usage' && e.message === message);
   usage(flags('feat/1', 'p'), '--project must be an absolute path');
   usage(flags('a..b'), '--branch is no plain branch name');
-  usage(flags('main'), '--branch is the default branch main, which supervised never pushes to');
+  usage(flags('main'), '--branch is the default branch main, which no worker pushes to');
   // The folders of --message and --body are resolved, so they and the worktree exist here.
   const dir = mkdtempSync(join(tmpdir(), 'commit-push-'));
   const w = join(dir, 'w');
   mkdirSync(join(w, 'sub'), { recursive: true });
   const commitFlags = (branch, message) => ['commit', '--project', '/p', '--worktree', w, '--repo', 'o/r', '--branch', branch, '--default-branch', 'main', '--message', message, '--file', 'a', '--owned', 'src'];
-  usage(commitFlags('main', join(dir, 'm')), '--branch is the default branch main, which commit never pushes to');
+  usage(commitFlags('main', join(dir, 'm')), '--branch is the default branch main, which no worker pushes to');
+  usage([...commitFlags('feat/1', join(dir, 'm')), '--dry-run', '--title', 't', '--body', join(dir, 'b.md')], '--dry-run opens no pull request, so it takes no --title');
   // gh runs in the folder of --body, else --message: never the worktree, also when a link names it.
   usage(commitFlags('feat/1', join(w, 'm')), '--message is under --worktree');
   symlinkSync(w, join(dir, 'link'));
   usage(commitFlags('feat/1', join(dir, 'link/m')), '--message is under --worktree');
   usage([...flags('feat/1', '/p', w), '--title', 't', '--body', join(w, 'sub/b.md')], '--body is under --worktree');
+});
+
+test('commit-push: a dry run commits and checks the change but pushes nothing and opens no pull request', () => {
+  const s = setup();
+  const result = s.run('commit', ...s.flags, '--file', 'src/a.txt', '--dry-run');
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { commit: s.inW('rev-parse', 'HEAD'), pullRequest: null });
+  assert.deepEqual(s.pushed(), ['refs/heads/main']);
+});
+
+test('commit-push: a push origin refuses as no fast-forward names git\'s reason, not the remote\'s URL', () => {
+  const s = setup();
+  s.inW('commit', '-qm', 'add a');
+  s.git('push', '-q', 'origin', `${s.inW('rev-parse', 'HEAD')}:refs/heads/${BRANCH}`);
+  s.inW('reset', '-q', '--hard', s.base);
+  mkdirSync(join(s.worktree, 'src'), { recursive: true });
+  writeFileSync(join(s.worktree, 'src/b.txt'), 'b\n');
+  s.inW('add', 'src/b.txt');
+  s.inW('commit', '-qm', 'add b');
+  const head = s.inW('rev-parse', 'HEAD');
+  const result = s.run('supervised', '--project', s.project, '--worktree', s.worktree, '--repo', 'owner/project', '--branch', BRANCH, '--default-branch', 'main', '--commit', head, '--owned', 'src');
+  refused(result, new RegExp(`^push of ${head}: ! \\[rejected\\] +${head} -> ${BRANCH} \\(non-fast-forward\\)$`));
+});
+
+test('commit-push: a ref origin cannot lock names origin\'s own error and the committed sha, which supervised then pushes', () => {
+  const s = setup();
+  mkdirSync(join(s.origin, 'refs/heads/feat'), { recursive: true });
+  writeFileSync(join(s.origin, `refs/heads/${BRANCH}.lock`), '');
+  const result = s.run('commit', ...s.flags, '--file', 'src/a.txt');
+  const sha = s.inW('rev-parse', 'HEAD');
+  refused(result, new RegExp(`^push of ${sha}: remote: error: cannot lock ref 'refs/heads/${BRANCH}'`));
+  renameSync(join(s.origin, `refs/heads/${BRANCH}.lock`), join(s.dir, 'lock'));
+  const retry = s.run('supervised', '--project', s.project, '--worktree', s.worktree, '--repo', 'owner/project', '--branch', BRANCH, '--default-branch', 'main', '--commit', sha, '--owned', 'src');
+  assert.equal(retry.status, 0, retry.stderr);
+  assert.deepEqual(JSON.parse(retry.stdout), { commit: sha, pullRequest: null });
+  assert.equal(execFileSync('git', ['-C', s.origin, 'rev-parse', `refs/heads/${BRANCH}`], { encoding: 'utf8' }).trim(), sha);
+});
+
+test('commit-push: owned checks every file a branch publishes, the local branch or with --origin origin\'s', () => {
+  const s = setup();
+  s.inW('commit', '-qm', 'add a');
+  const head = s.inW('rev-parse', 'HEAD');
+  const flags = (clone) => ['--clone', clone, '--branch', BRANCH, '--default-branch', 'main', '--owned', 'src'];
+  const result = s.run('owned', ...flags(s.worktree));
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { commit: head, files: ['src/a.txt'] });
+  mkdirSync(join(s.worktree, '.github'));
+  writeFileSync(join(s.worktree, '.github/ci.yml'), 'c\n');
+  s.inW('add', '.github/ci.yml');
+  s.inW('commit', '-qm', 'ci');
+  refused(s.run('owned', ...flags(s.worktree)), /^owned: \.github\/ci\.yml is under \.github\/, which is the owner's$/);
+  // A new clone has no local branch: --origin reads the pushed one.
+  s.inW('push', '-q', 'origin', `${head}:refs/heads/${BRANCH}`);
+  const clone = join(s.dir, 'clone');
+  execFileSync('git', ['clone', '-q', s.origin, clone]);
+  const pushed = s.run('owned', ...flags(clone), '--origin');
+  assert.equal(pushed.status, 0, pushed.stderr);
+  assert.deepEqual(JSON.parse(pushed.stdout), { commit: head, files: ['src/a.txt'] });
+});
+
+test('commit-push: remove refuses a worktree with changes, which --force removes', () => {
+  const s = setup();
+  refused(s.run('remove', '--project', s.project, '--worktree', s.worktree), /^remove: fatal: '.+' contains modified or untracked files, use --force to delete it$/);
+  assert.equal(existsSync(s.worktree), true);
+  const result = s.run('remove', '--project', s.project, '--worktree', s.worktree, '--force');
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { removed: s.worktree });
+  assert.equal(existsSync(s.worktree), false);
+  assert.doesNotMatch(s.git('worktree', 'list', '--porcelain').toString(), /\/w\n/);
+});
+
+test('commit-push: remove refuses a worktree whose commondir names another git directory', () => {
+  const s = setup();
+  s.inW('commit', '-qm', 'add a');
+  writeFileSync(join(s.admin, 'commondir'), `${join(s.dir, 'other/.git')}\n`);
+  refused(s.run('remove', '--project', s.project, '--worktree', s.worktree), /^commondir: the worktree's commondir does not hold \.\.\/\.\.$/);
+  assert.equal(existsSync(s.worktree), true);
 });
