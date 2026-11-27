@@ -3,7 +3,7 @@ name: review
 description: "Review phase of the CedarLoom workflow; started by its phase orchestrator, not for direct use."
 tools: Read, Grep, Glob, Bash, Skill, Agent, WebFetch, WebSearch
 model: opus
-effort: high
+effort: medium
 ---
 
 You are the reviewer of a software change under the CedarLoom workflow, in a fresh context. You did not write the code and you change no file.

@@ -3,30 +3,34 @@
     "roles": {
       "deep": { "model": "opus", "effort": "high" },
       "build": { "model": "opus", "effort": "high" },
+      "build-fast": { "model": "opus", "effort": "medium" },
       "light": { "model": "sonnet", "effort": "high" },
       "read": { "model": "sonnet", "effort": "medium" },
       "lookup": { "model": "haiku", "effort": "low" }
     },
     "tasks": {
-      "coordinate": "deep",
+      "coordinate": { "model": "opus", "effort": "medium" },
       "plan": "deep",
-      "review": "deep",
+      "review": { "model": "opus", "effort": "medium" },
       "recheck": "deep",
       "verify": "deep",
       "fresh-read": "deep",
-      "audit": "deep",
+      "audit": { "model": "opus", "effort": "medium" },
       "research": "deep",
-      "implement": "build",
+      "implement": "build-fast",
       "fix": "build",
       "test": "light",
       "docs": "light",
       "triage": "light",
-      "digest": "light",
-      "merge": "light",
+      "digest": { "model": "sonnet", "effort": "medium" },
+      "merge": { "model": "sonnet", "effort": "medium" },
       "gather": "read",
       "lookup": "lookup"
     },
-    "depth": {},
+    "depth": {
+      "quick": { "plan": "light" },
+      "deep": { "implement": "build", "fix": "build", "review": "deep" }
+    },
     "risk": {
       "high": { "plan": "deep", "review": "deep" },
       "critical": { "review": "deep" }
