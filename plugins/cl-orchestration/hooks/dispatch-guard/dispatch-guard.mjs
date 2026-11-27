@@ -10,7 +10,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { ansiC } from '../ansi-c-quote.mjs';
-import { CHANGE_DIR, LAUNCHERS, launcher, plain, program, programIndex, readings, runsText } from './shell-commands.mjs';
+import { CHANGE_DIR, LAUNCHERS, launcher, plain, program, programIndex, readings, runsText, WRAPPERS } from './shell-commands.mjs';
 
 // The command's own and its short form, as cl-workflow's role guard reads them.
 const QUESTIONS = /(^|[^\w-])\/(cl-workflow:)?away\s+off(?![\w.-])/i;
@@ -291,6 +291,8 @@ function commandRules(command, cwd, powershell) {
       const xa = head.findLastIndex((w) => program(w) === 'xargs');
       const words = xa < 0 ? c.words : xargsWords(c.words, xa, at);
       bypassRules(words, at, refuse);
+      // xargs before a wrapper with no program after it (xargs env) runs a program it reads from stdin; xargs alone runs echo.
+      if (at < 0 && xa >= 0 && c.words.slice(xa + 1).some((w) => WRAPPERS.has(program(w)))) refuse('unreadable-program', 'xargs runs a program it reads from a file or stdin, which the guard cannot check: write the program out');
       if (name === undefined) continue;
       if (xa >= 0 && name === 'orca') refuse('launch-env', 'orca run by xargs takes words the guard cannot read, a launch line or --force among them: write them out');
       // A gh, git, orca or agent word after a program the guard does not list may be a command that program runs (caffeinate, find -exec).
@@ -299,7 +301,7 @@ function commandRules(command, cwd, powershell) {
       // PowerShell runs a leading variable that no assignment operator follows (& $gh pr merge), which programIndex skips as a target.
       const called = powershell && /^\$[^=]*$/.test(c.words[0]) && !/^(\?\?|[-+*/%])?=$/.test(c.words[1] ?? '');
       if (called) refuse('unreadable-program', `the program ${c.words[0]} is a variable, so the guard cannot check it against its rules: write the program out`);
-      else if (expands(c.words[at]) && c.words[at] !== '$') refuse('unreadable-program', `the program ${c.words[at].length > 40 ? 'of a command' : c.words[at]} is a variable or command substitution, so the guard cannot check it against its rules: write the program out`);
+      else if (expands(words[at]) && words[at] !== '$') refuse('unreadable-program', `the program ${words[at].length > 40 ? 'of a command' : words[at]} is a variable, a command substitution or an xargs replace string, so the guard cannot check it against its rules: write the program out`);
       else if ((hidden || behind) && !KNOWN.has(name) && !LAUNCHERS.has(launcher(c.words[at]))) {
         for (const w of c.words) if (TRIGGERS.has(w)) refuse(TRIGGERS.get(w), `a command of a program the guard does not list, on a line that runs text as commands or before a gh, git, orca or agent word, holds ${w}: write the program out`);
       }
@@ -324,7 +326,9 @@ function xargsWords(words, from, at) {
     else if (/^-i./.test(w)) replace = w.slice(2);
     else if (w.startsWith('--replace=')) replace = w.slice('--replace='.length);
   }
-  return [...words.slice(0, at + 1), ...words.slice(at + 1).map((w) => (replace && w.includes(replace) ? UNSEEN : w)), UNSEEN];
+  // The replace string can stand in the program word too (xargs -I x env x).
+  const p = Math.max(at, 0);
+  return [...words.slice(0, p), ...words.slice(p).map((w) => (replace && w.includes(replace) ? UNSEEN : w)), UNSEEN];
 }
 
 // The handoff file as a Write, Edit or MultiEdit call leaves it, in characters (code points): null where the guard cannot work it out.

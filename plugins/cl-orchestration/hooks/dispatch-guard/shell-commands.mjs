@@ -12,7 +12,7 @@ export const CHANGE_DIR = new Set(['cd', 'pushd', 'popd', 'chdir', 'set-location
 const acted = (word) => ['gh', 'git', 'orca'].includes(program(word)) || LAUNCHERS.has(launcher(word)) || CHANGE_DIR.has(word.toLowerCase());
 
 // Programs that run the program after them, each with its options whose value is the next word.
-const WRAPPERS = new Map([
+export const WRAPPERS = new Map([
   ['env', ['-u', '--unset', '-C', '--chdir', '-S', '--split-string', '-P']],
   ['sudo', ['-u', '--user', '-g', '--group', '-C', '--close-from', '-D', '--chdir', '-h', '--host', '-p', '--prompt', '-r', '--role', '-t', '--type', '-U', '--other-user', '-T', '--command-timeout']],
   ['doas', ['-u', '-C']],

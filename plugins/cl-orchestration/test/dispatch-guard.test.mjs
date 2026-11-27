@@ -223,10 +223,10 @@ test('no-admin, no-auto and no-delete-branch: gh pr merge refuses each flag, als
 });
 
 test('unreadable-program: a command whose program is a variable or command substitution is refused', () => {
-  refused('unreadable-program', ['$RUN', 'GH=gh; $GH pr merge 12 --squash', '"$ORCA" terminal create --command claude', '"$(which gh)" pr view 12', "env -S'gh pr merge 1 --squash'", "env --split-string='gh pr merge 1 --squash'"], 'Bash');
+  refused('unreadable-program', ['$RUN', 'GH=gh; $GH pr merge 12 --squash', '"$ORCA" terminal create --command claude', '"$(which gh)" pr view 12', "env -S'gh pr merge 1 --squash'", "env --split-string='gh pr merge 1 --squash'", 'xargs env < /tmp/agents', 'xargs -IRUNNER env RUNNER -a never < /tmp/agents'], 'Bash');
   refused('unreadable-program', ['& $gh pr merge 12'], 'PowerShell');
   passed(['$r = gh pr view 12'], 'PowerShell');
-  passed(['echo "$(date)"', 'head=$(git rev-parse HEAD)', 'echo $((1 + 2))', 'env LC_ALL=C sort -S50% /tmp/list']);
+  passed(['echo "$(date)"', 'head=$(git rev-parse HEAD)', 'echo $((1 + 2))', 'env LC_ALL=C sort -S50% /tmp/list', 'wc -l /tmp/list | xargs']);
 });
 
 test('update-branch-rebase: gh pr update-branch with --rebase, or an option the guard cannot read, is refused', () => {
