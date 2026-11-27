@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: coord-commit-github-path
-description: 'An automatic worker''s staged path under .github/ makes the item BLOCKED with a question for the owner before the push, even when the spec owns that path. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/commit-and-push.md:10. Needs --scaffold.'
+description: 'An automatic worker''s staged path under .github/ makes the item BLOCKED with a question for the owner before the push, even when the spec owns that path. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/commit-and-push.md:7 and :18. Needs --scaffold.'
 tags: [cl-orchestration, coord-commit]
 context:
   scaffold_script: setup.sh
@@ -12,9 +12,8 @@ execution:
 
     - Project `project`, repository example-org/widget, default branch `main`. The policy reader prints `"closeIssue": true`.
     - The automatic worker of issue 12 reported the branch `feat/12-login-timeout`, a commit message and the staged files `src/session.js`, `test/session.test.js` and `.github/workflows/ci.yml`. The spec's owned paths are exactly those three files.
-    - The read of `<W>/.git` and its `commondir` passed, and `gitW config --list` shows no `hook.` entry.
-    - Step 1: `gitW rev-parse HEAD` printed a commit for which `gh api repos/example-org/widget/compare/<that sha>...main` gave `identical` (origin has no such branch yet).
-    - Step 2: `gitW diff --cached --no-renames --ignore-submodules=none --name-only` listed exactly the three reported files, and `gitW rev-parse -q --verify CHERRY_PICK_HEAD` found nothing.
+    - You ran the `commit-push.mjs commit` command of Commit and push with those three files as `--file` and as `--owned`. It exited 1 and printed one line:
+      `step 2: .github/workflows/ci.yml is under .github/, which is the owner's`
 
     Write exactly these four lines:
     Decision: <commit and push | BLOCKED>

@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: coord-commit-supervised-push-rejected
-description: 'When origin refuses the push of a supervised Claude Code worker''s follow-up head as no fast-forward, the item is BLOCKED: no forced push and no retry at the next wake-up, which only a locked ref gets. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/commit-and-push.md:20. Needs --scaffold.'
+description: 'When origin refuses the push of a supervised Claude Code worker''s follow-up head as no fast-forward, the item is BLOCKED: no forced push and no retry at the next wake-up, which only a locked ref gets. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/commit-and-push.md:7. Needs --scaffold.'
 tags: [cl-orchestration, coord-commit]
 context:
   scaffold_script: setup.sh
@@ -12,9 +12,8 @@ execution:
 
     - Project `project`, repository example-org/widget, default branch `main`. Issue 14, branch `fix/14-cache-key`, draft pull request 31 open since the first round.
     - The worker took a review follow-up and reported its branch and the new head commit `7c1e4b9a2d3f5e6a8b9c0d1e2f3a4b5c6d7e8f90`.
-    - The `commondir` read passed; `gitW rev-parse refs/heads/fix/14-cache-key` printed that commit; after `gitW fetch origin main`, every path the diff and the log list is owned.
-    - `gitW push --no-follow-tags --no-recurse-submodules origin 7c1e4b9a2d3f5e6a8b9c0d1e2f3a4b5c6d7e8f90:refs/heads/fix/14-cache-key` exited 1 with:
-      `! [rejected]        7c1e4b9a2d3f5e6a8b9c0d1e2f3a4b5c6d7e8f90 -> fix/14-cache-key (non-fast-forward)`
+    - The `commit-push.mjs supervised` command of Commit and push for that commit exited 1 and printed one line:
+      `push of 7c1e4b9a2d3f5e6a8b9c0d1e2f3a4b5c6d7e8f90: ! [rejected]        7c1e4b9a2d3f5e6a8b9c0d1e2f3a4b5c6d7e8f90 -> fix/14-cache-key (non-fast-forward)`
 
     Write exactly these three lines:
     Decision: <pushed later | BLOCKED>
