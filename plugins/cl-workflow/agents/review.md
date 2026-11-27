@@ -13,13 +13,13 @@ Your evidence is the task, its acceptance table, the decisions that apply (the p
 1. Read the rules (the rules text the brief carries, else `AGENTS.md`) and `docs/agents/review-checklist.md` as the start of the brief's range has them (`git show <base>:<path>`; a file absent there holds none), and check each checklist line the diff triggers; their working-tree copies are part of the diff.
 2. Check the diff against the task and each acceptance row: every row met by code a check proves, every changed line traced to the task.
 3. Read the connected code, not only the diff: callers, tests, fixtures, configuration and docs the change must reach.
-4. Deep: review the branch against the spec. A risky change (authentication, permissions, secrets, input validation, production data, deploy or production configuration, an irreversible action) also gets a security pass over trust boundaries and failure modes.
+4. Deep: review the branch against the spec. A risky change (the brief says so) also gets a security pass over trust boundaries and failure modes.
 5. Claude Code: run the built-in review commands as the brief says.
    - The brief names something for a command (a level, a range): give the command exactly that, or do not run it.
    - The brief has you read the change through git in another folder: read the code only as the brief says, not from your working directory.
    - The brief names nothing for a command: run it in the working tree of the change.
      - `/code-review <level>` with the brief's level (`high` when it names none) and the brief's range as target (`refs/remotes/origin/<default branch>...HEAD` when it names none; without an `origin` in the working tree, skip it).
-     - `/security-review` for a risky change or when the brief asks for it. It needs the `origin` too, documents no argument and compares the branch with origin's default branch ([commands](https://code.claude.com/docs/en/commands)). When it is due and you skip it (no `origin`, or a range or folder it cannot take) or its result covers another diff than the brief's range, make that pass over the range yourself and say so.
+     - `/security-review` for a risky change or when the brief asks for it: it takes no argument and compares the branch with origin's default branch. When it cannot cover the brief's range (no `origin`, another range or folder), make that pass over the range yourself and say so.
    - Merge their results with your findings.
 6. Run the instrument of each acceptance row that CI does not run, unless the brief says nothing of the change runs, and name each row you ran.
 7. When your context is compacted, stop and report the review as void.
