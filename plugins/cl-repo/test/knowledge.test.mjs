@@ -115,6 +115,23 @@ test('write: drops the oldest entries until the file stays within 1 MiB', () => 
   assert.ok(statSync(path).size <= 1024 * 1024);
 });
 
+test('write: refuses an entry larger than the file may be and keeps the stored entries', () => {
+  const { root } = repo();
+  const old = Array.from({ length: 10 }, (_, i) => ({ id: `q${i}`, commit: 'c'.repeat(40), date: '2026-01-01', tree: '1'.repeat(40) }));
+  store(root, 'questions', { entries: old });
+  assert.throws(() => writeBase(root, { questions: [{ id: 'huge', text: 'x'.repeat(1100 * 1024), tree: true }] }, NOW), BadInput);
+  assert.deepEqual(JSON.parse(readFileSync(join(root, '.cedarloom/knowledge/questions.json'), 'utf8')).entries.map((e) => e.id), ['q0', 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9']);
+});
+
+test('write: an ignore rule for the base files only still gets their temporary files ignored', () => {
+  const { root, git } = repo();
+  writeFileSync(join(root, '.gitignore'), '.cedarloom/knowledge/*.json\n');
+  git('add', '.gitignore');
+  git('commit', '-qm', 'ignore');
+  writeBase(root, { tools: [{ id: 'knip', tree: true }] }, NOW);
+  assert.equal(git('check-ignore', '--', '.cedarloom/knowledge/tools.json.1234.tmp'), '.cedarloom/knowledge/tools.json.1234.tmp');
+});
+
 test('write: keeps the newest 500 entries of a file, dropping the oldest by date', () => {
   const { root } = repo();
   const old = Array.from({ length: 500 }, (_, i) => ({ id: `t${i}`, commit: 'c'.repeat(40), date: i === 7 ? '2025-01-01' : '2026-01-01', tree: '1'.repeat(40) }));
@@ -145,7 +162,9 @@ test('write: refuses a link in the base path, a tracked base and a base git does
   const negated = repo();
   writeFileSync(join(negated.root, '.gitignore'), '!.cedarloom/knowledge/\n!.cedarloom/knowledge/*.json\n');
   assert.throws(() => writeBase(negated.root, { verdicts: [entry] }, NOW), Refused);
+  assert.throws(() => writeBase(negated.root, { verdicts: [entry] }, NOW), Refused);
   assert.equal(existsSync(join(negated.root, '.cedarloom')), false);
+  assert.equal(readFileSync(join(negated.root, '.git/info/exclude'), 'utf8').split('\n').filter((l) => l === '.cedarloom/knowledge/').length, 1);
 
   const outside = repo();
   writeFileSync(join(elsewhere, 'a.js'), 'export const a = 1;\n');

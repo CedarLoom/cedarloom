@@ -2,7 +2,7 @@
 
 What earlier passes learned about this project, so a repeated pass skips finished work; losing it costs time, never correctness. It lives in `.cedarloom/knowledge/` at the repository root, local only. The owner clears it by deleting that folder once `test -L .cedarloom` shows no link, since a recursive delete would follow a link out of the repository.
 
-`kb` below is `node <skill folder>/knowledge.mjs` (Claude Code: `<skill folder>` is `${CLAUDE_SKILL_DIR}`), run in the repository. Exit 1 (refused: a link in the base's path, a tracked base, a base git does not ignore): run without the base and report why. Exit 2: fix the input and rerun.
+`kb` below is `node <skill folder>/knowledge.mjs` (Claude Code: `<skill folder>` is `${CLAUDE_SKILL_DIR}`), run in the repository. Exit 1 (refused: a link in the base's path, a tracked base, a base git does not ignore) or 3 (git or the file system failed): run without the base and report why. Exit 2: fix the input and rerun.
 
 ## Read first
 

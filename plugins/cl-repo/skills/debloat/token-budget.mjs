@@ -67,8 +67,9 @@ function walk(root, dir = '') {
   });
 }
 
-// git from a system folder, so the PATH search does not decide which program runs.
-export const GIT = ['/usr/bin/git', '/usr/local/bin/git', '/opt/homebrew/bin/git', join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'cmd', 'git.exe')].find((p) => existsSync(p));
+// git from a system folder, so the PATH search does not decide which program runs. On macOS the developer tools' git comes
+// before /usr/bin/git, a shim that runs it through xcrun, which fails in Claude Code's sandbox when it cannot write its cache.
+export const GIT = ['/Library/Developer/CommandLineTools/usr/bin/git', '/Applications/Xcode.app/Contents/Developer/usr/bin/git', '/usr/bin/git', '/usr/local/bin/git', '/opt/homebrew/bin/git', join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'cmd', 'git.exe')].find((p) => existsSync(p));
 
 // Started from a hook or `git rebase --exec`, these variables name another repository or index and carry that command's -c settings;
 // outside a hook the GIT_CONFIG_* ones are the caller's own settings (safe.directory of a checkout another user owns) and reach git.

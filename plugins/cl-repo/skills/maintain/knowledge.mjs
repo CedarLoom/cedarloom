@@ -9,7 +9,7 @@ import { dirname, join, posix, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GIT, gitEnv } from '../debloat/token-budget.mjs';
 
-export const KINDS = ['verdicts', 'tests', 'architecture', 'tools', 'questions'];
+const KINDS = ['verdicts', 'tests', 'architecture', 'tools', 'questions'];
 const VERDICTS = ['open', 'fixed', 'kept', 'rejected', 'issue'];
 const BASE = '.cedarloom/knowledge';
 const MAX_BYTES = 1024 * 1024;
@@ -26,7 +26,7 @@ export class BadInput extends Error {}
 // No fsmonitor, which the repository's configuration could start; a git that hangs is killed after a minute.
 const gitOptions = { env: gitEnv(), windowsHide: true, timeout: 60_000, killSignal: 'SIGKILL' };
 const gitArgs = (root, args) => {
-  if (!GIT) throw new Error('git is not in /usr/bin, /usr/local/bin, /opt/homebrew/bin or Program Files');
+  if (!GIT) throw new Error('git is not in the macOS developer tools, /usr/bin, /usr/local/bin, /opt/homebrew/bin or Program Files');
   return [GIT, ['-c', 'core.fsmonitor=false', '-C', root, ...args]];
 };
 const git = (root, ...args) => execFileSync(...gitArgs(root, args), { ...gitOptions, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -166,6 +166,8 @@ function stored(root, kind, e, context) {
     const problem = verdictProblem(entry);
     if (problem) throw new BadInput(`${where}: ${problem}`);
   }
+  // capped() would drop every stored entry and then this one.
+  if (FRAME + entryBytes(entry) > MAX_BYTES) throw new BadInput(`${where}: larger than the 1 MiB a file may hold`);
   return entry;
 }
 
@@ -189,9 +191,12 @@ function capped(entries) {
   return { entries: entries.filter((_, i) => !drop.has(i)), dropped: drop.size };
 }
 
-// Whether git ignores the file of every kind; check-ignore prints each ignored path and exits 0 when it printed one, 1 when none.
+// The file a write fills before it renames it over the kind's file.
+const tempOf = (path) => `${path}.${process.pid}.tmp`;
+
+// Whether git ignores the file of every kind and its temporary file; check-ignore prints each ignored path and exits 0 when it printed one, 1 when none.
 function allIgnored(root) {
-  const paths = KINDS.map((k) => `${BASE}/${k}.json`);
+  const paths = KINDS.flatMap((k) => [`${BASE}/${k}.json`, tempOf(`${BASE}/${k}.json`)]);
   const check = spawnSync(...gitArgs(root, ['check-ignore', '--', ...paths]), { ...gitOptions, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   if (check.status !== 0 && check.status !== 1) throw new Error(`git check-ignore failed: ${check.error?.message ?? check.stderr.trim()}`);
   return check.stdout.split('\n').filter(Boolean).length === paths.length;
@@ -205,10 +210,11 @@ function keepLocal(root) {
   mkdirSync(dirname(exclude), { recursive: true });
   let text = '';
   try { text = readFileSync(exclude, 'utf8'); } catch (e) { if (e.code !== 'ENOENT') throw e; }
-  appendFileSync(exclude, `${text && !text.endsWith('\n') ? '\n' : ''}${BASE}/\n`);
+  const added = !text.split(/\r?\n/).includes(`${BASE}/`);
+  if (added) appendFileSync(exclude, `${text && !text.endsWith('\n') ? '\n' : ''}${BASE}/\n`);
   // A negation in .gitignore outranks info/exclude.
   if (!allIgnored(root)) throw new Refused(`git does not ignore ${BASE}/ even with the line in info/exclude: a .gitignore rule keeps it`);
-  return true;
+  return added;
 }
 
 export function writeBase(root, input, now) {
@@ -233,7 +239,7 @@ export function writeBase(root, input, now) {
     const { entries, dropped } = capped([...byId.values()]);
     // A new file renamed over the old one replaces a link there instead of writing through it.
     const path = join(dir, `${kind}.json`);
-    const temp = `${path}.${process.pid}.tmp`;
+    const temp = tempOf(path);
     writeFileSync(temp, serialized(entries), { mode: 0o600, flag: 'wx' });
     renameSync(temp, path);
     chmodSync(path, 0o600);
@@ -243,7 +249,7 @@ export function writeBase(root, input, now) {
   return out;
 }
 
-export function run(argv, { cwd, stdin, now, print }) {
+function run(argv, { cwd, stdin, now, print }) {
   const [command, ...rest] = argv;
   if (rest.length || !['read', 'write'].includes(command)) throw new BadInput('usage: node knowledge.mjs read | node knowledge.mjs write < entries.json');
   const root = git(cwd, 'rev-parse', '--show-toplevel');
