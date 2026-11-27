@@ -42,7 +42,21 @@ function declarations(tokens, scheme) {
 }
 
 function fontFamily(family) {
-  return family.map((name) => (/^[\w-]+$/.test(name) ? name : `"${name}"`)).join(', ');
+  return family.map((name) => (/^[\w-]+$/.test(name) ? name : `"${name}"`));
+}
+
+// As Biome prints it at 120 columns: a longer list moves below the name and fills lines indented by four spaces.
+function listDeclaration(name, items) {
+  const line = `  ${name}: ${items.join(', ')};`;
+  if (line.length <= 120) return line;
+  const lines = [];
+  for (const [index, item] of items.entries()) {
+    const text = `${item}${index === items.length - 1 ? ';' : ','}`;
+    const last = lines.at(-1);
+    if (last !== undefined && `${last} ${text}`.length <= 120) lines[lines.length - 1] = `${last} ${text}`;
+    else lines.push(`    ${text}`);
+  }
+  return [`  ${name}:`, ...lines].join('\n');
 }
 
 function tokensCss(tokens) {
@@ -79,7 +93,7 @@ function tokensCss(tokens) {
 ${[...faces, fallbackFace].join('\n\n')}
 
 :root {
-  --cl-font-family: ${fontFamily([family, `${family} Fallback`, ...fallbacks])};
+${listDeclaration('--cl-font-family', fontFamily([family, `${family} Fallback`, ...fallbacks]))}
 ${weights.join('\n')}
 ${light}
 }
