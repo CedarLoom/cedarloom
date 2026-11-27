@@ -120,13 +120,15 @@ function writeLocked(path, fn, sleep) {
       sleep(10);
     }
   } catch (e) { rmSync(own, { recursive: true, force: true }); throw e; }
-  // A writer that died before its rename left its own folder: gone once its holder is.
-  const prefix = `${basename(lock)}-new-`;
-  for (const name of readdirSync(dirname(path)).filter((n) => n.startsWith(prefix))) {
-    const holder = holderIn(join(dirname(path), name, name.slice(prefix.length)));
-    if (holder && gone(holder)) rmSync(join(dirname(path), name), { recursive: true, force: true });
-  }
-  try { return fn(); } finally {
+  try {
+    // A writer that died before its rename left its own folder: gone once its holder is.
+    const prefix = `${basename(lock)}-new-`;
+    for (const name of readdirSync(dirname(path)).filter((n) => n.startsWith(prefix))) {
+      const holder = holderIn(join(dirname(path), name, name.slice(prefix.length)));
+      if (holder && gone(holder)) rmSync(join(dirname(path), name), { recursive: true, force: true });
+    }
+    return fn();
+  } finally {
     rmSync(join(lock, token), { force: true });
     try { rmdirSync(lock); } catch (e) { if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(e.code)) throw e; }
   }
