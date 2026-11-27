@@ -188,6 +188,11 @@ test('catch-up 5: a bot pull request whose head is red or in conflict and not ha
     github({ prs: [pr({ statusCheckRollup: [ci('SUCCESS', ago(20)), ci(conclusion, ago(10))] })] });
     assert.deepEqual(check(stateWith()), NOTHING);
   }
+  // Of runs that started in the same second, a failed one counts before a cancelled one, in either order.
+  for (const rollup of [[ci('CANCELLED', ago(10)), ci('FAILURE', ago(10))], [ci('FAILURE', ago(10)), ci('CANCELLED', ago(10))]]) {
+    github({ prs: [pr({ statusCheckRollup: rollup })] });
+    assert.ok(holds(5)(check(stateWith())));
+  }
 });
 
 test('catch-up 6: a green bot pull request without a review, verdict or recent claim for its head starts a run', () => {

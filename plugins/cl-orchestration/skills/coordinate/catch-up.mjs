@@ -14,7 +14,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { answer, readQueue } from './approval.mjs';
-import { checkStates, redRuns, unconfirmed } from './merge.mjs';
+import { checkStates, FAILED, redRuns, unconfirmed } from './merge.mjs';
 import { errorLine, json, read, sh } from './policy.mjs';
 import { asks, originRepo, trusts, writers } from './precheck.mjs';
 import { count, inspectLock, isPrFile, LIMITS, logged, RED_MAIN, TIP } from './state.mjs';
@@ -28,10 +28,7 @@ const WATCH_MIN = 10 * MINUTE;
 const ANSWER_DAYS = 7;
 const BOT_BRANCH = /^[a-z]+\/([1-9]\d*)-./;
 
-// The conclusions that make a check red. A cancelled, stale or action-required check counts as pending: a fix run finds nothing to fix there (bot-project.md, Pull request events).
-const FAILED = ['FAILURE', 'TIMED_OUT', 'STARTUP_FAILURE', 'ERROR'];
-
-// 'none', 'red', 'pending' or 'green' of a statusCheckRollup, from the newest run of each check.
+// 'none', 'red', 'pending' or 'green' of a statusCheckRollup, from the newest run of each check. A red check that did not fail counts as pending: a fix run finds nothing to fix there (bot-project.md, Pull request events).
 function checks(rollup) {
   const states = checkStates(rollup).map((c) => (c.state === 'red' && !FAILED.includes(c.conclusion) ? 'pending' : c.state));
   if (!states.length) return 'none';
