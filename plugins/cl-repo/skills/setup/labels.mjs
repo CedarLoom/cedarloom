@@ -26,7 +26,7 @@ const key = (name) => name.toLowerCase();
 
 // The label set with the policy's start label in place of cl:ready-for-agent; a start label equal to another label of the set is refused.
 export function labelSet(start = START) {
-  if (start !== START && LABELS.some(([name]) => key(name) === key(start))) throw new Error(`the start label ${start} is another CedarLoom label`);
+  if (LABELS.some(([name]) => name !== START && key(name) === key(start))) throw new Error(`the start label ${start} is another CedarLoom label`);
   return LABELS.map(([name, description]) => ({ name: name === START ? start : name, description }));
 }
 

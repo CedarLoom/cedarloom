@@ -19,8 +19,9 @@ test('labels: an existing label in another case counts as present', () => {
   assert.deepEqual(names(missing(existing)), ['cl:needs-human', 'cl:in-progress', 'cl:deferred', 'cl:follow-up']);
 });
 
-test('labels: a start label equal to another CedarLoom label is refused', () => {
+test('labels: a start label equal to another CedarLoom label is refused, a case variant of its own accepted', () => {
   assert.throws(() => missing('[]', 'CL:Follow-Up'), /the start label CL:Follow-Up is another CedarLoom label/);
+  assert.deepEqual(names(missing('[]', 'CL:Ready-For-Agent')).slice(0, 2), ['cl:plan', 'CL:Ready-For-Agent']);
 });
 
 test('labels: create runs gh for each approved label and returns the commands that failed', () => {
