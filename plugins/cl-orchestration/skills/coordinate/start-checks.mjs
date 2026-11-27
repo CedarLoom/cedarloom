@@ -1,7 +1,7 @@
 // Usage: node start-checks.mjs --project <path> [--worktree <path>] [--config-dir <path>] [--claude-json <file>] [--managed <folder>], the paths absolute.
 // Checks 3 and 4 of Automatic start (automatic-start.md) for an automatic worker of the project checked out at <project>, starting in <worktree>: the settings files are the managed ones (<managed>/managed-settings.json and managed-settings.d/*.json), the user's (<config dir>/settings.json), and .claude/settings.json and .claude/settings.local.json of the main checkout and of the worktree; the MCP servers those of <managed>/managed-mcp.json, <claude json>, .mcp.json of the main checkout and of the worktree, and the installed plugins'.
 // --config-dir defaults to $CLAUDE_CONFIG_DIR, else ~/.claude; --claude-json to .claude.json in a config dir that is set, else ~/.claude.json; --managed to the platform's folder. Without --worktree, an absolute additionalDirectories entry counts as outside the worktree.
-// Prints { failed, read, unresolved, allowRules } as JSON. Exit 0: both checks pass for what the script reads. Exit 1: a check failed (failed names each entry) or a file could not be read (one line on stderr). Exit 2: nothing failed, but each command of read runs outside the permission rules and the role guard and is not one the script can judge, or unresolved names a source or entry the script could not resolve: the checks pass only when your read of each clears it.
+// Prints { failed, read, unresolved, allowRules, classifyAllShell } as JSON. Exit 0: both checks pass for what the script reads. Exit 1: a check failed (failed names each entry) or a file could not be read (one line on stderr). Exit 2: nothing failed, but each command of read runs outside the permission rules and the role guard and is not one the script can judge, or unresolved names a source or entry the script could not resolve: the checks pass only when your read of each clears it.
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -117,7 +117,7 @@ function nested(folder) {
 }
 
 export function startChecks({ project, worktree, configDir, claudeJson, managedDir, home, env = {} }) {
-  const failed = [], toRead = [], unresolved = [], allowRules = [];
+  const failed = [], toRead = [], unresolved = [], allowRules = [], classifyAllShell = [];
   const fail = (check, source, entry) => failed.push({ check, source, entry: escaped(String(entry)) });
   const cannot = (source, reason) => unresolved.push({ source, reason: escaped(String(reason)) });
   const checkouts = [project, ...(worktree ? [worktree] : [])];
@@ -284,7 +284,10 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
     if ((scope === 'managed' || scope === 'user') && settings.autoMode !== undefined) {
       if (!plain(settings.autoMode)) cannot(file, 'autoMode is no object');
       else for (const [key, list] of Object.entries(settings.autoMode)) {
-        if (key === 'classifyAllShell') { if (typeof list !== 'boolean') cannot(file, `autoMode.classifyAllShell is no boolean: ${JSON.stringify(list)}`); }
+        if (key === 'classifyAllShell') {
+          if (typeof list === 'boolean') classifyAllShell.push({ source: file, value: list });
+          else cannot(file, `autoMode.classifyAllShell is no boolean: ${JSON.stringify(list)}`);
+        }
         else if (!Array.isArray(list) || !list.includes('$defaults')) cannot(file, `autoMode.${key} is no list with "$defaults", which keeps the classifier's built-in rules: ${JSON.stringify(list)}`);
         else if ((key === 'allow' || key === 'environment') && list.some((e) => e !== '$defaults')) cannot(file, `autoMode.${key} can widen what auto mode's classifier lets pass: ${JSON.stringify(list)}`);
       }
@@ -298,7 +301,7 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
       else allowRules.push({ source: file, rule: escaped(text) });
     }
   }
-  return { failed, read: toRead, unresolved, allowRules };
+  return { failed, read: toRead, unresolved, allowRules, classifyAllShell };
 }
 
 const FLAGS = { project: { type: 'string' }, worktree: { type: 'string' }, 'config-dir': { type: 'string' }, 'claude-json': { type: 'string' }, managed: { type: 'string' } };
