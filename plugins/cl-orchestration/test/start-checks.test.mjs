@@ -274,14 +274,15 @@ test('start-checks: a settings key the script does not know to run no command is
 test('start-checks: settings that keep the worker out of auto mode, turn off hooks, set the role or turn on the sandbox fail check 4', () => {
   const s = setup({
     'managed/managed-settings.json': { permissions: { disableAutoMode: 'disable' }, allowManagedHooksOnly: true },
-    'home/.claude/settings.json': { disableAllHooks: true, sandbox: { enabled: true } },
+    'home/.claude/settings.json': { disableAllHooks: true, sandbox: { enabled: true }, disableAutoMode: 'disable' },
     'project/.claude/settings.local.json': { env: { CEDARLOOM_ROLE: 'coordinator' }, sandbox: {} },
-    'wt/.claude/settings.json': { disableAllHooks: false, sandbox: { enabled: false }, permissions: { disableAutoMode: false } },
+    'wt/.claude/settings.json': { disableAllHooks: false, sandbox: { enabled: false }, permissions: { disableAutoMode: false }, disableAutoMode: false },
   });
   const r = s.run();
   assert.deepEqual(r.failed.filter((f) => f.check === 4).map((f) => [f.source.slice(s.dir.length + 1), f.entry]), [
     ['managed/managed-settings.json', 'permissions.disableAutoMode keeps the worker out of auto mode: "disable"'],
     ['managed/managed-settings.json', 'allowManagedHooksOnly can turn off the role guard'],
+    ['home/.claude/settings.json', 'disableAutoMode keeps the worker out of auto mode: "disable"'],
     ['home/.claude/settings.json', 'disableAllHooks turns off the role guard'],
     ['home/.claude/settings.json', 'sandbox: CedarLoom ignores the Claude Code sandbox and does not support it; set sandbox.enabled to false or remove the key'],
     ['project/.claude/settings.local.json', 'env sets CEDARLOOM_ROLE, which the worker must not inherit'],
