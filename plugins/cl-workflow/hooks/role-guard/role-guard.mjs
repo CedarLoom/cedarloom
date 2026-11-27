@@ -275,11 +275,12 @@ const SAFE_LONG = new Map(
     cut: ['delimiter', 'fields', 'characters', 'bytes'],
   }).map(([name, options]) => [name, new Set(options)]),
 );
-// A reader or filter with no env assignment before it (RIPGREP_CONFIG_PATH can name a config with --pre) and only its safe long options.
+// A reader or filter after nothing but wrapper names and durations, so no wrapper option or env assignment (env -S can set
+// RIPGREP_CONFIG_PATH, which can name a config with --pre), and with only its safe long options.
 const plain = ({ words }, powershell) => {
   const at = programIndex(words, powershell);
   const safe = at < 0 ? undefined : SAFE_LONG.get(program(words[at]));
-  if (!safe || words.slice(0, at).some((w) => /^[A-Za-z_]\w*=/.test(w))) return false;
+  if (!safe || words.slice(0, at).some((w) => !WRAPPERS.has(program(w)) && !/^\d+(\.\d+)?[smhd]?$/.test(w))) return false;
   return words.slice(at + 1).every((w) => !w.startsWith('--') || w === '--' || safe.has(w.slice(2).split('=')[0]));
 };
 // Some command of the line may run what a reader prints: one that is no plain reader or filter (an unknown program fails closed), or a redirect.

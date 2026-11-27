@@ -122,12 +122,14 @@ const DENIED = [
   "echo | rg -r 'gh pr merge 1' '^' | tcsh",
   "echo | grep -H --label 'gh pr merge 1;' '' | awk '{system($0)}'",
   "echo | rg -r 'gh pr merge 1' '^' | caffeinate sh",
-  // sort and rg run a program on what they read: a reader's text stays read as commands unless every long option is a safe one.
+  // sort and rg run a program on what they read: a reader's text stays read as commands unless every long option is a safe one
+  // and no wrapper option or env assignment comes before the program.
   "rg --no-heading --no-filename -N -r 'gh pr merge 12 --squash' '^.*$' README.md | sort -S 1b --compress-program=sh",
   "rg -N -r 'gh pr merge 12' '^.*$' README.md | sort -S 1b --co=sh",
   "rg -N -r 'gh pr merge 12' '^.*$' README.md | rg --pre sh x /dev/stdin",
   "rg -N -r 'gh pr merge 12' '^.*$' README.md | rg --pre=sh x /dev/stdin",
   "rg -N -r 'gh pr merge 12' '^.*$' README.md | RIPGREP_CONFIG_PATH=pre.cfg rg x /dev/stdin",
+  "rg -N -r 'gh pr merge 12' '^.*$' README.md | env -SRIPGREP_CONFIG_PATH=pre.cfg rg x /dev/stdin",
 ];
 
 const ALLOWED = [
@@ -437,6 +439,7 @@ test('role guard: the builder bot refuses git in a line that runs text as comman
     "git log -1 --format='%x67it push origin main' | sort -S 1b --compress-program=sh",
     "git log -1 --format='%x67it push origin main' | sort -S 1b --co=sh",
     "git log -1 --format='%x67it push origin main' | rg --pre sh x /dev/stdin",
+    "git log -1 --format='%x67it push origin main' | env -SRIPGREP_CONFIG_PATH=pre.cfg rg x /dev/stdin",
   ];
   for (const command of hidden) assert.equal(decision(command, { role: 'builder-bot', cwd: feature }), 'deny', command);
 });
