@@ -31,7 +31,8 @@ const refuse = (step, message) => { throw new Refused(step, message); };
 // A command that fails is a refusal of the step that ran it, with git's own reason: a push or fetch prints its remote's URL before it.
 const failure = (e) => {
   const lines = (e.stderr?.toString().trim() || e.message).split('\n');
-  return (lines.find((line) => /^\s*(!|error:|fatal:)/.test(line)) ?? lines[0]).trim();
+  // origin's own error (remote: error: cannot lock ref ...) comes before its ! [remote rejected] summary.
+  return (lines.find((line) => /^\s*(!|(remote: )?(error|fatal):)/.test(line)) ?? lines[0]).trim();
 };
 const during = (step, fn) => { try { return fn(); } catch (e) { if (e instanceof Refused) throw e; return refuse(step, failure(e)); } };
 

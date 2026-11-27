@@ -435,6 +435,13 @@ test('commit-push: a push origin refuses as no fast-forward names git\'s reason,
   refused(result, new RegExp(`^push: ! \\[rejected\\] +${head} -> ${BRANCH} \\(non-fast-forward\\)$`));
 });
 
+test('commit-push: a ref origin cannot lock names origin\'s own error, not its summary', () => {
+  const s = setup();
+  mkdirSync(join(s.origin, 'refs/heads/feat'), { recursive: true });
+  writeFileSync(join(s.origin, `refs/heads/${BRANCH}.lock`), '');
+  refused(s.run('commit', ...s.flags, '--file', 'src/a.txt'), new RegExp(`^push: remote: error: cannot lock ref 'refs/heads/${BRANCH}'`));
+});
+
 test('commit-push: owned checks every file a branch publishes, the local branch or with --origin origin\'s', () => {
   const s = setup();
   s.inW('commit', '-qm', 'add a');
