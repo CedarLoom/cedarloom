@@ -1,10 +1,11 @@
-# Bot brief: names, roles and owner-only decisions
+# Bot brief: names, policy, roles and owner-only decisions
 
 ## Names
 
 - The one exception to the command rule: a pull request's file path inside single quotes, in a scratch clone ([scratch-clone.md](scratch-clone.md)).
-- `<owner/repo>` and `<default branch>` are what `gh repo view --json nameWithOwner,defaultBranchRef` prints in the bot's checkout, used only when both are plain (letters, digits, `.`, `_`, `/`, `-`; no `-` at the start, no `..`) and `nameWithOwner` is the repository of `origin`. Otherwise nothing starts there: report it.
+- `<owner/repo>` and `<default branch>` are what `gh repo view --json nameWithOwner,defaultBranchRef` prints in the bot's checkout (for the `coordinate` entry, the repository path it was given), used only when both are plain (letters, digits, `.`, `_`, `/`, `-`; no `-` at the start, no `..`) and `nameWithOwner` is the repository of that checkout's `git remote get-url origin` (case and a `.git` suffix ignored). Otherwise nothing starts there: report it.
 - Every other `gh` command names its repository with `-R` or in the API path.
+- A project's work items (`startLabel` issues), follow-up issues and questions live in `<owner/repo>`; a policy names no other repository (the reader refuses `issues.repository`).
 - A branch is `<type>/<number>-<slug>`, type and slug in lower-case letters, digits and hyphens. A branch name goes into a command only when it is plain as `merge-checks.mjs` requires.
 - Numbers and commit ids come from `gh` and `git` output; names from the state file or the spec the project bot wrote.
 - Per pull request: the state file `pr-<n>.json`, the event automations `<owner/repo>#<n> <event>`, the clones `<bot home>/clones/<repo>-<n>-<counter>`.
@@ -27,7 +28,13 @@ All bots and workers may act under one GitHub login, so each line holds by these
 | Maintenance pass | a maintain bot run, skipped in a private repository while a maintenance pull request is open; its findings wait for the owner's approval | a change before it |
 | Close an issue, file follow-up issues in a private repository, answer a worker's question from written sources | the project bot | role bots |
 | The state folder, clones and the shared git directory | the project bot; the merge lock `merge.mjs` alone | role bots |
-| Model and effort | the model map ([Policy](SKILL.md#policy)) is the ceiling; the project bot names them per run | a run above them |
+| Model and effort | the model map ([Policy and model map](#policy-and-model-map)) is the ceiling; the project bot names them per run | a run above them |
+
+## Policy and model map
+
+`<project path>` is the bot's `<clone>`. `node <skill folder>/policy.mjs <project path>` prints each project's effective policy; exit 1 means no policy, so no pick, merge, issue close or branch deletion in that project. The reader's rules and every field with its default: [policy.md](policy.md).
+
+The model and effort of every session and subagent come from the model map, with the project's `cedarloom.json` as the reader read it, never the working tree's: `git -C <project path> show <commit>:cedarloom.json | node <workflow skill folder>/models.mjs --repository - --depth <depth> --risk <class>` (the `commit` the reader printed; the folder of the `cl-workflow:workflow` skill), or, where the reader found no `cedarloom.json`, `node <workflow skill folder>/models.mjs --depth <depth> --risk <class>`. It prints each task's value with the row and file that set it, from CedarLoom's defaults, the user file `~/.config/cedarloom/cedarloom.json` and that `cedarloom.json`. A sensitive change looks up risk `high`, one to authentication, permissions, secrets, input validation or firmware safety `critical`. A worker runs as `implement` at its depth and risk, or `research` for a research issue.
 
 ## Owner-only decisions
 

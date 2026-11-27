@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     Dry run of the next wake-up: run no command, change no file, and decide from these facts as the skill says.
     - `project` is example-org/widget, mode supervised; every worker of the run is a Claude Code worker. Worker slots are free on the project and on the host.
     - The worker of issue 12 reported BLOCKED: its role check failed, and the output it quotes is `coordinator`.

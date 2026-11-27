@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     Dry run of the host limit count before the next start: run no command, change no file, and decide from these facts as the skill says.
     - The policy reader printed `workersPerProject` 3 and `hostWorkerLimit` 3 for `project`. Issue 31 is the next pick there, a Claude Code worker.
     - `orca orchestration run-list --json` shows two runs: `run-a`, this run, and `run-b`, a project bot's run on another repository.

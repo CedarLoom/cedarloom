@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the reviewer bot, not for the entry: take `SOUL.md`, then `bot-reviewer.md`, both in this skill's folder, as the procedure.
+
     This is a dry run of one read during the review step: run no command and start no subagent; decide from these facts and the skill's files.
 
     - Pull request 14 of example-org/widget, default branch `main`. `gh pr view 14 -R example-org/widget --json headRefOid,baseRefName,title` printed `headRefOid` `5e1a9c3d7b2f4e6a8c0d2b4f6a8e0c2d4b6f8a13` and `baseRefName` `main`.

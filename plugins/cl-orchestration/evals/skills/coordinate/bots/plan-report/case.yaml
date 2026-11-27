@@ -8,7 +8,7 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
-    This session stands for one pick sweep run of the project bot of example-org/widget (default branch `main`), not for a coordinator run: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure. It is a dry run: run no command and write no file. Decide what the run does with two plan reports, from these facts only.
+    This session stands for one pick sweep run of the project bot of example-org/widget (default branch `main`), not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure. It is a dry run: run no command and write no file. Decide what the run does with two plan reports, from these facts only.
 
     - The prompts folder holds two builder prompt files of round 0, each a plan run (the line `Plan only.`), whose result files hold a plan report: one for issue 12, whose spec's branch is `feat/12-login-timeout`, and one for issue 14, whose spec's branch is `fix/14-cache-key`. Both issues carry `cl:in-progress`.
     - Neither plan lists an open question.

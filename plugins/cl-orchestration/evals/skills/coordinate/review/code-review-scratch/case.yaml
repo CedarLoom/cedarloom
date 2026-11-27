@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the reviewer bot, not for the entry: take `SOUL.md`, then `bot-reviewer.md`, both in this skill's folder, as the procedure.
+
     This run checks one review step only. Act yourself as the fresh reviewer of pull request 14 of example-org/widget that review.md starts (start no reviewer subagent of your own). Your brief is `.cedarloom/runs/r1/review-brief-14.md`, and the scratch clone it names is already cloned and fetched. Run `/code-review` on that diff the way "The commands" in review.md says, at the level of the brief. Start no worker and run no orca or gh command.
 
     Then write one line per Blocking or Important finding, `Finding: <Blocking or Important> <file>:<line> <what is wrong>`, or `Finding: none`, and one line `Code review: <kept, when /code-review reviewed that diff through git; or dropped, and what it read instead>`, then stop.

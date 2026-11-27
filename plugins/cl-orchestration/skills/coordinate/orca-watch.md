@@ -16,8 +16,6 @@ How the coordinator waits:
   - Delete it (`CronDelete`) when the run closes.
 - **Without session crons** (`CronCreate` missing, or `CLAUDE_CODE_DISABLE_CRON` set). It runs `check --wait` for those types with `--timeout-ms 600000` in the foreground, never looped faster than once a minute, and runs the wake-up checks when it returns.
 
-A wait's deadline ([SKILL.md](SKILL.md#waiting)) is checked at a wake: it is a point to report at and ends no run.
-
 At each wake-up, including an empty one, run these in this order; a wake-up that skips them lets a failed or finished worker go unseen:
 
 1. `worker-list --run <run id>` for state, with `--full` because the concise rows carry no `projection`.
@@ -44,4 +42,4 @@ In auto mode a single block of the auto mode check refuses one action, and the w
 
 A supervised Claude Code worker on Orca shows no status bar while a permission dialog is open: the dialog takes the prompt area, so its terminal does not show its mode then.
 
-Orca also shows such a dialog as an approval of its own. One nobody answers closes after about 90 seconds as "closed without an answer" while the dialog stays open in the worker's terminal, and from then on an approve or deny through Orca no longer reaches the worker. The coordinator answers neither ([SKILL.md](SKILL.md#rules)): the dialog stays listed for the owner as with `block`, and the item waits.
+Orca also shows such a dialog as an approval of its own. One nobody answers closes after about 90 seconds as "closed without an answer" while the dialog stays open in the worker's terminal, and from then on an approve or deny through Orca no longer reaches the worker. The coordinator answers neither ([Rules](SOUL.md#rules)): the dialog stays listed for the owner as with `block`, and the item waits.

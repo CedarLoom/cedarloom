@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     Dry run, a question about the worker rules: run no command and change no file. A supervised Claude Code worker on Orca for issue 12 of `project` runs with the rule file that worker-settings.mjs wrote from worker-rules.json. The user's settings allow `Bash(git push *)` and `Bash(rm *)`. For each command below, decide whether the rule file's deny rules alone refuse it when the worker runs it in its worktree, leaving aside auto mode's classifier and the role guard:
     1. `git push origin fix/12-login-timeout`
     2. `git -C . push origin fix/12-login-timeout`

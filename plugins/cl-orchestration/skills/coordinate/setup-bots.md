@@ -34,7 +34,7 @@ Owner questions go where `<skill folder>/approvals.md` (Where it goes) says; the
 
 ## Automations
 
-On the project bot, each `--runs-in new --results-to chat --model <model> --effort <effort>` with the model map's `coordinate` task for the clone ([Policy](SKILL.md#policy)), its prompt naming one procedure file:
+On the project bot, each `--runs-in new --results-to chat --model <model> --effort <effort>` with the model map's `coordinate` task for the clone ([Policy and model map](brief-reference.md#policy-and-model-map)), its prompt naming one procedure file:
 
 ```text
 ORCA automations create --bot cl-<repo> --name '<owner/repo> pick' --trigger '*/30 * * * *' --precheck "node <skill folder>/precheck.mjs --prompts <project home>/prompts <clone>" --prompt 'Pick sweep: take <skill folder>/bot-project.md.' <flags> --json
@@ -47,7 +47,7 @@ Event rules and role bot runs are the project bot's runs' to make, never setup's
 
 ## Setup
 
-The setup skill of cl-repo takes these steps in its own phases. It creates no bot.
+The setup skill of cl-repo takes these steps in its own phases, and the `coordinate` entry ([SKILL.md](SKILL.md)) with `setup` in its own steps. Neither creates a bot.
 - **Which bots.** None where no Orca executable is found or the user declines. With `cedarloom.json` on the default branch or in the plan: the project bot and the three role bots. Templates, if wanted, as [The bots](#the-bots) says.
 - **Read only.** `ORCA bot list` and the homes of the bots it lists, `ORCA automations list --json`, an existing `docs/agents/bots.md`, and `<skill folder>`, which must hold `merge.mjs`, `precheck.mjs`, `bot-settings.mjs` and the procedures Automations names, and `<maintain folder>/SKILL.md`: a missing one skips the bots, naming it. Orca keys a bot's home by its name, so a listed bot whose `<clone>` has another `origin` than `<owner/repo>` stops the step, naming that repository. A repository named `builder`, `reviewer`, `maintain` or `security` stops the step, as its project bot would take a role bot's name. A plugin update moves both folders: compare each automation's filled text, its `--precheck` string included, with the plan `SOUL.md`'s paths with them and each settings file with `bot-settings.mjs --check`, and propose each that differs and a missing `<project home>/prompts/`. A prompt file there whose role is none of `builder`, `reviewer` and `maintain` stops the step, naming it: its run's result is read, or its issue released (`cl:in-progress` off), and the file deleted, by hand first, since the precheck reads no such file. Ask the reconciliation time, the maintenance weekday and time, and a pre-merge command (none recommended). Before any role bot is planned, also where `ORCA bot list` shows none, state what [The bots](#the-bots) says the role bots share and ask whether this repository's runs must stay apart (yes recommended where an existing `docs/agents/bots.md` names fresh workers for each role, else no): a yes plans fresh workers for each role in `docs/agents/bots.md` and no role bot work for this repository.
 - **Plan.** A filled path stays inside quotes in each command, in single quotes within a `--precheck` string; a path that holds a quote stops the step, naming it. `docs/agents/bots.md`, committed, with no local path; per bot its card (name, purpose, look), its home files, the clone and the automations, each with its filled text. Bot homes and automations belong to the repository's bots, not to user scope.

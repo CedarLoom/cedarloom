@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     Dry run of one worker start: run no command, change no file, and decide from these facts as the skill says.
     - `project` is example-org/widget, mode supervised. Issue 12 (slug `login-timeout`) starts one Claude Code worker; this is its first start in the run, and no retry has run yet.
     - `orca worktree create --name 12-login-timeout --repo path:<project path> --base-branch main --no-parent --setup run --json` printed the worktree path `/work/widget-worktrees/12-login-timeout`.

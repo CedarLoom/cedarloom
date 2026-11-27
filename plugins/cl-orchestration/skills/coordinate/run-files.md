@@ -38,7 +38,7 @@ Models: <alias> = <concrete model>, ...
 
 ## Clean up
 
-A worker whose terminal a person typed in gets none of these steps ([Rules](SKILL.md#rules)).
+A worker whose terminal a person typed in gets none of these steps ([Clean up](orca-clean-up.md)).
 
 Each step is separate; do the ones the outcome allows, in this order:
 

@@ -7,12 +7,12 @@ These suites check that the `coordinate` skill does what its text says, on small
 | Path | Holds |
 |---|---|
 | `skills/coordinate/<area>/<case>/case.yaml` | one case: the prompt, the limits and the graders |
-| `skills/coordinate/<area>/<case>/setup.sh` | the scaffold: the project the coordinator works on and the fakes' answers |
+| `skills/coordinate/<area>/<case>/setup.sh` | the scaffold: the project the bot works on and the fakes' answers |
 | `bin/orca`, `bin/gh` | the fakes, run by [`test/fake-orca.mjs`](../test/fake-orca.mjs) |
 
 - One suite per area, tagged `coord-<area>`; every case is also tagged `cl-orchestration`, and named `coord-<area>-<case>`.
-- Each case starts the skill as the owner does, `/cl-orchestration:coordinate <project path>`, and cites the public issue or pull request it comes from in its `description`, or says it is constructed and names the rule's file and line.
-- A case that only checks a decision states the facts in its prompt, grants no gated tool and ends with a stop line ("write the lines ..., then stop"). A case that checks the commands the coordinator runs lists `Bash` and grades the fakes' call logs.
+- Each case starts the skill with `/cl-orchestration:coordinate <project path>`, which loads it, then has the session take `SOUL.md` and one procedure file (`bot-project.md`, `bot-catch-up.md`, `bot-upkeep.md` or `bot-reviewer.md`) as an automation's prompt does, and cites the public issue or pull request it comes from in its `description`, or says it is constructed and names the rule's file and line.
+- A case that only checks a decision states the facts in its prompt, grants no gated tool and ends with a stop line ("write the lines ..., then stop"). A case that checks the commands the session runs lists `Bash` and grades the fakes' call logs.
 - `coord-review-code-review-scratch` shows whether `/code-review` reviews a scratch clone diff read only through `git -C` (review.md, The commands): its `Code review:` line says whether `/code-review` read the diff or the reviewer fell back to its own pass.
 
 ## The fakes

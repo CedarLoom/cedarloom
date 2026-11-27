@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     The run is already under way; this turn is one clean-up only. `worker-12.md` holds the worker's facts: its pull request is merged, so clean it up as the skill says, the release and the worktree removal only (no branch deletion, no reconciliation, no pick, no new start). The Orca executable is `orca`. Change no file but what the clean-up itself removes.
 
     Then write exactly these lines, and stop:

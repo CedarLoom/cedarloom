@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-upkeep.md`, both in this skill's folder, as the procedure.
+
     This is a dry run: run no command, start nothing and write no file. Decide from the facts below and the files named.
 
     A new run starts in this working directory on 2026-11-25; the earlier run closed on 2026-11-10. No worker has started in project (example-org/widget, default branch main) in this run yet. The merge log is `.cedarloom/runs/merge-log.md`, the config listing beside it `.cedarloom/runs/git-config-example-org-widget.txt`, and the reads of steps 1 to 4 of this Reconciliation are in `.cedarloom/runs/r-1125/reads.md`.

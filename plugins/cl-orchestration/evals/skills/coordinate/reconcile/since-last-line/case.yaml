@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-upkeep.md`, both in this skill's folder, as the procedure.
+
     This is a dry run: run no command, start nothing and write no file. Decide from the facts below and the file named.
 
     A run is open in this working directory, and the daily Reconciliation of project is due now (2026-11-25, 08:00 UTC). In project, `gh repo view --json nameWithOwner,defaultBranchRef` prints `{"nameWithOwner":"example-org/widget","defaultBranchRef":{"name":"trunk"}}`, and its origin is https://github.com/example-org/widget.git. The merge log is `.cedarloom/runs/merge-log.md`.

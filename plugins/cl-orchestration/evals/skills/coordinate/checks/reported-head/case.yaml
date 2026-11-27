@@ -8,6 +8,8 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
+    This session stands for one run of the project bot, not for the entry: take `SOUL.md`, then `bot-project.md`, both in this skill's folder, as the procedure.
+
     This is a dry run: run no command and change no file. Decide from these facts and the skill's text.
 
     - The worker of issue 12 is a supervised Codex worker on branch `fix/12-login-timeout`, with pull request example-org/widget#31 (not from a fork, base `main`). The review of #31 sent it a follow-up for two findings.

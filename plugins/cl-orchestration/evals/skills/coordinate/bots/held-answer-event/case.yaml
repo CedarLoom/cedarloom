@@ -8,7 +8,7 @@ execution:
   prompt: |
     /cl-orchestration:coordinate project
 
-    This session stands for two separate runs of the project bot of example-org/widget, not for a coordinator run: run E, started by its `ci_passed` event rule for pull request 31, takes `SOUL.md`, then `bot-project.md`; run S, a catch-up sweep run that starts a few seconds earlier, takes `SOUL.md`, then `bot-catch-up.md`. All three files are in this skill's folder. It is a dry run: run no command and write no file. Decide each run from these facts only.
+    This session stands for two separate runs of the project bot of example-org/widget, not for the entry: run E, started by its `ci_passed` event rule for pull request 31, takes `SOUL.md`, then `bot-project.md`; run S, a catch-up sweep run that starts a few seconds earlier, takes `SOUL.md`, then `bot-catch-up.md`. All three files are in this skill's folder. It is a dry run: run no command and write no file. Decide each run from these facts only.
 
     - `pr-31.json`: `"handled": { "head": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678", "action": "merge" }`, `"held": "merge stop at a1b2c3d4"`, `"mergeCommandAt": null`.
     - Run E's event names head `a1b2c3d4e5f60718293a4b5c6d7e8f9012345678`.
