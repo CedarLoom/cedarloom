@@ -11,8 +11,8 @@ metadata:
 Every depth:
 - Before the first edit, state your assumptions and the check that proves each step done; loop until those checks pass, and stop and report on the stuck signals of step 6 of [the implement agent](../../agents/implement.md).
 - Keep validation at trust boundaries, error handling that prevents data loss, and security checks.
-- A step here or in the playbooks that asks or waits on the user does so in the session only while the user allows terminal questions. Otherwise its questions go with your recommendations into one issue per task in the project's issue tracker, else the report; take each safe, reversible recommendation (an item without one waits) and go on.
-- An installed skill may run a step of this skill or its playbooks in more detail: these texts set its floor and gates and win where the two differ. Reviews, research notes and pull request text follow these playbooks.
+- Without terminal questions, a step's questions go with your recommendations into one issue per task in the project's issue tracker, else the report; take each safe, reversible recommendation (an item without one waits) and go on.
+- An installed skill may run a step of this skill or its playbooks in more detail: these texts set its floor and gates and win where the two differ; one only the user starts is suggested, then wait; none installed: do the step directly. Reviews, research notes and pull request text follow these playbooks.
 
 1. **Classify.** Kind: software change, docs pass (several documents or product copy checked against the code; a one-file rewrite with no claim about code is a quick software change), research, or a mix or several requests (one item each). Each item gets one depth:
 
@@ -57,16 +57,10 @@ Every depth:
    - Reviews start then, by the depth's playbook with its remediation rounds.
    - Read-only lookups and mechanical reading (file searches, log and CI output, inventories, pull request status) run in a subagent on [map](models.md) task `gather` that edits no file (Claude Code: `cl-workflow:gather`), on `lookup` only for a bounded lookup whose whole input stays under 100,000 tokens.
    - Failed checks rerun after their fix.
-   - Waiting for pull request checks: watch them in the background (GitHub: `gh pr checks --watch --interval 30`; a host without a watch command: one until-loop Monitor, 30 seconds or slower), never a leading `sleep`.
+   - Waiting for pull request checks: watch them in the background (GitHub: `gh pr checks --watch --interval 30`; a host without a watch command: one until-loop Monitor, 30 seconds or slower).
 6. **Report done** with each check's command and result, a "steps skipped" line naming the checklist steps not run (or "none") and what was not checked. After a merge or when the next task is unrelated, suggest a new session (`/clear` in Claude Code).
 
-## Sessions on `fable`
-
-A session itself on `fable` follows these defaults unless the user or spec changes them:
-- works one ticket and ends with that ticket's handoff (a coordinator's worker: the handoff block of its spec);
-- hands off at a task boundary once its context holds 100,000 to 150,000 tokens;
-- goes on only in a new session started from that handoff, never by resuming this one;
-- waits on no other session, and starts one subagent at a time, waiting only on the one that runs its own current step.
+A session itself on `fable` also follows [fable.md](fable.md).
 
 ## Change types
 

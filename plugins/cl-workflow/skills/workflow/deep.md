@@ -1,6 +1,6 @@
 # Deep
 
-Parentheses name the kind of skill that runs a step when installed; one only the user starts is suggested, then wait. None installed: do the step directly.
+Parentheses name the kind of installed skill that may run a step ([SKILL.md](SKILL.md)).
 
 1. Settle the spec: the decisions an agent does not take on its own (deployment target, data storage, module boundaries, core types and interfaces; without terminal questions they go into the task's issue (else the report), and the task waits while other work goes on), terms and decisions recorded (a domain-modeling skill).
    - Add an acceptance table: per requirement the instrument (test, command, screenshot), the wrong implementation it rejects, and where the result is observed.
