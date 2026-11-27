@@ -432,14 +432,21 @@ test('commit-push: a push origin refuses as no fast-forward names git\'s reason,
   s.inW('commit', '-qm', 'add b');
   const head = s.inW('rev-parse', 'HEAD');
   const result = s.run('supervised', '--project', s.project, '--worktree', s.worktree, '--repo', 'owner/project', '--branch', BRANCH, '--default-branch', 'main', '--commit', head, '--owned', 'src');
-  refused(result, new RegExp(`^push: ! \\[rejected\\] +${head} -> ${BRANCH} \\(non-fast-forward\\)$`));
+  refused(result, new RegExp(`^push of ${head}: ! \\[rejected\\] +${head} -> ${BRANCH} \\(non-fast-forward\\)$`));
 });
 
-test('commit-push: a ref origin cannot lock names origin\'s own error, not its summary', () => {
+test('commit-push: a ref origin cannot lock names origin\'s own error and the committed sha, which supervised then pushes', () => {
   const s = setup();
   mkdirSync(join(s.origin, 'refs/heads/feat'), { recursive: true });
   writeFileSync(join(s.origin, `refs/heads/${BRANCH}.lock`), '');
-  refused(s.run('commit', ...s.flags, '--file', 'src/a.txt'), new RegExp(`^push: remote: error: cannot lock ref 'refs/heads/${BRANCH}'`));
+  const result = s.run('commit', ...s.flags, '--file', 'src/a.txt');
+  const sha = s.inW('rev-parse', 'HEAD');
+  refused(result, new RegExp(`^push of ${sha}: remote: error: cannot lock ref 'refs/heads/${BRANCH}'`));
+  renameSync(join(s.origin, `refs/heads/${BRANCH}.lock`), join(s.dir, 'lock'));
+  const retry = s.run('supervised', '--project', s.project, '--worktree', s.worktree, '--repo', 'owner/project', '--branch', BRANCH, '--default-branch', 'main', '--commit', sha, '--owned', 'src');
+  assert.equal(retry.status, 0, retry.stderr);
+  assert.deepEqual(JSON.parse(retry.stdout), { commit: sha, pullRequest: null });
+  assert.equal(execFileSync('git', ['-C', s.origin, 'rev-parse', `refs/heads/${BRANCH}`], { encoding: 'utf8' }).trim(), sha);
 });
 
 test('commit-push: owned checks every file a branch publishes, the local branch or with --origin origin\'s', () => {

@@ -123,8 +123,8 @@ export function sync({ project, worktree, branch, merge = false }, gitInW = gitI
 
 // The end of step 3: the checked sha pushed, never HEAD, and on the first round the draft pull request.
 function publish(git, exec, { repo, branch, defaultBranch, title, body, dryRun }, sha) {
-  // No tag and no submodule commit beside the checked one, whatever push.followTags or push.recurseSubmodules say.
-  during('push', () => git('push', '--quiet', ...(dryRun ? ['--dry-run'] : []), '--no-follow-tags', '--no-recurse-submodules', 'origin', `${sha}:refs/heads/${branch}`));
+  // No tag and no submodule commit beside the checked one, whatever push.followTags or push.recurseSubmodules say. The line names the sha: after commit's step 3, supervised --commit <sha> retries the push.
+  during(`push of ${sha}`, () => git('push', '--quiet', ...(dryRun ? ['--dry-run'] : []), '--no-follow-tags', '--no-recurse-submodules', 'origin', `${sha}:refs/heads/${branch}`));
   if (title === undefined) return { commit: sha, pullRequest: null };
   // The push is done by now, so the line names the pushed sha.
   const url = during(`pull request after the push of ${sha}`, () => exec('gh', ['pr', 'create', '-R', repo, '--draft', '--base', defaultBranch, '--head', branch, '--title', title, '--body-file', body]).trim());

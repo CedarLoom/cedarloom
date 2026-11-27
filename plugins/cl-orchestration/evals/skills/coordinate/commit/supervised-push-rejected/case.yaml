@@ -13,7 +13,7 @@ execution:
     - Project `project`, repository example-org/widget, default branch `main`. Issue 14, branch `fix/14-cache-key`, draft pull request 31 open since the first round.
     - The worker took a review follow-up and reported its branch and the new head commit `7c1e4b9a2d3f5e6a8b9c0d1e2f3a4b5c6d7e8f90`.
     - The `commit-push.mjs supervised` command of Commit and push for that commit exited 1 and printed one line:
-      `push: ! [rejected]        7c1e4b9a2d3f5e6a8b9c0d1e2f3a4b5c6d7e8f90 -> fix/14-cache-key (non-fast-forward)`
+      `push of 7c1e4b9a2d3f5e6a8b9c0d1e2f3a4b5c6d7e8f90: ! [rejected]        7c1e4b9a2d3f5e6a8b9c0d1e2f3a4b5c6d7e8f90 -> fix/14-cache-key (non-fast-forward)`
 
     Write exactly these three lines:
     Decision: <pushed later | BLOCKED>
