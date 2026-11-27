@@ -71,18 +71,23 @@ const WRAPPERS = new Map([
 // (=, +=, ??=) as words before the command.
 const PS_TARGET = /^(\[[^\]]*\])*\$\S+$/;
 const PS_OPERATOR = /^(\?\?|[-+*/%])?=$/;
-// Word j runs as the command: every word before it is an env assignment, a wrapper, a wrapper's option with its value, a
-// duration (timeout 10), or in PowerShell an assignment's target or operator.
-function runs(words, j, powershell) {
+// The index of the word that runs as the program, -1 for none: every word before it is an env assignment, a wrapper, a wrapper's
+// option with its value, a duration (timeout 10), or in PowerShell an assignment's target or operator.
+function programIndex(words, powershell) {
   let values = [];
-  for (let i = 0; i < j; i++) {
+  for (let i = 0; i < words.length; i++) {
     const w = words[i];
     if (WRAPPERS.has(program(w))) values = WRAPPERS.get(program(w));
     else if (w.startsWith('-')) i += values.includes(w) ? 1 : 0;
     else if (powershell && (PS_TARGET.test(w) || PS_OPERATOR.test(w))) values = [];
-    else if (!/^([A-Za-z_]\w*=|\d+(\.\d+)?[smhd]?$)/.test(w)) return false;
+    else if (!/^([A-Za-z_]\w*=|\d+(\.\d+)?[smhd]?$)/.test(w)) return i;
   }
-  return true;
+  return -1;
+}
+// Word j may run as the command: it stands at or before the program, so the words before it are all ones programIndex skips.
+function runs(words, j, powershell) {
+  const at = programIndex(words, powershell);
+  return at < 0 || at >= j;
 }
 
 // gh flags that take the next word as their value, wherever they stand (gh pr -R owner/repo merge).
@@ -131,7 +136,7 @@ const BASH_QUOTED_ESCAPES = '$`"\\';
 // @{ a = gh }): the words after each = of a command are read as a command of their own as well.
 // An ANSI-C quoted string ($'...') holds its decoded value, as the shell of mode reads it (ansi-c-quote.mjs).
 function commands(source, powershell, nested = false, mode = 'bash') {
-  /** @type {{ words: string[], targets: string[], nested: boolean }[]} */
+  /** @type {{ words: string[], targets: string[], nested: boolean, data?: boolean }[]} */
   const out = [];
   const escape = powershell ? '`' : '\\';
   const s = source.replace(powershell ? /`\r?\n/g : /\\\r?\n/g, '');
@@ -140,11 +145,18 @@ function commands(source, powershell, nested = false, mode = 'bash') {
   const blocks = [];
   const endWord = () => {
     if (started) {
+      // An argument of a program that only reads (grep "gh release create" f) is marked data: readings() drops it where no
+      // text of the line runs as commands.
+      const at = powershell || redirect ? -1 : programIndex(words, false);
+      const data = at >= 0 && READERS.has(program(words[at]));
       if (redirect) {
         redirect = false;
         targets.push(word);
       } else words.push(word);
-      if (quoted && /[\s;&|()`<>]/.test(word)) out.push(...(powershell ? commands(word, true, true) : nestedCommands(word)));
+      if (quoted && /[\s;&|()`<>]/.test(word)) {
+        const inner = powershell ? commands(word, true, true) : nestedCommands(word);
+        out.push(...(data ? inner.map((c) => ({ ...c, data: true })) : inner));
+      }
     }
     word = '';
     started = quoted = false;
@@ -222,10 +234,21 @@ function commands(source, powershell, nested = false, mode = 'bash') {
   return out;
 }
 
+// Programs whose arguments are text they search for, never commands they run (GNU sed is not one: its e command runs one).
+const READERS = new Set(['grep', 'egrep', 'fgrep', 'rg']);
+// Programs that run text as commands: their arguments (eval, sh -c, xargs) or their input (a pipe into a shell, source).
+const RUNNERS = new Set(['eval', 'xargs', 'sh', 'bash', 'zsh', 'dash', 'ksh', 'source', '.']);
+// The line runs text as commands that the guard may not read as such, what a reading program prints among it: a backtick or
+// $( substitution, or a runner.
+const runsText = (parsed, source, powershell) =>
+  source.includes('$(') || (!powershell && source.includes('`')) || parsed.some(({ words }) => words.some((w, j) => RUNNERS.has(program(w)) && runs(words, j, powershell)));
+
 // The commands of a command text in each reading a shell may give it: PowerShell's, or those of current bash, bash 3.2 and zsh,
-// which differ only in ANSI-C quoting and a NUL; every check runs on each.
+// which differ only in ANSI-C quoting and a NUL; every check runs on each. A reading program's quoted arguments are left out
+// only in one line (a comment or a here-document on another line could end its quote) that runs no text as commands.
 function readings(source, powershell) {
-  return powershell ? [commands(source, true)] : shellReadings(source, false);
+  const all = powershell ? [commands(source, true)] : shellReadings(source, false);
+  return all.map((parsed) => (source.includes('\n') || runsText(parsed, source, powershell) ? parsed : parsed.filter((c) => !c.data)));
 }
 
 // The readings of a POSIX shell text. A quoted word read again as commands gets every reading too: the shell that runs it
@@ -282,13 +305,11 @@ function folder(dir, args) {
 
 // known: dir is the folder git runs in. Otherwise dir is one of the folders it may run in, and only a named branch is read.
 // switched: an earlier git command in the same command line changes the branch, which the guard reads before the line runs.
-// filled: the shell fills in words of the push at run time (a backtick substitution, or xargs), which the guard never sees.
 // tags: the tags an earlier git tag in the same command line creates, which do not exist yet when the guard reads the repository.
-function push(args, dir, known, role, { switched, filled, tags }) {
+function push(args, dir, known, role, { switched, tags }) {
   if (BOTS.has(role) && !OWN_BRANCH.has(role)) return 'a push';
   const own = OWN_BRANCH.has(role);
   if (own && switched) return 'a push after a branch switch in the same command';
-  if (own && filled) return 'a push whose refspec the shell fills in';
   const positionals = [];
   let repo;
   for (let i = 0; i < args.length; i++) {
@@ -406,6 +427,8 @@ function git(args, cwd, known, gitDir, role, line) {
     if (GIT_VALUE_OPTS.has(args[i])) i++;
   }
   const [sub, ...rest] = args.slice(i);
+  // The builder bot's push is read from its refspec, so the shell may not fill in the subcommand (git $p, git pu?h).
+  if (OWN_BRANCH.has(role) && sub !== undefined && !/^[\w-]+$/.test(sub)) return 'a git command whose subcommand is no plain word';
   if (sub === 'stash') return 'git stash';
   // git then pushes from the repository GIT_DIR or --git-dir names, whose branches and remotes the guard does not read.
   if (sub === 'push' && gitDir) return GIT_DIR_PUSH;
@@ -417,27 +440,6 @@ function git(args, cwd, known, gitDir, role, line) {
   const tag = sub === 'tag' && createdTag(rest);
   if (tag) line.tags.add(tag);
   return sub === 'push' ? push(rest, dir, known, role, line) : null;
-}
-
-// bash runs a backtick substitution anywhere but in single quotes and after a backslash; in $'...' a backslash escapes a quote.
-function backtick(cmd) {
-  let quote = '';
-  for (let i = 0; i < cmd.length; i++) {
-    const c = cmd[i];
-    if (quote === "'") quote = c === "'" ? '' : quote;
-    else if (quote === '$') {
-      if (c === '\\') i++;
-      else if (c === "'") quote = '';
-    } else if (c === '\\') i++;
-    else if (c === '`') return true;
-    else if (c === '"') quote = quote ? '' : '"';
-    else if (quote) continue;
-    else if (c === '$' && cmd[i + 1] === "'") {
-      quote = '$';
-      i++;
-    } else if (c === "'") quote = "'";
-  }
-  return false;
 }
 
 // gh api's flags as gh reads them: grouped short flags (-iX PUT), values joined (-XPUT, --method=PUT) or in the next word.
@@ -573,6 +575,11 @@ function reason({ tool_name: tool, tool_input: toolInput }, cwd, role) {
   const source = [cmd, ...all.flat().flatMap((c) => c.words)].join('\n');
   // Before the command, through env or export in bash, or $env:GIT_DIR in PowerShell.
   const gitDir = /\bGIT_DIR\s*=/i.test(source);
+  // Text run as commands may hide the builder bot's push or its refspec from the guard (sh -c 'git push origin `echo main`'),
+  // also behind an apostrophe in a comment or a here-document, which the guard reads as a quote.
+  if (OWN_BRANCH.has(role) && all.some((parsed) => runsText(parsed, cmd, powershell) && parsed.some(({ words }) => words.some((w) => program(w) === 'git')))) {
+    return 'git in a line that runs text as commands (a backtick or $( substitution, eval, a shell, source or xargs)';
+  }
   for (const parsed of all) {
     const why = checks(parsed, cmd, cwd, role, powershell, source, gitDir);
     if (why) return why;
@@ -588,9 +595,7 @@ function checks(parsed, cmd, cwd, role, powershell, source, gitDir) {
   // not hold where git runs: from then on git is read in every folder seen, and a push has to name its branch.
   let dir = cwd, known = true, first = changesDir(/\S*/.exec(cmd.trimStart())[0]);
   const seen = [cwd];
-  const line = { switched: false, filled: false, tags: new Set() };
-  // The tokenizer ends a command at a backtick, so the raw text tells whether one runs.
-  const substitutes = !powershell && backtick(cmd);
+  const line = { switched: false, tags: new Set() };
   for (const { words, nested } of parsed) {
     if (!words.length) continue;
     const at = words.findIndex(changesDir);
@@ -607,7 +612,6 @@ function checks(parsed, cmd, cwd, role, powershell, source, gitDir) {
     for (let j = 0; j < words.length; j++) {
       const name = program(words[j]);
       const rest = words.slice(j + 1);
-      line.filled = substitutes || words.slice(0, j).some((w) => program(w) === 'xargs');
       const why =
         name === 'git' ? (known ? [dir] : seen).reduce((found, d) => found ?? git(rest, d, known, gitDir, role, line), null)
         : name === 'gh' ? gh(rest, source, role, runs(words, j, powershell))

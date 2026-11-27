@@ -140,6 +140,8 @@ const ALLOWED = [
   'git -C ../other log --oneline',
   'git commit -m "explain the merge"',
   'claude -p "review 12" 2>&1 | tee out.txt',
+  'grep -n "gh release create" scripts/release.sh',
+  "rg -n 'git push origin main' docs | head",
 ];
 
 test('role guard: denies coordinator steps outside the coordinator role, unset or another role', () => {
@@ -397,6 +399,25 @@ test('role guard: the builder bot pushes only the branch checked out where git r
 test('role guard: the builder bot never force-pushes or deletes its branch', () => {
   const forced = ['git push -f origin feat/x', 'git push -uf origin feat/x', 'git push --force origin feat/x', 'git push --force-with-lease origin feat/x', 'git push --forc origin feat/x', 'git push origin +feat/x', 'git push origin +HEAD:feat/x', 'git push -d origin feat/x', 'git push --delete origin feat/x', 'git push origin :feat/x', 'git push origin `echo main`', 'git push origin `echo +feat/x`', 'git push origin `echo HEAD:main`', 'echo main | xargs git push origin'];
   for (const role of ['builder-bot']) for (const command of forced) assert.equal(decision(command, { role, cwd: feature }), 'deny', `${role}: ${command}`);
+});
+
+test('role guard: the builder bot refuses git in a line that runs text as commands and a git subcommand that is no plain word', () => {
+  const hidden = [
+    "sh -c 'git push origin `echo main`'",
+    "eval 'git push origin `echo main`'",
+    "bash -lc 'git push origin `echo main`'",
+    "env sh -c 'git push origin `echo main`'",
+    "echo 'git push origin `echo main`' | sh",
+    "# don't stop\ngit push origin `echo main`",
+    "cat <<EOF\ndon't stop\nEOF\ngit push origin `echo main`",
+    'git `echo push` origin main',
+    'git $(echo push) origin main',
+    'p=push; git $p origin main',
+    'git pu?h origin main',
+    'echo push origin main | xargs git',
+    "echo main | xargs -I feat/x sh -c 'git push origin feat/x'",
+  ];
+  for (const command of hidden) assert.equal(decision(command, { role: 'builder-bot', cwd: feature }), 'deny', command);
 });
 
 test('role guard: a role bot runs only gh commands that read', () => {
