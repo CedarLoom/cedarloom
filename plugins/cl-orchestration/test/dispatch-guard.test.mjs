@@ -234,7 +234,7 @@ test('clone-checkout: checkout, switch, restore and worktree in a scratch clone,
   const changes = Array.from({ length: 30 }, (_, k) => `cd d${k}`).join('; ');
   // From the temp folder: each path lookup under /home goes through the automounter on macOS.
   refused('clone-checkout', [`${changes}; git checkout main`], 'Bash', tmpdir());
-  refused('handoff-size', [`${changes}; echo x > handoff.md`], 'Bash', tmpdir());
+  refused('handoff-size', [`${changes}; echo x > handoff.md`, `${changes}; echo x > /tmp/.cedarloom/runs/handoff.md`], 'Bash', tmpdir());
   passed([`${changes}; git status`], 'Bash', tmpdir());
   // A bot home holds .cedarloom/runs/ and its clones beside it.
   const home = mkdtempSync(join(tmpdir(), 'bot-'));

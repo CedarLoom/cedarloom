@@ -258,8 +258,9 @@ function bypassRules(words, at, refuse) {
 }
 
 function handoffRules({ words, targets }, at, places, powershell, refuse) {
-  // In a folder the guard cannot read, a relative path that ends in handoff.md may be the handoff file.
-  const named = (w) => [...places].some((p) => (p === null ? !isAbsolute(w) && /(^|[/\\])handoff\.md$/i.test(w) : isHandoff(resolve(p, w))));
+  // An absolute path names one file in any folder; in a folder the guard cannot read, a relative path that ends in handoff.md may
+  // be the handoff file.
+  const named = (w) => (isAbsolute(w) ? isHandoff(w) : [...places].some((p) => (p === null ? /(^|[/\\])handoff\.md$/i.test(w) : isHandoff(resolve(p, w)))));
   if (targets.some((t) => expands(t) || named(t))) refuse('handoff-size', 'a redirection that writes the handoff file, or into a path the guard cannot read: write the handoff file with the Write or Edit tool, which this rule measures');
   else if (at >= 0 && !plain({ words }, powershell) && words.slice(at + 1).some((w) => named(w) || (expands(w) && /handoff/i.test(w)))) refuse('handoff-size', 'a command that may write the handoff file: write it with the Write or Edit tool, which this rule measures');
 }
