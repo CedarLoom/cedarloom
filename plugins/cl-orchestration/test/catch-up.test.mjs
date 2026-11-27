@@ -179,6 +179,20 @@ test('catch-up 5: a bot pull request whose head is red or in conflict and not ha
   assert.ok(holds(6)(check(stateWith())));
   github({ prs: [pr({ statusCheckRollup: [ci('SUCCESS', ago(20)), ci('FAILURE', ago(10))] })] });
   assert.ok(holds(5)(check(stateWith())));
+  // Commit statuses count per context: a newer green status of one context hides no red one of another.
+  const status = (context, state, startedAt) => ({ __typename: 'StatusContext', context, state, startedAt });
+  github({ prs: [pr({ statusCheckRollup: [status('lint', 'ERROR', ago(20)), status('deploy', 'SUCCESS', ago(10))] })] });
+  assert.ok(holds(5)(check(stateWith())));
+  // A cancelled or action-required check is no red one: a fix run would find nothing to fix.
+  for (const conclusion of ['CANCELLED', 'ACTION_REQUIRED']) {
+    github({ prs: [pr({ statusCheckRollup: [ci('SUCCESS', ago(20)), ci(conclusion, ago(10))] })] });
+    assert.deepEqual(check(stateWith()), NOTHING);
+  }
+  // Of runs that started in the same second, a failed one counts before a cancelled one, in either order.
+  for (const rollup of [[ci('CANCELLED', ago(10)), ci('FAILURE', ago(10))], [ci('FAILURE', ago(10)), ci('CANCELLED', ago(10))]]) {
+    github({ prs: [pr({ statusCheckRollup: rollup })] });
+    assert.ok(holds(5)(check(stateWith())));
+  }
 });
 
 test('catch-up 6: a green bot pull request without a review, verdict or recent claim for its head starts a run', () => {
@@ -198,6 +212,14 @@ test('catch-up 6: a green bot pull request without a review, verdict or recent c
   assert.deepEqual(check(stateWith(), { run: gitWith('{ "merge": { "requiredChecks": ["test"] } }') }), NOTHING);
   github({ prs: [pr({ statusCheckRollup: [{ status: 'IN_PROGRESS', conclusion: '' }] })] });
   assert.deepEqual(check(stateWith()), NOTHING);
+  // A head handled as fix that turned green, a check run again, starts a run once no run for that head is open.
+  github({ prs: [pr()] });
+  const fix = { repo: 'acme/app', pr: 9, handled: { head: HEAD, action: 'fix' } };
+  assert.ok(holds(6)(check(stateWith({ 'pr-9.json': { ...fix, runs: [{ startedAt: ago(30), head: HEAD, role: 'builder', result: 'done' }] } }))));
+  assert.deepEqual(check(stateWith({ 'pr-9.json': { ...fix, runs: [{ startedAt: ago(5), head: HEAD, role: 'builder', result: null }] } })), NOTHING);
+  // A conflict stays the fix's.
+  github({ prs: [pr({ mergeable: 'CONFLICTING' })] });
+  assert.deepEqual(check(stateWith({ 'pr-9.json': fix })), NOTHING);
 });
 
 test('catch-up 7: a dispatch past the stall limit, or a headless job whose result nobody read, starts a run', () => {
@@ -236,14 +258,20 @@ test('catch-up: a failed read starts a run that reports it', () => {
   const cut = stateWith({}, { runs: 1, workerStarts: 0, catchUp: 0, prs: {} });
   writeFileSync(join(cut, 'red-main.json'), '{ "sha": ');
   assert.deepEqual(check(cut), { start: true, condition: 'failed', reason: 'red-main.json is unreadable', probe: true });
+  // A null root is no missing file either.
+  writeFileSync(join(cut, 'red-main.json'), 'null');
+  assert.deepEqual(check(cut), { start: true, condition: 'failed', reason: 'red-main.json is unreadable', probe: true });
 });
 
 test('catch-up: a precheck near its 90-second limit starts the run, which reports it', () => {
   github();
   let at = 0;
+  const timeouts = [];
   // The first gh read takes 90 seconds: the next command would start past the limit.
-  const slow = (cwd, cmd, args, timeout) => { if (cmd === 'gh') at += 90_000; return git(cwd, cmd, args, timeout); };
+  const slow = (cwd, cmd, args, timeout) => { timeouts.push(timeout); if (cmd === 'gh') at += 90_000; return git(cwd, cmd, args, timeout); };
   assert.deepEqual(catchUp({ clone: CLONE, state: stateWith(), now: NOW, run: slow, queue: () => [], clock: () => at }), { start: true, condition: 'failed', reason: 'the 90-second limit nears', probe: false });
+  // A command may take only what is left of the limit, less the 5-second margin.
+  assert.equal(timeouts[0], 85_000);
 });
 
 test('catch-up: a daily limit reached starts no run and says which', () => {

@@ -6,15 +6,15 @@
 // 2. The default branch's tip has a red run, or red-main.json names the tip, and red-main.json names no report for that tip.
 // 3. An owner answer that answered.json does not list: on an open issue that carries cl:needs-human, or a trusted author's issue updated in the last ANSWER_DAYS days whose answer has the full form, as #<n> <at>, or on a local question, as <file> <at>.
 // 4. A pull request is merge-ready: its state's handled names its head with the verdict merge or trial (merge-checks.mjs) and a reviewed head, its checks are green, or it has none and merge.requiredChecks is empty, the lock is free, no merge command is unconfirmed or held (merge.mjs pauses every merge then), and the tip's watch ended (10 minutes from tip.json's first sight, no run open) or red-main.json names the red tip and that pull request.
-// 5. A bot pull request's head is red or in conflict and handled does not name that head.
-// 6. A bot pull request's head is green, or has no checks and merge.requiredChecks is empty, neither handled nor the reviewed head names that head, and no claim-<n>-<head> folder is younger than stallMinutes.
+// 5. A bot pull request's head is red (a check failed, timed out, failed to start or errored) or in conflict and handled does not name that head.
+// 6. A bot pull request's head is green, or has no checks and merge.requiredChecks is empty, the reviewed head does not name that head, handled does not name it or names it with the action fix while it is not in conflict and every dispatch and run for it has a result, and no claim-<n>-<head> folder is younger than stallMinutes.
 // 7. An entry of a pull request state's dispatches or runs has no result and its result file exists (a headless job ended) or it started more than stallMinutes ago.
 // A bot pull request is open, not from a fork, on a head branch <type>/<n>-<slug>, and issue n exists, is no pull request and has a trusted author (precheck.mjs).
 import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { answer, readQueue } from './approval.mjs';
-import { checkStates, redRuns, unconfirmed } from './merge.mjs';
+import { checkStates, FAILED, redRuns, unconfirmed } from './merge.mjs';
 import { errorLine, json, read, sh } from './policy.mjs';
 import { asks, originRepo, trusts, writers } from './precheck.mjs';
 import { count, inspectLock, isPrFile, LIMITS, logged, RED_MAIN, TIP } from './state.mjs';
@@ -28,9 +28,9 @@ const WATCH_MIN = 10 * MINUTE;
 const ANSWER_DAYS = 7;
 const BOT_BRANCH = /^[a-z]+\/([1-9]\d*)-./;
 
-// 'none', 'red', 'pending' or 'green' of a statusCheckRollup, from the newest run of each check.
+// 'none', 'red', 'pending' or 'green' of a statusCheckRollup, from the newest run of each check. A red check that did not fail counts as pending: a fix run finds nothing to fix there (bot-project.md, Pull request events).
 function checks(rollup) {
-  const states = checkStates(rollup).map((c) => c.state);
+  const states = checkStates(rollup).map((c) => (c.state === 'red' && !FAILED.includes(c.conclusion) ? 'pending' : c.state));
   if (!states.length) return 'none';
   if (states.includes('red')) return 'red';
   return states.every((state) => state === 'green') ? 'green' : 'pending';
@@ -42,8 +42,13 @@ function pending({ clone, state, now, run, queue, counts }) {
   const lock = inspectLock(state, now);
   if (lock?.stale) return { condition: 1, reason: 'the merge lock is stale' };
 
-  // A missing file is absent; one that cannot be read or parsed fails the precheck, so the run reports or rebuilds it.
-  const stored = (name) => { try { return JSON.parse(readFileSync(join(state, name), 'utf8')); } catch (e) { if (e.code === 'ENOENT') return null; throw new Error(`${name} is unreadable`); } };
+  // A missing file is absent; one that cannot be read or parsed, or holds null, fails the precheck, so the run reports or rebuilds it.
+  const stored = (name) => {
+    let value;
+    try { value = JSON.parse(readFileSync(join(state, name), 'utf8')); } catch (e) { if (e.code === 'ENOENT') return null; throw new Error(`${name} is unreadable`); }
+    if (value === null) throw new Error(`${name} is unreadable`);
+    return value;
+  };
   const states = new Map();
   for (const file of readdirSync(state).filter(isPrFile)) {
     const s = stored(file);
@@ -116,8 +121,13 @@ function pending({ clone, state, now, run, queue, counts }) {
   }
   const stall = policy.stallMinutes * MINUTE;
   const claimed = (pr) => { try { return ageOf(new Date(lstatSync(join(state, `claim-${pr.number}-${pr.headRefOid}`)).mtimeMs)) < stall; } catch (e) { if (e.code === 'ENOENT') return false; throw e; } };
+  // A fix leaves the head as it was where a check that ran again passed: its green event can be lost once the fix run ended. A conflict stays the fix's.
+  const fixed = (pr) => {
+    const s = states.get(pr.number);
+    return s.handled.action === 'fix' && pr.mergeable !== 'CONFLICTING' && ![...(s.dispatches ?? []), ...(s.runs ?? [])].some((e) => e.head === pr.headRefOid && !e.result);
+  };
   for (const pr of open) {
-    if (!handled(pr) && states.get(pr.number)?.reviewedHead !== pr.headRefOid && passes(pr) && !claimed(pr) && bot(pr)) return { condition: 6, reason: `#${pr.number} has no review for ${pr.headRefOid}` };
+    if ((!handled(pr) || fixed(pr)) && states.get(pr.number)?.reviewedHead !== pr.headRefOid && passes(pr) && !claimed(pr) && bot(pr)) return { condition: 6, reason: `#${pr.number} has no review for ${pr.headRefOid}` };
   }
 
   for (const s of open.map((pr) => states.get(pr.number)).filter(Boolean)) {
