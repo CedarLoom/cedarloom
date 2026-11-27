@@ -3,7 +3,7 @@
   border-bottom: 1px solid var(--cl-line);
   background:
     radial-gradient(60rem 22rem at 50% -6rem, var(--cl-accent-soft), transparent 70%),
-    var(--cl-page);
+    var(--cl-surface);
   text-align: center;
 }
 
@@ -62,7 +62,7 @@
   padding: 1.5rem;
   border: 1px solid var(--cl-line);
   border-radius: 1rem;
-  background: var(--cl-surface);
+  background: var(--cl-raised);
   box-shadow: var(--cl-shadow);
 }
 
@@ -115,7 +115,7 @@
   padding: 0.9rem 1rem 0.9rem 3.5rem;
   border: 1px solid var(--cl-line);
   border-radius: 0.75rem;
-  background: var(--cl-surface);
+  background: var(--cl-raised);
   counter-increment: step;
 }
 
@@ -132,5 +132,5 @@
   background: var(--ifm-color-primary);
   color: var(--ifm-background-color);
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: var(--cl-font-weight-strong);
 }

@@ -19,13 +19,13 @@
   padding: 0.9rem 1rem;
   border: 1px solid var(--cl-line);
   border-radius: 0.75rem;
-  background: var(--cl-surface);
+  background: var(--cl-raised);
   box-shadow: var(--cl-shadow);
 }
 
 .command {
   align-self: flex-start;
-  font-weight: 600;
+  font-weight: var(--cl-font-weight-strong);
 }
 
 .purpose {

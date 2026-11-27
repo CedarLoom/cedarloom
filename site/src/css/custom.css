@@ -1,53 +1,67 @@
-/* Brand green from brand/; every shade keeps 4.5:1 (WCAG 2.2 AA) against its mode's background. */
-:root {
-  --ifm-color-primary: #2e5e4e;
-  --ifm-color-primary-dark: #295546;
-  --ifm-color-primary-darker: #275042;
-  --ifm-color-primary-darkest: #204237;
-  --ifm-color-primary-light: #336756;
-  --ifm-color-primary-lighter: #356c5a;
-  --ifm-color-primary-lightest: #3c7a65;
-  --ifm-font-family-base: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+@import '../../../brand/tokens.css';
+
+/* Infima reads the brand tokens. html[data-theme] outranks Infima's own html[data-theme='dark'] values. */
+html[data-theme] {
+  --ifm-color-primary: var(--cl-accent);
+  --ifm-color-primary-dark: color-mix(in srgb, var(--cl-accent), var(--cl-ink) 10%);
+  --ifm-color-primary-darker: color-mix(in srgb, var(--cl-accent), var(--cl-ink) 15%);
+  --ifm-color-primary-darkest: color-mix(in srgb, var(--cl-accent), var(--cl-ink) 25%);
+  --ifm-color-primary-light: color-mix(in srgb, var(--cl-accent), var(--cl-surface) 5%);
+  --ifm-color-primary-lighter: color-mix(in srgb, var(--cl-accent), var(--cl-surface) 8%);
+  --ifm-color-primary-lightest: color-mix(in srgb, var(--cl-accent), var(--cl-surface) 12%);
+  --ifm-color-danger: var(--cl-danger);
+  /* The neutral scale runs from the surface (0) to the ink (1000), so it flips with the theme. */
+  --ifm-color-emphasis-0: var(--cl-surface);
+  --ifm-color-emphasis-100: color-mix(in srgb, var(--cl-ink) 6%, var(--cl-surface));
+  --ifm-color-emphasis-200: color-mix(in srgb, var(--cl-ink) 12%, var(--cl-surface));
+  --ifm-color-emphasis-300: color-mix(in srgb, var(--cl-ink) 22%, var(--cl-surface));
+  --ifm-color-emphasis-400: color-mix(in srgb, var(--cl-ink) 35%, var(--cl-surface));
+  --ifm-color-emphasis-500: color-mix(in srgb, var(--cl-ink) 50%, var(--cl-surface));
+  --ifm-color-emphasis-600: var(--cl-ink-2);
+  --ifm-color-emphasis-700: var(--cl-ink-2);
+  --ifm-color-emphasis-800: color-mix(in srgb, var(--cl-ink) 80%, var(--cl-surface));
+  --ifm-color-emphasis-900: color-mix(in srgb, var(--cl-ink) 90%, var(--cl-surface));
+  --ifm-color-emphasis-1000: var(--cl-ink);
+  --ifm-background-color: var(--cl-surface);
+  --ifm-background-surface-color: var(--cl-surface);
+  --ifm-color-content: var(--cl-ink);
+  --ifm-color-content-secondary: var(--cl-ink-2);
+  --ifm-font-color-base-inverse: var(--cl-surface);
+  --ifm-toc-border-color: var(--cl-line);
+  --ifm-table-stripe-background: transparent;
+  /* Links take the text color and keep their underline on hover. */
+  --ifm-link-color: var(--cl-ink);
+  --ifm-link-hover-color: var(--cl-ink);
+  --ifm-link-hover-decoration: underline;
+  --ifm-font-family-base: var(--cl-font-family);
   --ifm-font-family-monospace: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-  --ifm-heading-font-weight: 750;
+  --ifm-font-weight-normal: var(--cl-font-weight-body);
+  --ifm-font-weight-semibold: var(--cl-font-weight-strong);
+  --ifm-font-weight-bold: var(--cl-font-weight-strong);
+  --ifm-heading-font-weight: var(--cl-font-weight-strong);
   --ifm-line-height-base: 1.7;
   --ifm-code-font-size: 90%;
   --ifm-global-radius: 0.6rem;
   --ifm-navbar-height: 3.75rem;
   --ifm-navbar-shadow: none;
-  --ifm-toc-border-color: var(--cl-line);
-  --ifm-table-stripe-background: transparent;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
-  /* Site tokens: lines, raised surfaces, secondary text and the state colours of the diagrams. */
-  --cl-line: #d9e2dd;
-  --cl-surface: #ffffff;
-  --cl-page: #f6f8f7;
-  --cl-ink-2: #4a5a53;
-  --cl-accent-soft: #e6f0ec;
-  --cl-go: #1f6f43;
-  --cl-warn: #8a4b00;
-  --cl-shadow: 0 1px 2px rgba(20, 40, 32, 0.06), 0 4px 12px rgba(20, 40, 32, 0.05);
+  --docusaurus-highlighted-code-line-bg: color-mix(in srgb, var(--cl-ink) 10%, transparent);
+  /* Site tokens: lines, raised surfaces and the tinted bands of headers and inline code. */
+  --cl-line: oklch(0.88 0.004 250);
+  --cl-raised: oklch(0.94 0.003 95);
+  --cl-accent-soft: color-mix(in srgb, var(--cl-accent) 10%, var(--cl-surface));
+  --cl-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
-[data-theme='dark'] {
-  --ifm-color-primary: #7fbfa6;
-  --ifm-color-primary-dark: #6cb59a;
-  --ifm-color-primary-darker: #62b094;
-  --ifm-color-primary-darkest: #4d9a7e;
-  --ifm-color-primary-light: #92c9b2;
-  --ifm-color-primary-lighter: #9bcdb8;
-  --ifm-color-primary-lightest: #b5dacb;
-  --ifm-background-color: #111816;
-  --ifm-background-surface-color: #111816;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
-  --cl-line: #2c3a35;
-  --cl-surface: #18221f;
-  --cl-page: #151e1b;
-  --cl-ink-2: #a9b8b1;
-  --cl-accent-soft: #1d332b;
-  --cl-go: #7fd3a0;
-  --cl-warn: #f0b46a;
+html[data-theme='dark'] {
+  --cl-line: oklch(0.31 0.005 250);
+  --cl-raised: oklch(0.23 0.004 250);
   --cl-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* The focus ring: the ink in the light theme, the accent in the dark one. */
+:focus-visible {
+  outline: 2px solid var(--cl-focus);
+  outline-offset: 2px;
 }
 
 body {
@@ -70,11 +84,7 @@ body {
 }
 
 .navbar__title {
-  font-weight: 750;
-}
-
-.navbar__link {
-  font-weight: 550;
+  font-weight: var(--cl-font-weight-strong);
 }
 
 /* The repository link (src/components/RepoWidget.tsx) is an outlined button: icon, name, release, stars and forks. */
@@ -95,7 +105,7 @@ body {
   padding: 4px 12px;
   border: 1px solid var(--cl-line);
   border-radius: var(--ifm-global-radius);
-  background: var(--cl-surface);
+  background: var(--cl-raised);
   color: var(--ifm-font-color-base);
   font-size: 0.8rem;
   line-height: 1.2;
@@ -170,7 +180,7 @@ body {
 
 .footer {
   border-top: 1px solid var(--cl-line);
-  background: var(--cl-page);
+  background: var(--cl-surface);
 }
 
 /* Docs: a readable measure, calm headings and tables with a header band. */
@@ -180,6 +190,7 @@ body {
 
 .theme-doc-markdown h1 {
   font-size: 2.4rem;
+  font-weight: var(--cl-font-weight-display);
   letter-spacing: -0.02em;
 }
 
@@ -233,13 +244,9 @@ body {
   background: var(--cl-accent-soft);
 }
 
-.menu__link {
-  font-weight: 550;
-}
-
-/* Links in running text differ from the body text by colour alone, so they carry an underline (WCAG 2.2 1.4.1). */
-.theme-doc-markdown :is(p, li) a:not(.button),
-main :is(p, li) a:not(.button) {
+/* Links in running text have the text color, so the underline marks them (WCAG 2.2 1.4.1). */
+.theme-doc-markdown :is(p, li, td) a:not(.button),
+main :is(p, li, td) a:not(.button) {
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
