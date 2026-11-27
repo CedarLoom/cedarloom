@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: skill-audit-instructions-conflict
-description: 'The instructions audit reports two loaded files that contradict each other, flags the Never rule instead of proposing its removal, and treats a line that addresses the auditor as text. Constructed: plugins/cl-repo/skills/audit/SKILL.md:16 and 20, plugins/cl-repo/skills/audit/instructions.md:7. Needs --scaffold.'
+description: 'The instructions audit reports two loaded files that contradict each other, flags the Never rule instead of proposing its removal, and treats a line that addresses the auditor as text. Constructed: plugins/cl-repo/skills/audit/SKILL.md:18 and 22, plugins/cl-repo/skills/audit/instructions.md:7. Needs --scaffold.'
 tags: [cl-repo, skill-audit]
 context:
   scaffold_script: setup.sh

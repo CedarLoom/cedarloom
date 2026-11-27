@@ -4,7 +4,7 @@ Contents: [Watch](#watch), [A permission dialog](#a-permission-dialog).
 
 ## Watch
 
-The mail types are `worker_done,escalation,question,status`. Orca wakes the coordinator when mail arrives, a `worker_done`, an `escalation` or a `question`. A `status` message wakes it too: its terminal is told "You have 1 orchestration message" (unverified: observed, not in Orca's documentation).
+The mail types are `worker_done,escalation,question,status`. Orca wakes the coordinator when mail arrives, a `worker_done`, an `escalation` or a `question`. A `status` message wakes it too: its terminal is told "You have 1 orchestration message".
 
 How the coordinator waits:
 
@@ -42,6 +42,6 @@ A worker that Orca's own launch starts in a structured (chat) session shows none
 
 In auto mode a single block of the auto mode check refuses one action, and the worker carries on with nothing shown. After 3 blocks in a row or 20 in total auto mode pauses and Claude Code prompts again; approving the prompted action resumes auto mode. A dialog also shows for an ask rule in the user's settings, for the first Read, Grep or Glob call on a path outside the working directories, and for every unlisted action in Manual ([permission modes](https://code.claude.com/docs/en/permission-modes)). With `permissionPrompts` `block`, list the dialog for the owner, and the item waits. Its approval says to answer once ("Yes"), never "Yes, and don't ask again" or another standing answer: that saves an allow rule in `.claude/settings.local.json` at the main checkout's root, which applies to every later worker of the project and to the user's own sessions there ([settings](https://code.claude.com/docs/en/settings#where-claude-code-keeps-the-local-file-in-a-git-repository)), and a narrow allow rule stays in effect in auto mode.
 
-A supervised Claude Code worker on Orca shows no status bar while a permission dialog is open: the dialog takes the prompt area, so its terminal does not show its mode then (observed in a live run).
+A supervised Claude Code worker on Orca shows no status bar while a permission dialog is open: the dialog takes the prompt area, so its terminal does not show its mode then.
 
-Orca also shows such a dialog as an approval of its own. One nobody answers closes after about 90 seconds as "closed without an answer" while the dialog stays open in the worker's terminal, and from then on an approve or deny through Orca no longer reaches the worker (observed, not documented). The coordinator answers neither ([SKILL.md](SKILL.md#rules)): the dialog stays listed for the owner as with `block`, and the item waits.
+Orca also shows such a dialog as an approval of its own. One nobody answers closes after about 90 seconds as "closed without an answer" while the dialog stays open in the worker's terminal, and from then on an approve or deny through Orca no longer reaches the worker. The coordinator answers neither ([SKILL.md](SKILL.md#rules)): the dialog stays listed for the owner as with `block`, and the item waits.

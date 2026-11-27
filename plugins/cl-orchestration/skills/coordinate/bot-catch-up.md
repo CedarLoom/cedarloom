@@ -4,11 +4,11 @@ The procedure of the project bot's catch-up sweep, the backstop that starts a ru
 
 ## The automation
 
-Every 15 minutes, `--runs-in new`, working folder the bot home, with `--precheck "node <skill folder>/precheck.mjs --catch-up <clone> --state <state>" --precheck-timeout 120` (the precheck answers within 90 seconds). Its exit 0 starts the run, which reads the precheck's JSON line `{ start, condition, reason, probe }`; the precheck writes nothing. Schedule it only once `SOUL.md` and the `bot-*.md` procedures are in the skill folder its prompt names: a run without them counts nothing, so every sweep starts one.
+The catch-up line of [Automations](setup-bots.md#automations): every 15 minutes, its precheck `precheck.mjs --catch-up` printing the JSON line `{ start, condition, reason, probe }` ([catch-up.mjs](catch-up.mjs)).
 
 ## The run
 
-1. Step 1 of [Every run](bot-project.md#every-run). Then, before counting, run the precheck once more as written above: its line is the run's task, one per run, and its `probe` holds for step 2. A start for nothing (`start: false`) counts `{ runs: 1 }` and ends the run. Otherwise step 2 of Every run, counting `{ runs: 1, catchUp: 1 }`, and `pr` for a condition that names a pull request, unless `probe` is true.
+1. Step 1 of [Every run](bot-project.md#every-run). Then, before counting, run the precheck once more as its automation's `--precheck` writes it: its line is the run's task, one per run, and its `probe` holds for step 2. A start for nothing (`start: false`) counts `{ runs: 1 }` and ends the run. Otherwise step 2 of Every run, counting `{ runs: 1, catchUp: 1 }`, and `pr` for a condition that names a pull request, unless `probe` is true.
 2. **`probe: true`**, the first catch-up run of the UTC day, where the project's `mode` is `automatic`: the daily automatic-start probe is the run's task, and the condition waits for the next sweep. Run checks 1, 3 and 4 and the probe (check 5) of [Automatic start](automatic-start.md), the probe's start counted as a worker start, and write `<state>/probe-<day>.json` `{ day, passed, failed }` with `writeState`, `failed` naming the first check or step that failed. A failure starts the project supervised for the rest of the UTC day where [orca.md](orca.md#fallback-to-supervised) offers it, else starts no worker there; the report names the check. A supervised project skips the probe.
 3. The condition:
    - **`probe`:** none; a supervised project reports that and ends.

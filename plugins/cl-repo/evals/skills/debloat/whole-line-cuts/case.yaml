@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: skill-debloat-whole-line-cuts
-description: 'debloat cuts the restated heading, history and recap of a doc as whole lines through token-budget.mjs cut, keeps the Never rule and the deploy step, and never writes the file back as a whole. Constructed: plugins/cl-repo/skills/debloat/SKILL.md:17-18. Needs --scaffold.'
+description: 'debloat cuts the restated heading, history and recap of a doc as whole lines through token-budget.mjs cut, keeps the Never rule and the deploy step, and never writes the file back as a whole. Constructed: plugins/cl-repo/skills/debloat/SKILL.md:18-19. Needs --scaffold.'
 tags: [cl-repo, skill-debloat]
 context:
   scaffold_script: setup.sh
