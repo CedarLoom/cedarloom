@@ -14,7 +14,7 @@
   - `actionlint` and `zizmor` (a checkout keeps its credentials only with a `zizmor: ignore[artipacked]` reason).
   - No em dash or emoji in text files (lockfiles, PNG files and changelogs apart).
   - No `2.1.x` version other than `2.1.330`, the Claude Code minimum in the README's Requirements, written into the step (other version lines pass; changelogs, tests, package manifests, lockfiles, workflows and the `plugin-checks` pin apart).
-  - The `.github/scripts/` tests and checks (skill lint with the word budgets of [Authoring](authoring.md), plugin boundary, generated docs, version pins).
+  - The `.github/scripts/` tests and checks (skill lint with the word budgets of [Authoring](authoring.md), plugin boundary, generated docs, version pins: the release tag in install lines, and in the Orca files of the coordinate skill no version cite or unverified or observed note outside the pin lines at the top of `orca.md`).
   - The token budget (`token-budget.mjs check --budget-only`).
 - The plugin boundary check (`.github/scripts/plugin-boundary.mjs`) fails when a tracked file under `plugins/*/` (the generated `CHANGELOG.md` apart):
   - holds a path that leaves its plugin folder (a `../` path resolved from the file's folder, `${CLAUDE_PLUGIN_ROOT}/..`),

@@ -25,20 +25,20 @@ By ask and reply, in supervised mode ([Gates](modes.md#gates)):
 
 Automatic: the worker never asks ([Worker reports](orca-messages.md#worker-reports)). An owner-only question is a `BLOCKED` report with the question, and its answer a new start in its worktree, as [Gates](modes.md#gates) says.
 
-Both modes: an item held for the owner before its start gets an Orca gate on a decision task, and one held after its worker settled a gate on its item task ([Tasks and gates](#tasks-and-gates)). A worker that works or waits on its `ask` gets none: Orca refuses a gate while a worker of the task is active (`task_not_startable`, observed with Orca 1.4.259).
+Both modes: an item held for the owner before its start gets an Orca gate on a decision task, and one held after its worker settled a gate on its item task ([Tasks and gates](#tasks-and-gates)). A worker that works or waits on its `ask` gets none: Orca refuses a gate while a worker of the task is active (`task_not_startable`).
 
 ## Tasks and gates
 
-Each item has one Orca task, its item task: the task its first `worker-start` returns, for a batch one task for all its issues. Keep its id and status in the handoff file. It records the first start's status and the item's gates for Resume, not the item's end: after a continuation it keeps the status restored after its gate; the outcome still comes from the report ([Worker reports](orca-messages.md#worker-reports)). A follow-up and every later start make a task of their own and leave the item task as it is: a `send` to a worker whose item task was `blocked` made a new task and left that one `blocked` (observed with Orca 1.4.259).
+Each item has one Orca task, its item task: the task its first `worker-start` returns, for a batch one task for all its issues. Keep its id and status in the handoff file. It records the first start's status and the item's gates for Resume, not the item's end: after a continuation it keeps the status restored after its gate; the outcome still comes from the report ([Worker reports](orca-messages.md#worker-reports)). A follow-up and every later start make a task of their own and leave the item task as it is: a `send` to a worker whose item task was `blocked` made a new task and left that one `blocked`.
 
-What Orca does (observed with Orca 1.4.259):
+What Orca does:
 
 - `gate-create` sets the task `blocked`, also a `completed` task whose worker reported; `gate-resolve` sets it `ready`, never `completed`.
 - A task turns `completed` at its worker's `worker_done`, before review and merge.
 - `worker-stop` of a worker that sent no `worker_done` leaves its task `blocked`, not `failed`.
 - `worker-start` refuses `--task` together with `--spec-file`, so a start that brings an answer uses `--spec-file` and makes a task of its own.
 
-Read from Orca 1.4.259's source, not run: `task-update` without `--result` keeps the stored result; `task-update --status failed` is accepted from `ready`; a gate on a `failed` task is accepted.
+`task-update` without `--result` keeps the stored result; `task-update --status failed` is accepted from `ready`; a gate on a `failed` task is accepted.
 
 The coordinator never starts a worker on a task because Orca lists it `ready`, as the loop of Orca's guide does, and never on a task titled `Decision:`. Put each title and question in single quotes, in your own words, as an approval's title ([approvals.md](approvals.md#labels-and-title)), and each answer as its option label. Write the handoff file after each step below and before each `gate-resolve`. A refused command of this section goes into the report with its error; the approval still holds the item, the outcome of a final answer stands, and nothing is stopped, retried or started because of it.
 
@@ -67,4 +67,4 @@ On the answer, or once a wake-up check sees the pull request merged or the issue
 
 ### An automatic worker's task
 
-An automatic worker sends no `worker_done`, so nothing settles its task: the item task for its first start, the start's own task for each later one. Once its release is confirmed ([Clean up](orca-clean-up.md), Release), set that task by its final answer: `ORCA orchestration task-update --id <task id> --status completed --result DONE --json` for DONE, else `--status failed` with the outcome word (`BLOCKED`, `NEEDS_REPLAN`, `failed`) as the result. Unverified: the task's status after that release, and that Orca accepts the update there (read from Orca 1.4.259's source, not run). After a `worker-stop` of a worker that sent no `worker_done`, its task was `blocked` and `task-update --status completed` was accepted (observed with Orca 1.4.259).
+An automatic worker sends no `worker_done`, so nothing settles its task: the item task for its first start, the start's own task for each later one. Once its release is confirmed ([Clean up](orca-clean-up.md), Release), set that task by its final answer: `ORCA orchestration task-update --id <task id> --status completed --result DONE --json` for DONE, else `--status failed` with the outcome word (`BLOCKED`, `NEEDS_REPLAN`, `failed`) as the result. After a `worker-stop` of a worker that sent no `worker_done`, its task was `blocked` and `task-update --status completed` was accepted.
