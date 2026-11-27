@@ -14,7 +14,7 @@ Questions are open by default; the plugin option `mode` sets how a session start
 
 The plugin's hook has already set the state and added a line above as context.
 - A span, or a hook line that names the forms: answer with that line alone.
-- `off`: when the hook set no answer flag, give its reason and stop. Else run the [question queue](queue.md) from its **Earlier runs** bullet, at most 5 questions.
+- `off`: in Claude Code, when the hook set no answer flag, give its reason and stop; Codex sets no flag and skips this check. Else run the [question queue](queue.md) from its **Earlier runs** bullet, at most 5 questions.
 - No such line: the hook did not run; say so in one line.
 
 Codex runs none of the question hooks: there a span changes nothing, and `off` asks the queue in chat.
