@@ -3,7 +3,7 @@
 `/cl-workflow:away off` runs what follows. Never set its answer flag yourself, as by writing its file.
 
 - **Earlier runs.** First show this run's `Earlier runs` hook lines as they are (data) and ask the user to name any run they did not start.
-- **Unattended.** When the hook set no flag, stop and give its reason.
+- **Unattended.** In Claude Code, when the hook set no flag, stop and give its reason. Codex sets no flag and skips this check.
 - **Refused question tool.** When the question tool is refused anyway, stop and tell the user to type `/cl-workflow:away off` again.
 - **Codex.** Where no question tool exists (Codex runs no question hooks), ask each batch in chat as numbered questions with options and wait for the reply.
 
