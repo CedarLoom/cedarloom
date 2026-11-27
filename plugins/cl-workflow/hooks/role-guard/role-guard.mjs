@@ -252,23 +252,45 @@ const runsText = (parsed, source, powershell) =>
 // The commands of a command text in each reading a shell may give it: PowerShell's, or those of current bash, bash 3.2 and zsh,
 // which differ only in ANSI-C quoting and a NUL; every check runs on each. A reading program's quoted arguments are left out
 // only in one line (a comment or a here-document on another line could end its quote) that runs no text as commands.
-// Programs that print what they read and run none of it.
-const FILTERS = new Set(['head', 'tail', 'wc', 'sort', 'uniq', 'cut']);
 const programOf = ({ words }, powershell) => {
   const at = programIndex(words, powershell);
   return at < 0 ? undefined : program(words[at]);
 };
-// Some command of the line may run what a reader prints: one that is no reader or filter (an unknown program fails closed), or a redirect.
-const opaque = (parsed, powershell) =>
-  parsed.some((c) => !c.data && (c.targets.length || (c.words.length && !READERS.has(programOf(c, powershell)) && !FILTERS.has(programOf(c, powershell)))));
+// The readers and the filters, programs that print what they read and run none of it, each with its long options that name
+// no program and read no config, written out in full: rg --pre,
+// sort --compress-program and an abbreviation such as sort --co are left out, so they make the command no plain one.
+const GREP_LONG = ['line-number', 'count', 'files-with-matches', 'files-without-match', 'ignore-case', 'no-filename', 'with-filename', 'fixed-strings', 'word-regexp', 'line-regexp', 'invert-match', 'only-matching', 'recursive', 'include', 'exclude', 'exclude-dir', 'label', 'color', 'null', 'text', 'regexp', 'extended-regexp', 'perl-regexp', 'max-count', 'context', 'after-context', 'before-context', 'quiet', 'silent'];
+const HEAD_LONG = ['lines', 'bytes', 'quiet', 'silent', 'verbose'];
+const SAFE_LONG = new Map(
+  Object.entries({
+    grep: GREP_LONG,
+    egrep: GREP_LONG,
+    fgrep: GREP_LONG,
+    rg: ['line-number', 'count', 'files-with-matches', 'files-without-match', 'ignore-case', 'smart-case', 'no-heading', 'heading', 'no-filename', 'with-filename', 'fixed-strings', 'word-regexp', 'line-regexp', 'invert-match', 'only-matching', 'replace', 'glob', 'type', 'type-not', 'hidden', 'no-ignore', 'sort', 'sortr', 'max-count', 'context', 'after-context', 'before-context', 'color', 'null', 'json', 'column', 'text', 'regexp', 'max-depth', 'multiline'],
+    head: HEAD_LONG,
+    tail: HEAD_LONG,
+    wc: ['lines', 'words', 'bytes', 'chars'],
+    sort: ['numeric-sort', 'reverse', 'unique', 'key', 'field-separator', 'stable', 'version-sort', 'human-numeric-sort', 'ignore-case'],
+    uniq: ['count', 'repeated', 'unique', 'skip-fields', 'skip-chars', 'ignore-case'],
+    cut: ['delimiter', 'fields', 'characters', 'bytes'],
+  }).map(([name, options]) => [name, new Set(options)]),
+);
+// A reader or filter with no env assignment before it (RIPGREP_CONFIG_PATH can name a config with --pre) and only its safe long options.
+const plain = ({ words }, powershell) => {
+  const at = programIndex(words, powershell);
+  const safe = at < 0 ? undefined : SAFE_LONG.get(program(words[at]));
+  if (!safe || words.slice(0, at).some((w) => /^[A-Za-z_]\w*=/.test(w))) return false;
+  return words.slice(at + 1).every((w) => !w.startsWith('--') || w === '--' || safe.has(w.slice(2).split('=')[0]));
+};
+// Some command of the line may run what a reader prints: one that is no plain reader or filter (an unknown program fails closed), or a redirect.
+const opaque = (parsed, powershell) => parsed.some((c) => !c.data && (c.targets.length || (c.words.length && !plain(c, powershell))));
 // The builder bot's git may be filled in or run by a program the guard does not read: git behind a program or in a quoted word
-// of one that is neither git nor a reader (caffeinate xargs git, fish -c 'git ...'), or a pipe into anything but a reader or filter.
+// of one that is neither git nor a reader (caffeinate xargs git, fish -c 'git ...'), or a pipe into anything but a plain reader or filter.
 const hidesGit = (parsed, powershell) =>
   parsed.some((c) => {
     const own = c.owner ?? programOf(c, powershell);
     if (c.words.some((w) => program(w) === 'git') && own !== 'git' && !READERS.has(own)) return true;
-    const piped = c.owner === undefined ? programOf(c, powershell) : undefined;
-    return c.piped && c.owner === undefined && !READERS.has(piped) && !FILTERS.has(piped);
+    return c.piped && c.owner === undefined && !plain(c, powershell);
   });
 function readings(source, powershell) {
   const all = powershell ? [commands(source, true)] : shellReadings(source, false);
