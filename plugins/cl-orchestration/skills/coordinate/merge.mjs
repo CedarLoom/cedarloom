@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { REPO } from './approval.mjs';
 import { escaped, isMain, json, sh } from './policy.mjs';
-import { appendLog, inspectLock, isPrFile, logged, readState, RED_MAIN, removeLock, takeLock, TIP, writeState } from './state.mjs';
+import { appendLog, change, inspectLock, isPrFile, logged, readState, RED_MAIN, removeLock, takeLock, TIP, writeState } from './state.mjs';
 import { unresolvedThreads } from './thread.mjs';
 
 const MINUTE = 60_000;
@@ -228,11 +228,13 @@ function locked({ stateFile, method, runId, run, now, sleep }) {
   if (unchecked) return unchecked;
 
   // The bot or the owner may have written the state during the checks: a hold or another accepted head written since wins.
-  const fresh = readState(stateFile);
-  if (fresh?.held) return stop(`held: ${fresh.held}`);
-  if (fresh?.handled?.head !== accepted || fresh?.handled?.action !== s.handled.action) return restart('the state changed during the checks');
-  const commanded = { ...fresh, mergeCommandAt: now().toISOString() };
-  writeState(stateFile, commanded);
+  let changed;
+  const commanded = change(stateFile, (fresh) => {
+    if (fresh?.held) changed = stop(`held: ${fresh.held}`);
+    else if (fresh?.handled?.head !== accepted || fresh?.handled?.action !== s.handled.action) changed = restart('the state changed during the checks');
+    return changed ? null : { ...fresh, mergeCommandAt: now().toISOString() };
+  });
+  if (!commanded) return changed;
   // Pinned to the accepted head; never --admin, which passes branch protection, nor --auto, which would merge a later push.
   const args = ['pr', 'merge', String(n), '-R', repo, `--${method}`, '--match-head-commit', accepted];
   if (bodyFile) args.push('--subject', subject, '--body-file', bodyFile);
@@ -240,8 +242,8 @@ function locked({ stateFile, method, runId, run, now, sleep }) {
   try { gh(...args); } catch (e) { failed = firstLine(e.stderr || e.message); }
 
   // A state that became unreadable keeps the merge command time, so later merges still pause.
-  const current = () => readState(stateFile) ?? commanded;
-  const held = (why) => { writeState(stateFile, { ...current(), held: why }); return stop(why); };
+  const amend = (edit) => change(stateFile, (current) => edit(current ?? commanded));
+  const held = (why) => { amend((current) => ({ ...current, held: why })); return stop(why); };
   let merged;
   try {
     const deadline = now().getTime() + CONFIRM_MAX;
@@ -254,8 +256,7 @@ function locked({ stateFile, method, runId, run, now, sleep }) {
       }
       // GitHub refused the command because the head moved: that push gets its re-review (step 5), and nothing is left to confirm.
       if (failed && merged.state === 'OPEN' && COMMIT.test(merged.headRefOid ?? '') && merged.headRefOid !== accepted) {
-        const { mergeCommandAt, ...rest } = current();
-        writeState(stateFile, rest);
+        amend(({ mergeCommandAt, ...rest }) => rest);
         return restart(`the head moved to ${merged.headRefOid} and GitHub refused the merge: ${failed}`);
       }
       if (failed || merged.state !== 'OPEN' || now().getTime() >= deadline) return held(`the merge is not confirmed${failed ? `: ${failed}` : ''}`);
@@ -267,7 +268,7 @@ function locked({ stateFile, method, runId, run, now, sleep }) {
   }
   const unreviewed = merged.headRefOid !== accepted;
   appendLog(state, `- ${merged.mergedAt} ${repo} #${n} reviewed ${s.reviewedHead} merged ${merged.headRefOid} commit ${merged.mergeCommit?.oid} review ${s.reviewUrl ?? 'none'} run ${runId}${unreviewed ? ' unreviewed head' : ''}`);
-  writeState(stateFile, { ...current(), mergedAt: merged.mergedAt, ...(unreviewed ? { held: 'unreviewed head' } : {}) });
+  amend((current) => ({ ...current, mergedAt: merged.mergedAt, ...(unreviewed ? { held: 'unreviewed head' } : {}) }));
   if (COMMIT.test(merged.mergeCommit?.oid ?? '')) writeState(join(state, TIP), { sha: merged.mergeCommit.oid, firstSeen: merged.mergedAt, passed: watched.passed });
   return unreviewed ? stop(`a head nobody reviewed merged: ${merged.headRefOid}`) : { outcome: 'merged', reason: `merged ${accepted} as ${merged.mergeCommit?.oid}` };
 }

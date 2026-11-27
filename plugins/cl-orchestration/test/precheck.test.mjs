@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { argsOf, check, distinct, lockToken, pickable, priorities, report, tryLock, unfinished, unlock, unread } from '../skills/coordinate/precheck.mjs';
+import { argsOf, check, distinct, handOver, lockToken, pickable, priorities, report, reserveStart, tryLock, unfinished, unlock, unread } from '../skills/coordinate/precheck.mjs';
 
 const POLICY = { startLabel: 'agent-ready', trustedAuthors: ['helper[bot]'] };
 const issue = (number, extra = {}) => ({ number, author_association: 'OWNER', user: { login: 'owner' }, labels: [{ name: 'agent-ready' }], ...extra });
@@ -152,7 +152,7 @@ test('precheck: starts of two repositories at the same time for one free slot: e
     const alpha = home(), beta = home(), shared = home();
     const lock = join(shared.prompts, '..', 'host-limit.lock');
     alpha.prompt(`alpha-12-builder-0-${RUN}`, `Result file: ${join(shared.results, 'alpha-12.md')}\n`);
-    const start = (repo, n) => new Promise((done) => spawn(process.execPath, [script, '--host-limit', '2', '--working', '0',
+    const start = (repo, n) => new Promise((done) => spawn(process.execPath, [script, '--host-limit', '2', '--working', '0', '--counted-at', '2026-11-24T10:15:00Z',
       '--reserve', join(repo === 'alpha' ? alpha.prompts : beta.prompts, `${repo}-${n}-builder-0-${RUN}`), '--result', join(shared.results, `${repo}-${n}.md`), '--lock', lock,
       alpha.prompts, beta.prompts]).on('exit', done));
     const codes = await Promise.all([1, 2, 3, 4, 5, 6].map((n) => start(n % 2 ? 'alpha' : 'beta', n)));
@@ -207,11 +207,32 @@ test('precheck: a start that waited for the host limit lock holds it for the sta
 test('precheck: the host limit lock needs no bot home: its folder is made on first use and left empty', () => {
   const alpha = home(), folder = join(mkdtempSync(join(tmpdir(), 'cl-host-')), 'host-limit');
   const script = fileURLToPath(new URL('../skills/coordinate/precheck.mjs', import.meta.url));
-  const run = spawnSync(process.execPath, [script, '--host-limit', '1', '--working', '0', '--reserve', join(alpha.prompts, `alpha-3-builder-0-${RUN}`),
+  const run = spawnSync(process.execPath, [script, '--host-limit', '1', '--working', '0', '--counted-at', '2026-11-24T10:15:00Z', '--reserve', join(alpha.prompts, `alpha-3-builder-0-${RUN}`),
     '--result', join(alpha.results, 'alpha-3.md'), '--lock', join(folder, 'host-limit.lock'), alpha.prompts], { encoding: 'utf8' });
   assert.equal(run.status, 0, run.stderr);
   assert.deepEqual(readdirSync(alpha.prompts), [`alpha-3-builder-0-${RUN}`]);
   assert.deepEqual(readdirSync(folder), []);
+});
+
+test('precheck: a fresh worker handed to the Orca count after another start began its count refuses that start, so two starts never pass a limit of 1', () => {
+  const alpha = home(), beta = home(), lock = join(mkdtempSync(join(tmpdir(), 'cl-host-')), 'host-limit.lock');
+  const at = (time) => () => Date.parse(time), folders = [alpha.prompts, beta.prompts];
+  const start = (repo, countedAt, time) => reserveStart({ limit: 1, working: 0, folders, countedAt: Date.parse(countedAt), reserve: join(repo.prompts, `r-1-builder-0-${RUN}`), result: join(repo.results, 'r-1.md'), lock }, at(time));
+  assert.deepEqual(start(alpha, '2026-11-24T10:00:00Z', '2026-11-24T10:00:01Z'), { runs: [], fits: true });
+  // Beta's Orca count begins at 10:00:05 and sees no worker; alpha's worker then shows in the Orca count and its prompt file goes at 10:00:10.
+  handOver({ prompt: join(alpha.prompts, `r-1-builder-0-${RUN}`), lock }, at('2026-11-24T10:00:10Z'));
+  assert.deepEqual(start(beta, '2026-11-24T10:00:05Z', '2026-11-24T10:00:12Z'), { runs: [], fits: false, recount: true });
+  assert.deepEqual(readdirSync(beta.prompts), []);
+  // A count that began after the hand-over holds alpha's worker, so its working count is taken as it is.
+  assert.equal(start(beta, '2026-11-24T10:00:15Z', '2026-11-24T10:00:16Z').fits, true);
+});
+
+test('precheck: a start that died before it took the host limit lock leaves its folder only until the stale age', () => {
+  const lock = join(mkdtempSync(join(tmpdir(), 'cl-host-')), 'host-limit.lock'), alpha = home();
+  const dead = lockToken(lock), waiting = lockToken(lock);
+  utimesSync(join(`${lock}-new-${dead}`, dead), STALE, STALE);
+  reserveStart({ limit: 1, working: 0, folders: [alpha.prompts], countedAt: Date.now(), reserve: join(alpha.prompts, `r-1-builder-0-${RUN}`), result: join(alpha.results, 'r-1.md'), lock });
+  assert.deepEqual(readdirSync(join(lock, '..')), [`host-limit.lock-new-${waiting}`]);
 });
 
 test('precheck: an issue that several projects list starts in none of them', () => {
