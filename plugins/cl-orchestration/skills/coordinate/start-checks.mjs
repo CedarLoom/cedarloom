@@ -275,7 +275,7 @@ export function startChecks({ project, worktree, configDir, claudeJson, managedD
   for (const { file, scope, settings } of files) {
     const permissions = object(settings.permissions);
     // Each turns off a bound the worker relies on: auto mode, the role guard's hook, or the guard's reading of the role.
-    if (permissions.disableAutoMode !== undefined && permissions.disableAutoMode !== false) fail(4, file, `permissions.disableAutoMode keeps the worker out of auto mode: ${JSON.stringify(permissions.disableAutoMode)}`);
+    for (const key of ['disableAutoMode', 'permissions.disableAutoMode']) { const v = at(settings, key); if (v !== undefined && v !== false) fail(4, file, `${key} keeps the worker out of auto mode: ${JSON.stringify(v)}`); }
     if (settings.disableAllHooks !== undefined && settings.disableAllHooks !== false) fail(4, file, 'disableAllHooks turns off the role guard');
     if (settings.allowManagedHooksOnly !== undefined && settings.allowManagedHooksOnly !== false) fail(4, file, 'allowManagedHooksOnly can turn off the role guard');
     if (plain(settings.env) && Object.hasOwn(settings.env, ROLE)) fail(4, file, `env sets ${ROLE}, which the worker must not inherit`);
