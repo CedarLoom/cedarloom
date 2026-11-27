@@ -6,16 +6,19 @@ set -u
 here=$(cd "$(dirname "$0")" && pwd)
 agent=$1 model=${2:-} record=${3:-}
 [[ "$model" = --record ]] && model= record=--record
-prompt=$(sed -n '/^```text$/,/^```$/{//!p}' "$here/../../../skills/audit/instructions.md")
+# POSIX sed: BSD sed rejects a block without a ; before its }.
+prompt=$(sed -n '/^```text$/,/^```$/{/^```text$/d;/^```$/d;p;}' "$here/../../../skills/audit/instructions.md")
+# macOS has no timeout: perl's alarm survives the exec and ends the agent after the same 120 s.
+limit() { if command -v timeout >/dev/null; then timeout 120 "$@"; else perl -e 'alarm shift; exec @ARGV or die "$ARGV[0]: $!\n"' 120 "$@"; fi; }
 answers='{}' pass=0 total=0
 for f in "$here"/*.md; do
   name=$(basename "$f")
   q="$prompt"$'\n'"$(nl -ba -w1 -s': ' "$f")"
   dir=$(mktemp -d)
   if [[ "$agent" = claude ]]; then
-    answer=$(cd "$dir" && timeout 120 claude -p "$q" --restricted --tools "" --strict-mcp-config --no-session-persistence --output-format json --max-turns 2 --max-budget-usd 0.25 ${model:+--model "$model"} </dev/null | jq -r .result)
+    answer=$(cd "$dir" && limit claude -p "$q" --restricted --tools "" --strict-mcp-config --no-session-persistence --output-format json --max-turns 2 --max-budget-usd 0.25 ${model:+--model "$model"} </dev/null | jq -r .result)
   else
-    (cd "$dir" && timeout 120 codex exec --sandbox read-only --skip-git-repo-check --ephemeral -o "$dir/answer.txt" ${model:+-m "$model"} "$q" </dev/null >/dev/null)
+    (cd "$dir" && limit codex exec --sandbox read-only --skip-git-repo-check --ephemeral -o "$dir/answer.txt" ${model:+-m "$model"} "$q" </dev/null >/dev/null)
     answer=$(cat "$dir/answer.txt")
   fi
   rm -rf "$dir"
