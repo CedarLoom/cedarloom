@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+reviews:
+  profile: chill
+  high_level_summary: true
+  poem: false
+  sequence_diagrams: false
+  auto_review:
+    enabled: true
+    drafts: false
+    # release-please pull requests carry only the changelog and version files.
+    ignore_title_keywords:
+      - "chore(main): release"
+    ignore_usernames:
+      - "dependabot[bot]"
+  path_filters:
+    - "!**/package-lock.json"
+    - "!**/CHANGELOG.md"
+    - "!.release-please-manifest.json"
+  path_instructions:
+    - path: "plugins/**/skills/**/SKILL.md"
+      instructions: "Check that every referenced file exists and that rules state what holds."
+  tools:
+    # Duplicates of CI gates stay on: a triggered review comments on the diff lines.
+    actionlint: { enabled: true }
+    zizmor: { enabled: true }
+    gitleaks: { enabled: true }
+    osvScanner: { enabled: true }
+    shellcheck: { enabled: true }
+    markdownlint: { enabled: true }
+    yamllint: { enabled: true }
+    # Off: no rule set committed, or a second linter that contradicts the repository's own.
+    ast-grep: { enabled: false }
+    languagetool: { enabled: false }
+    eslint: { enabled: false }
+    semgrep: { enabled: false }
+    opengrep: { enabled: false }
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "AGENTS.md"
+      - "docs/agents/**/*.md"
