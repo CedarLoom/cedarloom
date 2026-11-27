@@ -1,0 +1,40 @@
+schema_version: "1.1"
+name: coord-follow-up-automatic-checks
+description: 'A follow-up to a released automatic worker is a new start in its kept worktree, so checks 3 and 4 of Automatic start run on that worktree first, and a SessionStart hook that runs a script of the repository fails check 3: the item is BLOCKED and no terminal is created. Constructed for the rules at plugins/cl-orchestration/skills/coordinate/orca-follow-ups.md:18 and automatic-start.md:5. Needs --scaffold.'
+tags: [cl-orchestration, coord-follow-up]
+context:
+  scaffold_script: setup.sh
+execution:
+  prompt: |
+    /cl-orchestration:coordinate project
+
+    This is a dry run: run no command and change no file. Decide from these facts and the skill's text. `<skill folder>` is the coordinate skill's folder.
+
+    - The project runs automatic; the handoff's `Mode:` line says so. Checks 1 to 4 and the probe of Automatic start passed before the first worker of this run.
+    - The automatic worker of issue 12 reported DONE with draft pull request example-org/widget#31 and was released at its report. Its worktree `worktrees/widget/12-login-timeout` (absolute path `<scaffold>/worktrees/widget/12-login-timeout`) is kept, and the branch's last commit added `.claude/settings.json` there with a `SessionStart` command hook `node scripts/x.js`.
+    - The review of pull request 31 found one Important finding, and its follow-up to that worker is not sent yet. A slot is free.
+
+    Write exactly these lines, then stop:
+    Checks 3 and 4: <the command that runs them before this follow-up, exactly, or none>
+    Result: <pass|fail>
+    Issue 12: <follow-up started|BLOCKED, no worker>
+    terminal create: <runs|none>
+  max_turns: 10
+  disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
+graders:
+  - type: regex
+    name: checks-on-worktree
+    pattern: 'Checks 3 and 4:\W*node \S*start-checks\.mjs --project \S+ --worktree \S*worktrees/widget/12-login-timeout\b'
+  - type: regex
+    name: check-3-fails
+    pattern: 'Result:\W*fail\b'
+    flags: i
+  - type: regex
+    name: item-blocked
+    pattern: 'Issue 12:\W*BLOCKED\W+no worker\b'
+    flags: i
+  - type: regex
+    name: no-terminal
+    pattern: 'terminal create:\W*none\b'
+    flags: i
+expected_outcome: 'Checks 3 and 4: node <skill folder>/start-checks.mjs --project <project path> --worktree <scaffold>/worktrees/widget/12-login-timeout; Result: fail (check 3: the SessionStart hook runs a file inside the repository by a relative path); Issue 12: BLOCKED, no worker; terminal create: none.'
