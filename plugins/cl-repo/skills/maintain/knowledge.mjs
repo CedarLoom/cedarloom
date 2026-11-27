@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // The maintain pass's local knowledge base in .cedarloom/knowledge/ (knowledge.md): `read` sorts the stored entries into reuse and re-check, `write` stores new ones.
 // Usage, from the repository: node knowledge.mjs read | node knowledge.mjs write < entries.json
-// read prints { reuse, recheck, ignored }; write takes { <kind>: [entry, ...] } on stdin and prints { written, dropped, excluded }. Exit 0 ok, 1 refused (a link in the base's path, a tracked base), 2 bad input, 3 any other failure (git, the file system).
+// read prints { reuse, recheck, ignored }; write takes { <kind>: [entry, ...] } on stdin and prints { written, dropped, excluded }. Exit 0 ok, 1 refused (a link in the base's path, a tracked base, a base git does not ignore), 2 bad input, 3 any other failure (git, the file system).
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, chmodSync, closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, join, posix, resolve } from 'node:path';
+import { dirname, join, posix, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GIT, gitEnv } from '../debloat/token-budget.mjs';
 
@@ -50,6 +50,16 @@ function readRegular(path, maxBytes = Infinity) {
   } finally {
     closeSync(fd);
   }
+}
+
+// A proof file of the repository: readRegular, and missing when its folder resolves outside the repository, as through a linked folder.
+function readProof(root, p) {
+  const path = join(root, p);
+  let folder;
+  try { folder = realpathSync(dirname(path)); } catch (e) { if (e.code === 'ENOENT' || e.code === 'ENOTDIR') return { missing: true }; throw e; }
+  const top = realpathSync(root);
+  if (folder !== top && !folder.startsWith(top + sep)) return { missing: true };
+  return readRegular(path);
 }
 
 // HEAD^{tree} stands for the files only while nothing outside the base differs from HEAD.
@@ -108,7 +118,7 @@ function staleness(root, kind, e, tree, isClean, now) {
   if (e.tree !== undefined && e.tree !== tree) return 'the tree changed';
   if (e.tree !== undefined && !isClean) return 'the working tree differs from HEAD';
   for (const [p, hash] of Object.entries(e.files ?? {})) {
-    const { bytes } = readRegular(join(root, p));
+    const { bytes } = readProof(root, p);
     if (!bytes) return `${p} is missing or no regular file`;
     if (sha256(bytes) !== hash) return `${p} changed`;
   }
@@ -143,7 +153,7 @@ function stored(root, kind, e, context) {
   if (!e.files?.length && e.tree !== true) throw new BadInput(`${where}: needs files or tree, else nothing shows it is still current`);
   if (e.tree === true && !context.isClean) throw new BadInput(`${where}: tree needs a working tree that matches HEAD; commit or stash the changes, or give files`);
   const files = e.files?.length ? Object.fromEntries(e.files.map((p) => {
-    const { bytes } = readRegular(join(root, p));
+    const { bytes } = readProof(root, p);
     if (!bytes) throw new BadInput(`${where}: ${p} is no regular file`);
     return [p, sha256(bytes)];
   })) : undefined;
@@ -179,19 +189,25 @@ function capped(entries) {
   return { entries: entries.filter((_, i) => !drop.has(i)), dropped: drop.size };
 }
 
-// Adds .cedarloom/knowledge/ to the repository's info/exclude unless git already ignores every file of the base; returns whether it added the line.
-function keepLocal(root) {
+// Whether git ignores the file of every kind; check-ignore prints each ignored path and exits 0 when it printed one, 1 when none.
+function allIgnored(root) {
   const paths = KINDS.map((k) => `${BASE}/${k}.json`);
-  // check-ignore prints each ignored path and exits 0 when it printed one, 1 when none.
   const check = spawnSync(...gitArgs(root, ['check-ignore', '--', ...paths]), { ...gitOptions, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   if (check.status !== 0 && check.status !== 1) throw new Error(`git check-ignore failed: ${check.error?.message ?? check.stderr.trim()}`);
-  if (check.stdout.split('\n').filter(Boolean).length === paths.length) return false;
+  return check.stdout.split('\n').filter(Boolean).length === paths.length;
+}
+
+// Adds .cedarloom/knowledge/ to the repository's info/exclude unless git already ignores every file of the base; returns whether it added the line.
+function keepLocal(root) {
+  if (allIgnored(root)) return false;
   // --git-path answers relative to the repository root, or absolute in a linked worktree.
   const exclude = resolve(root, git(root, 'rev-parse', '--git-path', 'info/exclude'));
   mkdirSync(dirname(exclude), { recursive: true });
   let text = '';
   try { text = readFileSync(exclude, 'utf8'); } catch (e) { if (e.code !== 'ENOENT') throw e; }
   appendFileSync(exclude, `${text && !text.endsWith('\n') ? '\n' : ''}${BASE}/\n`);
+  // A negation in .gitignore outranks info/exclude.
+  if (!allIgnored(root)) throw new Refused(`git does not ignore ${BASE}/ even with the line in info/exclude: a .gitignore rule keeps it`);
   return true;
 }
 

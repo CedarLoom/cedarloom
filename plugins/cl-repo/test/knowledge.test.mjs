@@ -127,7 +127,7 @@ test('write: keeps the newest 500 entries of a file, dropping the oldest by date
   assert.equal(ids.at(-1), 'new');
 });
 
-test('write: refuses a link in the base path and a tracked base, and bad input writes nothing', () => {
+test('write: refuses a link in the base path, a tracked base and a base git does not ignore; a proof path through a linked folder and bad input write nothing', () => {
   const linked = repo();
   const elsewhere = mkdtempSync(join(tmpdir(), 'elsewhere-'));
   symlinkSync(elsewhere, join(linked.root, '.cedarloom'));
@@ -141,6 +141,18 @@ test('write: refuses a link in the base path and a tracked base, and bad input w
   tracked.git('add', '-f', '.cedarloom/knowledge/verdicts.json');
   tracked.git('commit', '-qm', 'base');
   assert.throws(() => writeBase(tracked.root, { verdicts: [entry] }, NOW), Refused);
+
+  const negated = repo();
+  writeFileSync(join(negated.root, '.gitignore'), '!.cedarloom/knowledge/\n!.cedarloom/knowledge/*.json\n');
+  assert.throws(() => writeBase(negated.root, { verdicts: [entry] }, NOW), Refused);
+  assert.equal(existsSync(join(negated.root, '.cedarloom')), false);
+
+  const outside = repo();
+  writeFileSync(join(elsewhere, 'a.js'), 'export const a = 1;\n');
+  symlinkSync(elsewhere, join(outside.root, 'linked'));
+  assert.throws(() => writeBase(outside.root, { verdicts: [{ ...entry, files: ['linked/a.js'] }] }, NOW), BadInput);
+  store(outside.root, 'verdicts', { entries: [verdict({ id: 'through-link', verdict: 'open', files: { 'linked/a.js': A_SHA } })] });
+  assert.deepEqual(readBase(outside.root, NOW).recheck.verdicts, [{ id: 'through-link', why: 'linked/a.js is missing or no regular file' }]);
 
   const bad = repo();
   assert.throws(() => writeBase(bad.root, { verdicts: [entry, { ...entry, id: 'y', verdict: 'kept', reason: 'public API' }] }, NOW), BadInput);
