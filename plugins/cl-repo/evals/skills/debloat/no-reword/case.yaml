@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: skill-debloat-no-reword
-description: 'Asked to shorten a sentence, debloat rewords nothing and names the change as a finding for /cl-repo:improve. Constructed: plugins/cl-repo/skills/debloat/SKILL.md:17. Needs --scaffold.'
+description: 'Asked to shorten a sentence, debloat rewords nothing and names the change as a finding for /cl-repo:improve. Constructed: plugins/cl-repo/skills/debloat/SKILL.md:18. Needs --scaffold.'
 tags: [cl-repo, skill-debloat]
 context:
   scaffold_script: setup.sh
