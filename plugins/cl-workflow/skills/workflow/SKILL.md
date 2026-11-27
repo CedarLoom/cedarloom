@@ -11,6 +11,7 @@ metadata:
 Every depth:
 - Before the first edit, state your assumptions and the check that proves each step done; loop until those checks pass, and stop and report on the stuck signals of step 6 of [the implement agent](../../agents/implement.md).
 - Keep validation at trust boundaries, error handling that prevents data loss, and security checks.
+- Without terminal questions, a step's questions go with your recommendations into one issue per task in the project's issue tracker, else the report; take each safe, reversible recommendation (an item without one waits) and go on.
 - An installed skill may run a step of this skill or its playbooks in more detail: these texts set its floor and gates and win where the two differ; one only the user starts is suggested, then wait; none installed: do the step directly. Reviews, research notes and pull request text follow these playbooks.
 
 1. **Classify.** Kind: software change, docs pass (several documents or product copy checked against the code; a one-file rewrite with no claim about code is a quick software change), research, or a mix or several requests (one item each). Each item gets one depth:
@@ -29,7 +30,7 @@ Every depth:
    - Unsure between two depths: the deeper one.
    - The work grows past its depth: say so, write a new depth line, and run the skipped steps before the next edit.
 
-2. **Settle.** Standard and deep: when goal, scope or result is open, grill the user in rounds (each question with your recommendation, all open ones per round) until goal, scope, acceptance criteria and risks are settled; a settled request skips the grill. Without terminal questions, the open questions go with your recommendations into one issue per task in the project's issue tracker, else the report; take each safe, reversible recommendation (an item without one waits) and go on. Then explore read-only, as the plan phase where [software.md](software.md#phases) runs phases (Claude Code: in plan mode, only while terminal questions are allowed).
+2. **Settle.** Standard and deep: when goal, scope or result is open, grill the user in rounds (each question with your recommendation, all open ones per round) until goal, scope, acceptance criteria and risks are settled; a settled request skips the grill. Then explore read-only, as the plan phase where [software.md](software.md#phases) runs phases (Claude Code: in plan mode, only while terminal questions are allowed).
 
    A plan or spec for this task with an acceptance table (from `/cl-workflow:plan`, a coordinator or the user) settles it: skip this step and the Plan phase and build against that plan. It never lowers the depth or the risk class, and the plan check still runs unless the plan records one.
 3. **Run the playbook.**
