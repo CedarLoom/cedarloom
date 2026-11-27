@@ -21,13 +21,19 @@ const LABELS = [
   ['cl:triage', 'Filed through the issue template; the owner reads it before adding another label.'],
 ];
 
-// The label set with the policy's start label in place of cl:ready-for-agent.
-export const labelSet = (start = START) => LABELS.map(([name, description]) => ({ name: name === START ? start : name, description }));
+// GitHub matches label names without regard to case.
+const key = (name) => name.toLowerCase();
+
+// The label set with the policy's start label in place of cl:ready-for-agent; a start label equal to another label of the set is refused.
+export function labelSet(start = START) {
+  if (start !== START && LABELS.some(([name]) => key(name) === key(start))) throw new Error(`the start label ${start} is another CedarLoom label`);
+  return LABELS.map(([name, description]) => ({ name: name === START ? start : name, description }));
+}
 
 // The labels of the set that `existing`, the JSON of `gh label list --json name`, lacks.
 export function missing(existing, start) {
-  const names = new Set(JSON.parse(existing).map((label) => label.name));
-  return labelSet(start).filter((label) => !names.has(label.name));
+  const names = new Set(JSON.parse(existing).map((label) => key(label.name)));
+  return labelSet(start).filter((label) => !names.has(key(label.name)));
 }
 
 // Creates each named label of the set; `gh` runs one gh command and throws when it fails. Returns the commands that failed.

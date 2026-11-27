@@ -14,6 +14,15 @@ test('labels: the policy start label takes the place of cl:ready-for-agent', () 
   assert.deepEqual(names(missing(existing, 'agent:go')), ['agent:go', 'cl:in-progress', 'cl:deferred', 'cl:follow-up', 'cl:triage']);
 });
 
+test('labels: an existing label in another case counts as present', () => {
+  const existing = JSON.stringify([{ name: 'CL:Plan' }, { name: 'cl:ready-for-agent' }, { name: 'Cl:Triage' }]);
+  assert.deepEqual(names(missing(existing)), ['cl:needs-human', 'cl:in-progress', 'cl:deferred', 'cl:follow-up']);
+});
+
+test('labels: a start label equal to another CedarLoom label is refused', () => {
+  assert.throws(() => missing('[]', 'CL:Follow-Up'), /the start label CL:Follow-Up is another CedarLoom label/);
+});
+
 test('labels: create runs gh for each approved label and returns the commands that failed', () => {
   const ran = [];
   const gh = (args) => {
