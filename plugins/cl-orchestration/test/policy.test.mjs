@@ -70,6 +70,17 @@ test('policy: a key the schema does not name gives no policy, a // comment key p
   assert.deepEqual(commented.policy.merge, { ...DEFAULTS.merge, allowed: true });
 });
 
+for (const label of ['cl:plan', 'cl:needs-human', 'cl:deferred', 'cl:in-progress', 'cl:follow-up', 'cl:triage', 'CL:Triage']) test(`policy: a startLabel of ${label} is refused with the label named`, () => {
+  const { policy, errors } = effective({ startLabel: label }, '0.1.0');
+  assert.equal(policy, null);
+  assert.deepEqual(rules(errors), [['refused', 'startLabel']]);
+  assert.match(errors[0].message, new RegExp(`${label.toLowerCase()} is another CedarLoom label`));
+});
+
+test('policy: a startLabel of cl:ready-for-agent or a project label is valid', () => {
+  for (const label of ['cl:ready-for-agent', 'agent-ready']) assert.equal(effective({ startLabel: label }, '0.1.0').policy.startLabel, label);
+});
+
 test('policy: a file that names another repository is refused and keeps the project repository', () => {
   const named = effective({ startLabel: 'go', issues: { repository: 'owner/tracker', labels: ['project-a'] } }, '0.1.0');
   assert.deepEqual(named.errors, []);
