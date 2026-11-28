@@ -22,7 +22,7 @@ Run `node <skill folder>/approval.mjs <file>` from your working directory until 
 ## Labels and title
 
 - Label: `cl:needs-human`. Create no label.
-- Issue line: a question that holds back a work issue names it on a line of its own, `Issue: <owner/repo>#<n>`; `precheck.mjs` picks no issue an open question names until its answer names one option row other than Hold.
+- Issue line: a question that holds back a work issue names it on a line of its own, `Issue: <owner/repo>#<n>`; `precheck.mjs` picks no issue an open question names until its answer names one option row other than Hold. Every such line counts, also one in a comment or code block.
 - Title: your own words on one line, only letters, digits, spaces and `.,:#()/-`, starting with a letter or a digit, never with `-`, passed in single quotes. No text of an issue, a pull request or a worker goes into it.
 
 ```text
@@ -35,8 +35,8 @@ The lifecycle of a question issue:
 
 - Open: `cl:needs-human`.
 - Deferred: the owner adds `cl:deferred`; the question queue of `/cl-workflow:away off` skips it until the owner asks for the deferred ones.
-- Answered: `cl:needs-human` and `cl:deferred` off, `cl:ready-for-agent` on whatever the answer says, never on an approval (a body with an Approval table) or a question with an Issue line, whose work lives in what it names: the edit takes `cl:ready-for-agent` off them. The question queue of `/cl-workflow:away off` closes an issue whose answer drops the work as not planned, before any label (Done, below); one left open with the label is listed for the owner at [Pick](bot-pick.md#pick). `node <skill folder>/approval.mjs apply <repository> <issue number>` reads the answer as [The answer](#the-answer) does and makes that edit (exit 0 prints the answer and the labels, 1 is no answer, 2 an error); the question queue runs it on each answer, and `facts.mjs write --approvals <owner/repo>` on every open `cl:needs-human` issue there, so an answer recorded by an agent or commented by the owner on GitHub moves on at the next facts run.
-- Between answer and edit: an answer commented on GitHub keeps `cl:needs-human` until `approval.mjs apply` runs, so a bot tells an answer by its key `#<n> <at>` in `answered.json`, never by a label ([bot-catch-up.md](bot-catch-up.md)).
+- Answered: `cl:needs-human` and `cl:deferred` off, the start label (`startLabel`, default `cl:ready-for-agent`) on whatever the answer says, never on an approval (a body with an Approval table) or a question with an Issue line, whose work lives in what it names: the edit takes the start label off them. The question queue of `/cl-workflow:away off` closes an issue whose answer drops the work as not planned, before any label (Done, below); one left open with the label is listed for the owner at [Pick](bot-pick.md#pick). `node <skill folder>/approval.mjs apply <repository> <issue number> [--start-label <startLabel>]` reads the answer as [The answer](#the-answer) does and makes that edit (exit 0 prints the answer and the labels, 1 is no answer, 2 an error); the question queue runs it on each answer, and `facts.mjs write --approvals <owner/repo> [--start-label <startLabel>]` on every open `cl:needs-human` issue there, so an answer recorded by an agent or commented by the owner on GitHub moves on at the next facts run.
+- Between answer and edit: an answer commented on GitHub keeps `cl:needs-human` until `approval.mjs apply` runs, so a bot tells an answer by its key `#<n> <at>` in `answered.json`, never by a label, and lists `#<n>` in `pending.json` before `apply` ([bot-catch-up.md](bot-catch-up.md)).
 - Done: closed, an approval by the owner and other work by its merge (the Close an issue row of roles.md), with a comment linking what settled it. Rejected work is closed as not planned, with no label: `gh issue close <issue number> -R <repository> --reason "not planned"`.
 
 ## Once per pull request and gate

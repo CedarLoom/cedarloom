@@ -110,6 +110,8 @@ test('catch-up 3: each owner answer not acted on starts a run, whether or not it
   assert.deepEqual(check(stateWith()), NOTHING);
   github({ recent: [{ ...OWNER_ANSWER, body: '| Option | Impact |\n|---|---|\n| (a) Go | x |\n| (b) Hold | y |\n', comments: [{ ...OWNER_ANSWER.comments[0], body: 'a' }] }] });
   assert.deepEqual(check(stateWith()), NOTHING);
+  // A run that took cl:needs-human off and ended before its answered.json entry listed the issue in pending.json: its plain answer still starts one.
+  assert.deepEqual(check(stateWith({ 'pending.json': ['#3'] })), ANSWERED);
   // A repeated pass over an answer acted on starts none, in either form; a newer answer on that issue starts one.
   const acted = stateWith({ 'answered.json': [`#3 ${ago(5)}`] });
   github({ asked: [OWNER_ANSWER], recent: [OWNER_ANSWER] });
