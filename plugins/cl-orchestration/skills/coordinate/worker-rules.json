@@ -4,7 +4,7 @@
     "Bash(git push *--force*)", "Bash(git push -f*)", "Bash(git push * -f*)", "Bash(git push * +*)",
     "Bash(git push *--delete*)", "Bash(git push -d*)", "Bash(git push * -d*)", "Bash(git push * :**)", "Bash(git push *--mirror*)", "Bash(git push *--prune*)",
     "Bash(git stash*)", "Bash(git gc*)", "Bash(git prune*)", "Bash(git worktree *)", "Bash(git config *)",
-    "Bash(git rebase*)", "Bash(git pull *--rebase*)", "Bash(git reset*)", "Bash(git clean*)",
+    "Bash(git rebase*)", "Bash(git pull *--rebase*)", "Bash(git pull -r*)", "Bash(git pull * -r*)", "Bash(git reset*)", "Bash(git clean*)",
     "Bash(podman machine *)", "Bash(podman system reset*)", "Bash(podman system prune*)", "Bash(colima *)",
     "Read(.env)", "Read(.env.*)", "Read(secrets/**)",
     "Bash(git push *)", "Bash(gh pr create *)", "Bash(gh pr comment *)",

@@ -46,10 +46,10 @@ test('worker-settings: fills the worktree and the shared .git into the template'
       `Edit(${folders}/*/commondir)`, `Edit(${folders}/*/config.worktree)`,
     ]);
     // The worker rules that Bash(gh *), Bash(git push *), WebFetch and the .claude deny already match are left out.
-    assert.deepEqual(settings.permissions.deny.slice(-29), [
+    assert.deepEqual(settings.permissions.deny.slice(-31), [
       'mcp__*', 'Bash(gh *)', 'Bash(git push *)',
       'Bash(git stash*)', 'Bash(git gc*)', 'Bash(git prune*)', 'Bash(git worktree *)', 'Bash(git config *)',
-      'Bash(git rebase*)', 'Bash(git pull *--rebase*)', 'Bash(git reset*)', 'Bash(git clean*)',
+      'Bash(git rebase*)', 'Bash(git pull *--rebase*)', 'Bash(git pull -r*)', 'Bash(git pull * -r*)', 'Bash(git reset*)', 'Bash(git clean*)',
       'Bash(podman machine *)', 'Bash(podman system reset*)', 'Bash(podman system prune*)', 'Bash(colima *)',
       'Read(.env)', 'Read(.env.*)', 'Read(secrets/**)',
       'Bash(rm -r*)', 'Bash(rm -R*)', 'Bash(rm -fr*)', 'Bash(rm -fR*)', 'Bash(rm * -r*)', 'Bash(rm * -R*)', 'Bash(rm *--recursive*)',
