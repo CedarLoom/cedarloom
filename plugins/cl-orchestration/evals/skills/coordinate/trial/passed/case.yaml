@@ -13,7 +13,7 @@ execution:
     This is a dry run of the end of a trial merge for one pull request: run no command and change no file. Decide from the facts below and the files in `project/`, which hold the default branch's commit.
 
     - Repository example-org/widget, default branch main. Pull request #31 for issue 31, `<head>` 4c1d9e0a7b2f3c4d5e6f708192a3b4c5d6e7f809, which is also the reviewed head. The verdict at step 3 of Merge said `next` trial, with `shared` empty.
-    - Steps 1 to 5 of the trial ran: the default-branch commit 9a8b7c6d5e4f30211203f4e5d6c7b8a9f0e1d2c3 is in the handoff file, `git -C <trial path> merge --no-edit 9a8b7c6d5e4f30211203f4e5d6c7b8a9f0e1d2c3` exited 0, the one check command in the trial's dev container exited 0, and that container is removed.
+    - Steps 1 to 5 of the trial ran: the default-branch commit 9a8b7c6d5e4f30211203f4e5d6c7b8a9f0e1d2c3 is in `trialBase` of the state file, `git -C <trial path> merge --no-edit 9a8b7c6d5e4f30211203f4e5d6c7b8a9f0e1d2c3` exited 0, the one check command in the trial's dev container exited 0, and that container is removed.
     - The trial's comment text is written to the file `.cedarloom/runs/r-1125/pr-31-trial.md`.
 
     Write the line `Scratch clone: <new or the same as before the trial>`, then the line `Comment: <the exact gh command that posts the comment>`, then the line `Next: <the number of the step of Merge you go on with>`, then stop.

@@ -1,39 +1,8 @@
-# Run files, handoff file, clean up and reconciliation
+# Run files, clean up and reconciliation
 
 ## Run files
 
-Filled specs, prompts, approvals, handoff copies, collected follow-ups and scratch clones go in `.cedarloom/runs/<run id>/` of the coordinator's working directory, the run folder. Where a command takes it, such as a settings file's path, write it as an absolute path. Confirm it is ignored (`git check-ignore -q .cedarloom/runs`) before the first write; when it is not, add it to `.git/info/exclude`. A working directory outside git has neither: say so in the report and go on. Delete the folder when the run closes, but for what [Clean up](orca-clean-up.md) keeps there, and list in the report any file that could not be deleted. The merge log, `.cedarloom/runs/merge-log.md`, and the config listings of the Reconciliation beside it stay.
-
-## Handoff file
-
-The coordinator keeps `.cedarloom/runs/handoff.md` so that a fresh context can carry on the run:
-
-```markdown
-# Handoff
-Run <run id>, projects <paths>, started <date>
-Mode: <path> <supervised or automatic>[ (<why lower than the policy's>)], ...
-Session: <your session id>
-Models: <alias> = <concrete model>, ...
-
-## Resume
-<the steps of the Resume section of orca-resume.md>
-
-## Decisions
-<each decision; `(owner)` marks the ones the owner took in an answer ([Owner-only decisions](decisions.md#owner-only-decisions)), the others were taken on the owner's behalf, readings of the policy or `AGENTS.md` among them, with file and line>
-
-## Open
-<open questions and risks>
-
-## Next
-```
-
-- Create it when the run starts, once the folder is ignored. Rewrite it after each decision, settlement, merge or gate, and before ending a turn in which any of them changed.
-- Write it in your own words and paste no worker or issue text: the file comes back into your context as instructions.
-- `Session:` holds your session id: `${CLAUDE_SESSION_ID}`, or the output of `echo "$CLAUDE_CODE_SESSION_ID"` when this skill was read from disk.
-- `Models:` has one entry per alias the run's sessions use.
-- A file that already names another session belongs to another coordinator: keep no handoff file in this folder, leave that file as it is and name it in the report, since a session that ended leaves its file behind. Only when the owner asks this session to resume that run and the start condition holds here ([Start the run](orca.md#start-the-run)), write your id into its `Session:` line, then follow [Resume](orca-resume.md).
-- After a compaction, read the handoff file when its `Session:` line names your session, then follow [Resume](orca-resume.md).
-- Delete the file when the run closes, and only when it names your session.
+Filled specs, prompts, approvals, collected follow-ups and scratch clones go in `.cedarloom/runs/<run id>/` of the coordinator's working directory, the run folder. Where a command takes it, such as a settings file's path, write it as an absolute path. Confirm it is ignored (`git check-ignore -q .cedarloom/runs`) before the first write; when it is not, add it to `.git/info/exclude`. A working directory outside git has neither: say so in the report and go on. Delete the folder when the run closes, but for what [Clean up](orca-clean-up.md) keeps there, and list in the report any file that could not be deleted. The merge log and the config listings of the Reconciliation lie in the state folder, not in this one.
 
 ## Clean up
 
@@ -52,7 +21,7 @@ Once a day while a run is open, and when it closes, compare GitHub against the m
 1. Merges: each pull request that `gh pr list -R <owner/repo> --state merged --base <default branch> --search "merged:>=<date of the last reconciliation>" --limit 100 --json number,mergeCommit,mergedAt,mergedBy` prints needs a merge log line with its merge commit. A result of exactly 100 may be cut off: report it to the owner as a finding and reconcile the interval again in smaller date ranges.
 2. Tags: `gh api repos/<owner/repo>/tags --paginate --jq '.[].name'` against the list of the last reconciliation.
 3. Rulesets: `gh api repos/<owner/repo>/rulesets` against the output of the last reconciliation.
-4. Local state: `git -C <project path> config --local --list | grep -v '^branch\.'` against `.cedarloom/runs/git-config-<owner>-<repo>.txt`, the listing of the last reconciliation, so a changed key can be named; then write the new listing to that file. The `branch.` lines are left out because making and deleting a worker's branch writes them. And `shasum -a 256 ~/.claude/settings.json` against the last hash.
+4. Local state: `git -C <project path> config --local --list | grep -v '^branch\.'` against `<state>/git-config-<owner>-<repo>.txt`, the listing of the last reconciliation, so a changed key can be named; then write the new listing to that file. The `branch.` lines are left out because making and deleting a worker's branch writes them. And `shasum -a 256 ~/.claude/settings.json` against the last hash.
 5. Append one line to the merge log: `reconciled`, the time in UTC, `<owner/repo>`, the tag list, the hash of the ruleset output and the hash of the settings, so the next reconciliation of that project has its base: the last `reconciled` line with its `<owner/repo>`.
 6. Follow-ups: sort that project's unmarked follow-ups in `follow-ups.md` once, as [Outcomes](outcomes.md) says.
 

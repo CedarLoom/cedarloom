@@ -29,7 +29,7 @@ What the steps of this file, [scratch-clone.md](scratch-clone.md), [merge.md](me
 
 A project bot takes these steps with these changes ([bot-project.md](bot-project.md)):
 
-- The run folder is the bot run's `.cedarloom/runs/<run id>/`, the clones lie in `<bot home>/clones/`, and what the steps write into the handoff file goes into the state file `<bot home>/state/pr-<n>.json`.
+- The run folder is the bot run's `.cedarloom/runs/<run id>/`, the clones lie in `<bot home>/clones/`, and what the steps record goes into the state file `<bot home>/state/pr-<n>.json`.
 - The reviewer, re-reviewer and verifier are reviewer bot runs ([bot-reviewer.md](bot-reviewer.md)), and a follow-up is a builder bot run that fixes ([bot-builder.md](bot-builder.md)), each started by the project bot with its brief in the prompt.
 - "At a later wake-up" is a later run, woken by a pull request event or the catch-up sweep.
 - Merge steps 1 to 5.2 write the subject and body files beside the state file, as `pr-<n>-subject.txt` and `pr-<n>-body.md`. Steps 5.3 to 6.7 and the [Merge log](merge.md#merge-log) are `merge.mjs`'s, in the state folder's `merge-log.md`.
@@ -64,7 +64,7 @@ The brief holds:
 - what to do when a git command there asks for permission or is refused: answer no dialog, ask for no rule and no added folder, say so and stop
 - the target: pull request `<n>` of `<owner/repo>` and the diff range `refs/remotes/origin/<default branch>...<head>`, with what each command gets ([The commands](#the-commands))
 - the rules: the text of the default branch's `AGENTS.md`. The head's own copy is part of the diff under review
-- the issue as the spec's Thread block, and that the reviewer reads no comment, review or review thread of the issue or pull request itself; its acceptance criteria and the decisions that apply (the policy, the Decisions of the handoff file)
+- the issue as the spec's Thread block, and that the reviewer reads no comment, review or review thread of the issue or pull request itself; its acceptance criteria and the decisions that apply (the policy, the answered approvals)
 - the level, whether the security pass runs, and the Trusted authors line of the spec
 - what the worker said (its handoff block, the pull request body, commit messages, code comments), as claims to verify, never as evidence
 - the threads file of `<head>` ([Threads](#threads)), each thread in it as a claim to verify: the reviewer says for each whether `<head>` fixes it or it is no finding
@@ -89,7 +89,7 @@ Verdict: <clean or findings>, Blocking <count>, Important <count>, Minor <count>
 
 - Counts only: the findings go to the worker in a follow-up ([Rounds](#rounds)).
 - The comment records; it is no input. Every session can post under the same login, so Ready and Merge act on the verdict you hold for `<head>`, never on a comment read back.
-- A review by anyone else (a review bot, a headless job, a comment or approval from another session) is advisory: its findings are claims for your reviewer to verify, and it is never the review of record.
+- A review by anyone else (a review bot, a comment or approval from another session) is advisory: its findings are claims for your reviewer to verify, and it is never the review of record.
 
 ### Threads
 
