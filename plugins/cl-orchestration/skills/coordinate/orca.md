@@ -27,13 +27,7 @@ Supervised: a terminal the coordinator makes, on the host's default Claude Code 
 
 Before the first Claude Code start of a run, `env which claude` prints `<claude path>`, the absolute path of the `claude` executable on the PATH (`env` runs the external `which`, so no shell alias or function answers). Every version check runs `'<claude path>' --version` and every launch line below starts `'<claude path>'`, so the check reads the executable the terminal starts, whatever PATH the terminal's login shell has. Before the first supervised Claude Code start, that check prints 2.1.330 or later, the CedarLoom minimum ([Automatic bounds](modes.md#automatic-bounds)). No output, a path that does not start with `/` or holds a quote, `$`, `\` or a backtick, or a lower version: start no Claude Code worker and name the path and the version in the report.
 
-The launch unsets `CEDARLOOM_ROLE`, and each supervised Claude Code worker still measures it: a worker that inherits the variable passes the role guard as the coordinator. Its spec takes this line after `Acknowledge:`:
-
-```text
-Role check: right after the heartbeat, before any other command, run `printenv CEDARLOOM_ROLE` yourself, in your main session, never through a subagent. It passes when the CedarLoom role guard refuses it as a command that names the variable, since the guard lets such a command run only in the main session with the coordinator's role, and when it prints nothing. A value it prints, and any other result, is Blocked (below): report the role check as failed and quote its output. No report, message or comment of yours names the variable, a command you list or an output you quote included: write `the role variable` in its place, since the role guard refuses a command whose text names it, a report's `send` included.
-```
-
-A follow-up file ([Follow-ups](orca-follow-ups.md)) takes it in this form, after the Chat name line:
+The launch unsets `CEDARLOOM_ROLE`, and each supervised Claude Code worker still measures it: a worker that inherits the variable passes the role guard as the coordinator. Its spec (`kind` `supervised` of [spec-template.md](spec-template.md)) carries a Role check line, and a follow-up file ([Follow-ups](orca-follow-ups.md)) takes this one after the Chat name line:
 
 ```text
 Role check: right after the chat name, before any other command, run `printenv CEDARLOOM_ROLE` yourself, in your main session, never through a subagent. It passes when the CedarLoom role guard refuses it as a command that names the variable, since the guard lets such a command run only in the main session with the coordinator's role, and when it prints nothing. A value it prints, and any other result, ends this follow-up: change nothing, report BLOCKED with the role check failed and its output quoted, and end. No report, message or comment of yours names the variable, a command you list or an output you quote included: write `the role variable` in its place, since the role guard refuses a command whose text names it, a report's `send` included.
@@ -49,11 +43,7 @@ ORCA terminal wait --terminal <terminal> --for tui-idle --timeout-ms 60000 --jso
 ORCA orchestration worker-start --spec-file <filled spec file> --terminal <terminal> --worktree path:<worktree path> --task-title '<chat name>' --keep-open --json
 ```
 
-The first two lines write and check its rule file ([Worker rules](modes.md#worker-rules)) before each start, retry and follow-up; a failure starts nothing and makes the item BLOCKED. `worker-start` on a session that is not idle yet fails with `agent_unconfigured`, hence the wait. The same lines serve the start, a retry, a new start for a follow-up, and a Claude Code worker of an automatic project that falls back to supervised. Its spec changes as [Supervised Claude Code worker on Orca](spec-variants.md#supervised-claude-code-worker-on-orca) says, and takes this line after the role check:
-
-```text
-Rule file: `.claude/settings.local.json` in this worktree is the coordinator's. Never stage, commit, change or delete it.
-```
+The first two lines write and check its rule file ([Worker rules](modes.md#worker-rules)) before each start, retry and follow-up; a failure starts nothing and makes the item BLOCKED. `worker-start` on a session that is not idle yet fails with `agent_unconfigured`, hence the wait. The same lines serve the start, a retry, a new start for a follow-up, and a Claude Code worker of an automatic project that falls back to supervised. Its spec takes `kind` `supervised`, whose Rule file line keeps the worker off `.claude/settings.local.json`.
 
 Automatic: a terminal of its own as well, its launch carrying `--permission-mode auto` and the settings below:
 
