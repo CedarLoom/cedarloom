@@ -1,6 +1,6 @@
 # Worker bounds
 
-The `cl-orchestration` dispatch guard refuses the commands that would let a coordinator, a worker or a bot step past a run's bounds by mistake: skip permission prompts, start an agent with the coordinator's role, delete a worktree with its changes, merge a head nobody reviewed, or put a pull request's files on disk. It is a `PreToolUse` hook for Bash, Monitor, PowerShell, Write, Edit and MultiEdit in every Claude Code session that loads the plugin ([hooks/claude-code.json](../plugins/cl-orchestration/hooks/claude-code.json)); Codex does not run it.
+The `cl-orchestration` dispatch guard refuses the commands that would let a coordinator, a worker or a bot step past a run's bounds by mistake: skip permission prompts, start an agent with the coordinator's role, delete a worktree with its changes, merge a head nobody reviewed, or put a pull request's files on disk. It is a `PreToolUse` hook for Bash, Monitor and PowerShell in every Claude Code session that loads the plugin ([hooks/claude-code.json](../plugins/cl-orchestration/hooks/claude-code.json)); Codex does not run it.
 
 | Rule | Refuses |
 |---|---|
