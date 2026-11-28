@@ -28,7 +28,6 @@ cat > project/cedarloom.json <<'POLICY'
   "stallMinutes": 20,
   "issuesPerWorker": 1,
   "keepRunning": false,
-  "permissionPrompts": "block",
   "review": { "depth": "high", "sensitiveDepth": "high" },
   "merge": { "allowed": true, "requiredChecks": ["ci"], "mode": "strict" },
   "closeIssue": true,
