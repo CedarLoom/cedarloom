@@ -404,14 +404,13 @@ test('precheck: Pick leaves an issue while a question that names it waits for th
   assert.deepEqual(check('/p', run([question([], undefined, 'stranger')]), {}, none), [7]);
   // A question filed under an App, as gh prints it, is a trustedAuthors login's.
   assert.deepEqual(check('/p', run([question([], undefined, 'app/helper')]), {}, none), []);
-  // An Issue line in a comment or a code block names nothing; a question about another repository's #7 holds nothing.
-  for (const quoted of ['<!--\nIssue: owner/project#7\n-->', '```\nIssue: owner/project#7\n```', '~~~~\nIssue: owner/project#7\n']) {
-    assert.deepEqual(check('/p', run([question([], quoted)]), {}, none), [7], quoted);
-  }
-  // GitHub shows the Issue line below a code span that starts with three backticks or holds "<!--": the question names #7.
-  for (const span of ['```gh issue list``` prints the author as app/slug.\nIssue: owner/project#7\n', 'A `<!--` starts a comment.\nIssue: owner/project#7\n']) {
-    assert.deepEqual(check('/p', run([question([], span)]), {}, none), [], span);
-  }
+  // Every Issue line holds its issue, also one in a comment or a code block, and one after an example Issue line in a fence that a "```text" line seems to close.
+  for (const body of [
+    '<!--\nIssue: owner/project#7\n-->', '```\nIssue: owner/project#7\n```', '~~~~\nIssue: owner/project#7\n',
+    '```gh issue list``` prints the author as app/slug.\nIssue: owner/project#7\n', 'A `<!--` starts a comment.\nIssue: owner/project#7\nA `-->` ends it.\n',
+    '```\n```text\nIssue: owner/project#5\n```\nIssue: owner/project#7\n',
+  ]) assert.deepEqual(check('/p', run([question([], body)]), {}, none), [], body);
+  // A question about another repository's #7 holds nothing.
   assert.deepEqual(check('/p', run([question([], 'Issue: owner/other#7')]), {}, none), [7]);
   // An answer releases the issue only when it names one option row that is no Hold, by label, text or both; anything else holds it.
   const options = 'Issue: owner/project#7\n\n| Option | Impact |\n|---|---|\n| (a) Stream it (Recommended) | x |\n| (c) Hold | Nothing changes |\n';
@@ -421,13 +420,16 @@ test('precheck: Pick leaves an issue while a question that names it waits for th
   for (const said of ['c', 'Owner answer (2026-11-20): (c) Hold. Later.', 'Owner answer (2026-11-20): Wait until the audit is done.']) {
     assert.deepEqual(check('/p', run([question([{ ...answered[0], body: said }], options)]), {}, none), [], said);
   }
+  // A row whose text holds "hold" but does not start with it is no Hold.
+  const remove = 'Issue: owner/project#7\n\n| Option | Impact |\n|---|---|\n| (a) Remove the hold (Recommended) | x |\n| (b) Hold | Nothing changes |\n';
+  assert.deepEqual(check('/p', run([question([{ ...answered[0], body: 'Owner answer (2026-11-20): Remove the hold. Go.' }], remove)]), {}, none), [7]);
   // An option that starts with a row's label but goes on to reject it names no row: the answer holds the issue.
   const node = 'Issue: owner/project#7\n\n| Option | Impact |\n|---|---|\n| (a) Upgrade to Node.js 24 (Recommended) | x |\n| (b) Hold | Nothing changes |\n';
   assert.deepEqual(check('/p', run([question([{ ...answered[0], body: 'Owner answer (2026-11-20): (a) is too risky. Wait for the audit.' }], node)]), {}, none), []);
   // Without option rows, no answer names one.
   assert.deepEqual(check('/p', run([question(answered)]), {}, none), []);
   // A local question holds it while open, deferred or held by its answer; a file that is no question starts nothing.
-  const local = (status, held) => () => [{ file: 'project-1.md', status, issue: 'owner/project#7', held }];
+  const local = (status, held) => () => [{ file: 'project-1.md', status, issues: ['owner/project#7'], held }];
   assert.deepEqual(check('/p', run([]), {}, local('open')), []);
   assert.deepEqual(check('/p', run([]), {}, local('deferred')), []);
   assert.deepEqual(check('/p', run([]), {}, local('answered', true)), []);

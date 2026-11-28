@@ -4,7 +4,7 @@
 // The conditions, in this order; from 4 on only an open pull request whose state is neither held nor merged counts, and from 1 on none that had LIMITS.prRuns runs today:
 // 1. The merge lock is stale, or, while no merge holds the lock, a pull request state that is not held holds a merge command time and the merge log no line for it.
 // 2. The default branch's tip has a red run, or red-main.json names the tip, and red-main.json names no report for that tip.
-// 3. An owner answer that answered.json does not list: on an open issue that carries cl:needs-human, or a trusted author's issue updated in the last ANSWER_DAYS days whose answer has the full form, as #<n> <at>, or on a local question, as <file> <at>.
+// 3. An owner answer that answered.json does not list: on an open issue that carries cl:needs-human or that pending.json lists, or a trusted author's issue updated in the last ANSWER_DAYS days whose answer has the full form, as #<n> <at>, or on a local question, as <file> <at>.
 // 4. A pull request is merge-ready: its state's handled names its head with the verdict merge or trial (merge-checks.mjs) and a reviewed head, its checks are green, or it has none and merge.requiredChecks is empty, the lock is free, no merge command is unconfirmed or held (merge.mjs pauses every merge then), and the tip's watch ended (10 minutes from tip.json's first sight, no run open) or red-main.json names the red tip and that pull request.
 // 5. A bot pull request's head is red (a check failed, timed out, failed to start or errored) or in conflict and handled does not name that head.
 // 6. A bot pull request's head is green, or has no checks and merge.requiredChecks is empty, the reviewed head does not name that head, handled does not name it or names it with the action fix while it is not in conflict and every dispatch and run for it has a result, and no claim-<n>-<head> folder is younger than stallMinutes.
@@ -73,6 +73,8 @@ function pending({ clone, state, now, run, queue, counts }) {
 
   const writes = writers(repo, (cmd, args) => run(clone, cmd, args));
   const acted = new Set(stored('answered.json') ?? []);
+  // A run records the issue in pending.json before approval.mjs apply takes cl:needs-human off: one that ended before its answered.json entry leaves the answer to act on.
+  const pending = new Set(stored('pending.json') ?? []);
   // An answer through the question queue takes cl:needs-human off at once, so the open issues updated in the answer window are read too.
   const since = new Date(now.getTime() - ANSWER_DAYS * 24 * 60 * MINUTE).toISOString().slice(0, 10);
   const listed = (...filter) => gh('issue', 'list', '-R', repo, ...filter, '--state', 'open', '--limit', '1000', '--json', 'number,labels,comments,author,body,url');
@@ -82,7 +84,7 @@ function pending({ clone, state, now, run, queue, counts }) {
   const labeled = listed('--label', 'cl:needs-human');
   for (const issue of [...labeled, ...listed('--search', `updated:>=${since}`)]) {
     const found = answer(issue, writes);
-    if (found && !labeled.includes(issue) && !(full(issue, found.at) && asker(issue))) continue;
+    if (found && !labeled.includes(issue) && !pending.has(`#${issue.number}`) && !(full(issue, found.at) && asker(issue))) continue;
     // An answer without a time has no key: it fails the precheck, which reports it, rather than start a run on every pass.
     if (found && !Number.isFinite(Date.parse(found.at))) throw new Error(`the answer on #${issue.number} has no time`);
     if (found && !acted.has(`#${issue.number} ${found.at}`)) return { condition: 3, reason: `#${issue.number} has an answer` };

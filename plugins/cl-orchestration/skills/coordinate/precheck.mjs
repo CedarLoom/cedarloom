@@ -363,7 +363,7 @@ if (isMain(import.meta.url) && process.argv.slice(2).includes('--catch-up')) {
   try { handOver(handOverArgs(process.argv.slice(2))); } catch (e) { console.error(escaped(e.message.split('\n')[0])); process.exit(2); }
 } else if (isMain(import.meta.url)) {
   let dirs, prompts;
-  try { ({ dirs, prompts } = argsOf(process.argv.slice(2))); } catch (e) { console.error(e.message); process.exit(1); }
+  try { ({ dirs, prompts } = argsOf(process.argv.slice(2))); } catch (e) { console.error(escaped(e.message)); process.exit(1); }
   if (!dirs.length) { console.error('usage: node precheck.mjs [--prompts <folder>] <project paths...>'); process.exit(1); }
   const results = prompts === undefined ? [] : unread(prompts).map((reason) => `${prompts}: ${reason}`);
   const { out, err, code } = report(dirs, (dir) => picks(dir, sh, process.env, readQueue), results);

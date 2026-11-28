@@ -136,6 +136,7 @@ const REFUSED = [
   [{ merge: { autoMergeMax: 'high' } }, 'enum', 'merge.autoMergeMax'],
   // The editor refuses what the reader drops.
   [{ issues: { repository: 'owner/tracker' } }, 'refused', 'issues.repository'],
+  [{ issues: { tracker: 'owner/tracker' } }, 'unknown-key', 'issues.tracker'],
   [{ models: { roles: { deep: { model: 'some-model-20260101', effort: 'high' } } } }, 'enum', 'models.roles.deep.model'],
   [{ review: { depth: 'max' } }, 'enum', 'review.depth'],
   [{ review: { sensitiveDepth: 'max' } }, 'enum', 'review.sensitiveDepth'],

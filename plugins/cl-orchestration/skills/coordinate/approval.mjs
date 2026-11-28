@@ -1,12 +1,13 @@
 // Usage: node approval.mjs <file>, the file in .cedarloom/runs/ of the working directory (the run folder, approvals.md); any other path exits 2. Checks an approval or owner question against approval-template.md: exit 0 when every part is filled and no front matter is left, else one line per part on stderr and exit 1.
 // Usage: node approval.mjs answer <file>, the file in the run folder as above. Reads the owner's answer from a filed approval, the file holding what `gh issue view <n> -R <repository> --json labels,comments,author,body,url` printed: the answer as JSON and exit 0, exit 1 while there is none, or exit 2 with one line when the file cannot be read as that output.
 // Usage: node approval.mjs file <file> <project>, the file in the run folder: checks it as above and files it as the next question of the local queue, .cedarloom/questions/<project>-<n>.md, printing { file }.
-// Usage: node approval.mjs apply <owner/name> <number>. Reads the issue with gh and its owner's answer as the answer mode does; on an answer takes cl:needs-human and cl:deferred off, and cl:ready-for-agent too when the body holds an Approval table or an Issue line, else puts cl:ready-for-agent on, then prints { option, text, at, labels } and exits 0; exit 1 while there is none, exit 2 with one line on an error.
-// Usage: node approval.mjs queue: { file, status, issue, option, text, at, held } of each question in the local queue as JSON (issue where its Issue line names one; held: whether the answer keeps that issue back, holds), or exit 2 with one line.
+// Usage: node approval.mjs apply <owner/name> <number> [--start-label <label>]. Reads the issue with gh and its owner's answer as the answer mode does; on an answer takes cl:needs-human and cl:deferred off, and the start label (the policy's startLabel, default cl:ready-for-agent) too when the body holds an Approval table or an Issue line, else puts the start label on, then prints { option, text, at, labels } and exits 0; exit 1 while there is none, exit 2 with one line on an error.
+// Usage: node approval.mjs queue: { file, status, issues, option, text, at, held } of each question in the local queue as JSON (issues where Issue lines name some; held: whether the answer keeps those issues back, holds), or exit 2 with one line.
 // Usage: node approval.mjs digests: makes the digest folder .cedarloom/digests/ (digest.md) and keeps it out of git as the queue is, printing { folder }, or exit 2 with one line.
 import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
-import { escaped, isMain, json, sh } from './policy.mjs';
+import { parseArgs } from 'node:util';
+import { escaped, isMain, json, sh, validate } from './policy.mjs';
 import { writers } from './precheck.mjs';
 
 // owner/name on GitHub; . and .. are no repository name.
@@ -123,22 +124,30 @@ const fullAnswer = (body, at) => {
 const ASKING = ['cl:needs-human', 'cl:deferred'];
 const START = 'cl:ready-for-agent';
 
+// The start label from a command line, refused where cedarloom.json would refuse it as startLabel; flag names the option in the error.
+export function startLabel(label = START, flag = '--start-label') {
+  const [error] = validate({ startLabel: label });
+  if (error) throw new Error(`${flag} ${error.message}`);
+  return label;
+}
+
 // gh refuses to remove a label the repository lacks, so only the issue's own go; an approval (an Approval table) or a question with an Issue line gets no start label and loses one it has, as its work lives in the issue or pull request it names.
-export function settle(repo, issue, exec) {
+// start is the project's startLabel: another label would mark work its coordinator never picks.
+export function settle(repo, issue, exec, start = START) {
   const labels = issue.labels.map((label) => String(label.name));
-  const approval = tables(issue.body.replace(COMMENT, ''), 'Approval').length > 0 || named(issue.body) !== null;
+  const approval = tables(issue.body.replace(COMMENT, ''), 'Approval').length > 0 || namedIssues(issue.body).length > 0;
   // Without cl:needs-human, an approval that kept the start label would read as work to start (precheck.mjs pickable).
-  const off = labels.filter((name) => [...ASKING, ...(approval ? [START] : [])].includes(name.toLowerCase()));
-  const on = approval || labels.some((name) => name.toLowerCase() === START) ? [] : [START];
+  const off = labels.filter((name) => [...ASKING, ...(approval ? [start.toLowerCase()] : [])].includes(name.toLowerCase()));
+  const on = approval || labels.some((name) => name.toLowerCase() === start.toLowerCase()) ? [] : [start];
   if (off.length || on.length) exec('gh', ['issue', 'edit', String(issue.number), '-R', repo, ...off.flatMap((name) => ['--remove-label', name]), ...on.flatMap((name) => ['--add-label', name])]);
   return [...labels.filter((name) => !off.includes(name)), ...on];
 }
 
 // { option, text, at, labels } of the owner's answer on issue number of repo after its label edit, or null with no edit. exec(cmd, args) gives stdout or throws.
-export function apply(repo, number, exec) {
+export function apply(repo, number, exec, start = START) {
   const issue = JSON.parse(exec('gh', ['issue', 'view', String(number), '-R', repo, '--json', 'number,labels,comments,author,body']));
   const found = answer(issue, writers(repo, exec));
-  return found && { ...found, labels: settle(repo, issue, exec) };
+  return found && { ...found, labels: settle(repo, issue, exec, start) };
 }
 
 // The local question queue (approvals.md) and the digest folder (digest.md): a folder that is a link is refused, as the run folder is.
@@ -232,24 +241,19 @@ export function readQueue() {
     }
     const status = /^Status: (open|answered|deferred)\r?$/.exec(body.split('\n', 1)[0])?.[1];
     if (!status) return { file, error: 'the first line is no Status line (open, answered or deferred)' };
-    const issue = named(body);
-    if (status !== 'answered') return { file, status, ...(issue && { issue }) };
+    const issues = namedIssues(body);
+    if (status !== 'answered') return { file, status, ...(issues.length && { issues }) };
     const found = fullAnswer(body.slice(body.lastIndexOf('\nOwner answer (') + 1));
-    return found ? { file, status, ...(issue && { issue }), ...found, held: holds(found.option, body) } : { file, error: 'answered, but no Owner answer line' };
+    return found ? { file, status, ...(issues.length && { issues }), ...found, held: holds(found.option, body) } : { file, error: 'answered, but no Owner answer line' };
   });
 }
 
-// A fenced code block, up to its closing fence or the end of the text: it shows its lines as code, not as lines of the body.
-// A line with a further backtick after its opening backticks is a code span, no fence (CommonMark: a backtick fence's info string holds no backtick).
-const FENCED = /^ {0,3}(`{3,}(?![^\n]*`)|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[^\n]*$|(?![\s\S]))/gm;
+// The work issues a question holds back from Pick, from its lines `Issue: <owner/repo>#<n>` (approvals.md, Labels and title).
+// Every such line counts, also one inside a comment or code block: naming more only holds more, where reading Markdown as GitHub shows it could miss the real line.
+const namedIssues = (text) => [...String(text).matchAll(/^Issue: ([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#[1-9]\d*)\r?$/gm)].map(([, ref]) => ref);
 
-// The work issue a question holds back from Pick, from its line `Issue: <owner/repo>#<n>` (approvals.md, Labels and title), or null; a line in a comment or code block is none.
-// Only a closed comment hides a line: an unclosed "<!--" may sit in a code span, and naming an issue only holds it back.
-// split, not replace: the text is searched for one line, never shown as HTML, so a "<!--" left in it is no injection.
-const named = (text) => /^Issue: ([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#[1-9]\d*)\r?$/m.exec(String(text).split(/<!--[\s\S]*?-->/).join('').replace(FENCED, ''))?.[1] ?? null;
-
-// Whether an answer keeps the work its question holds back: it does unless its option names exactly one option row of body that is no Hold,
-// by label ("b" or "(b)"), by text, or both, as the question queue records the option it offered; "(Recommended)" is no part of the name.
+// Whether an answer keeps the work its question holds back: it does unless its option names exactly one option row of body whose text does not start with Hold,
+// by label ("b" or "(b)"), by text, or both, as the question queue records the option it offered; "(Recommended)" is no part of the name. A row such as "Remove the hold" is no Hold.
 export function holds(option, body = '') {
   const plain = (text) => text.replace(/\(recommended\)/gi, '').replace(/\s+/g, ' ').trim().toLowerCase();
   const said = plain(String(option).replace(/\.$/, ''));
@@ -258,19 +262,19 @@ export function holds(option, body = '') {
     const label = labelOf(cell)?.toLowerCase() ?? '';
     return said !== '' && [plain(cell), label, label.slice(1, -1), textOf(cell)].includes(said);
   });
-  return /\bhold\b/.test(said) || rows.length !== 1 || /^hold\b/.test(textOf(rows[0]));
+  return rows.length !== 1 || /^hold\b/.test(textOf(rows[0]));
 }
 
-// The numbers of repo's issues that a question still waits on, which Pick leaves (precheck.mjs): one an open issue of asked or a local question names while its answer is missing or holds it.
+// The numbers of repo's issues that a question still waits on, which Pick leaves (precheck.mjs): each an open issue of asked or a local question names while its answer is missing or holds it.
 // A queue file that is no question throws, so nothing starts on a guess.
 export function waiting(repo, asked, queue, writes) {
   const open = (found, body) => !found || holds(found.option, body);
   const refs = [
-    ...asked.filter((issue) => named(issue.body) && open(answer(issue, writes), issue.body)).map((issue) => named(issue.body)),
-    ...queue.map((q) => { if (q.error) throw new Error(`the question ${q.file} ${q.error}`); return q.status !== 'answered' || q.held ? q.issue : null; }),
+    ...asked.filter((issue) => namedIssues(issue.body).length && open(answer(issue, writes), issue.body)).flatMap((issue) => namedIssues(issue.body)),
+    ...queue.flatMap((q) => { if (q.error) throw new Error(`the question ${q.file} ${q.error}`); return q.status !== 'answered' || q.held ? q.issues ?? [] : []; }),
   ];
   const prefix = `${repo.toLowerCase()}#`;
-  return new Set(refs.filter((ref) => ref?.toLowerCase().startsWith(prefix)).map((ref) => Number(ref.slice(prefix.length))));
+  return new Set(refs.filter((ref) => ref.toLowerCase().startsWith(prefix)).map((ref) => Number(ref.slice(prefix.length))));
 }
 
 // The path comes from a session's command line: a file that resolves outside the run folder, through .. or a link, is not read,
@@ -281,11 +285,14 @@ if (isMain(import.meta.url)) {
   const say = (message) => console.error(escaped(message.split('\n')[0]));
   process.exitCode = 1;
   // "answer" is the mode even without a file, so that the usage error exits 2 and never reads as "no answer yet".
-  const args = process.argv.slice(2);
-  const mode = ['answer', 'apply', 'digests', 'file', 'queue'].includes(args[0]) ? args.shift() : 'check';
-  const [file, project] = args;
+  const argv = process.argv.slice(2);
+  const mode = ['answer', 'apply', 'digests', 'file', 'queue'].includes(argv[0]) ? argv.shift() : 'check';
   try {
-    if (args.length !== { check: 1, answer: 1, apply: 2, file: 2, queue: 0, digests: 0 }[mode]) throw new Error('usage: node approval.mjs [answer] <file>, node approval.mjs apply <owner/name> <number>, node approval.mjs file <file> <project>, node approval.mjs queue, or node approval.mjs digests');
+    // Only apply takes an option: the other modes read each argument as a path or a name.
+    const { values, positionals: args } = mode === 'apply' ? parseArgs({ args: argv, options: { 'start-label': { type: 'string' } }, allowPositionals: true }) : { values: {}, positionals: argv };
+    const [file, project] = args;
+    if (args.length !== { check: 1, answer: 1, apply: 2, file: 2, queue: 0, digests: 0 }[mode]) throw new Error('usage: node approval.mjs [answer] <file>, node approval.mjs apply <owner/name> <number> [--start-label <label>], node approval.mjs file <file> <project>, node approval.mjs queue, or node approval.mjs digests');
+    const start = startLabel(values['start-label']);
     if (mode === 'apply' && !(REPO.test(file) && /^[1-9]\d*$/.test(project))) throw new Error(`no repository as owner/name and issue number: ${args.join(' ')}`);
     const reads = ['check', 'answer', 'file'].includes(mode);
     const real = reads ? inRuns(file) : null;
@@ -300,7 +307,7 @@ if (isMain(import.meta.url)) {
     let writes = writers(repo, (cmd, args) => sh('.', cmd, args));
     if (!repo) writes = () => { throw new Error('the file holds no issue url: it must be what gh issue view --json labels,comments,author,body,url printed'); };
     else if (host.toLowerCase() !== gh) writes = () => { throw new Error(`the issue is on ${host}, and gh asks ${gh}: set GH_HOST for an approval on another host`); };
-    const found = mode === 'answer' ? answer(issue, writes) : mode === 'apply' ? apply(file, project, (cmd, cmdArgs) => sh('.', cmd, cmdArgs)) : mode === 'queue' ? readQueue() : mode === 'digests' ? { folder: digestFolder((cmd, cmdArgs) => sh('.', cmd, cmdArgs)) } : null;
+    const found = mode === 'answer' ? answer(issue, writes) : mode === 'apply' ? apply(file, project, (cmd, cmdArgs) => sh('.', cmd, cmdArgs), start) : mode === 'queue' ? readQueue() : mode === 'digests' ? { folder: digestFolder((cmd, cmdArgs) => sh('.', cmd, cmdArgs)) } : null;
     if (found) console.log(json(found));
     const lacks = mode === 'check' || mode === 'file' ? missing(text) : [];
     if (mode === 'file' && !lacks.length) console.log(json({ file: fileQuestion(text, project, (cmd, cmdArgs) => sh('.', cmd, cmdArgs)) }));
