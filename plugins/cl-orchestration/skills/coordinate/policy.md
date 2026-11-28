@@ -25,7 +25,6 @@ Take each project's policy from the reader, never from the JSON file: `node <ski
 | `deleteMergedBranch` | the owner allows deleting a branch whose PR is merged | no deletion |
 | `issuesPerWorker` | pickable issues of the project that one worker takes as its batch | 1 |
 | `keepRunning` | the run stays open for this project and picks up issues labeled later | false |
-| `permissionPrompts` | `block`: the owner answers the dialog once ([A permission dialog](orca-watch.md#a-permission-dialog)) | `block` |
 | `mode` | `supervised` or `automatic` ([modes](modes.md#modes)). Nothing raises it. | `supervised` |
 | `review.depth`, `review.sensitiveDepth` | the review level of a routine and of a sensitive change (`low`, `medium`, `high`, `xhigh`) | both `high` |
 | `riskyPaths` | paths whose change has high impact: the risk class is at least medium and the change sensitive ([Risk class](decisions.md#risk-class)). | none |

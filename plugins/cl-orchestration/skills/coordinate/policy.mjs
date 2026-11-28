@@ -148,7 +148,6 @@ export function effective(file, version = pluginVersion()) {
       deleteMergedBranch: doc.deleteMergedBranch ?? false,
       issuesPerWorker: doc.issuesPerWorker ?? 1,
       keepRunning: doc.keepRunning ?? false,
-      permissionPrompts: doc.permissionPrompts ?? 'block',
       mode: doc.mode ?? 'supervised',
       riskyPaths: doc.riskyPaths ?? [],
       review: { depth: review.depth ?? 'high', sensitiveDepth: review.sensitiveDepth ?? 'high', sensitivePaths: review.sensitivePaths ?? [] },

@@ -8,7 +8,6 @@
   "stallMinutes": 20,
   "issuesPerWorker": 1,
   "keepRunning": false,
-  "permissionPrompts": "block",
   "review": {
     "depth": "high",
     "sensitiveDepth": "high"

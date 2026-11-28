@@ -22,7 +22,6 @@
     "stallMinutes": { "type": "integer", "minimum": 1, "maximum": 1440 },
     "issuesPerWorker": { "type": "integer", "minimum": 1, "maximum": 16 },
     "keepRunning": { "type": "boolean" },
-    "permissionPrompts": { "enum": ["block"] },
     "mode": { "enum": ["supervised", "automatic"] },
     "minPlugin": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
     "riskyPaths": { "type": "array", "items": { "type": "string", "pattern": "^(?!\\s)(?!\\.{1,2}(?:/|$))[^/\\\\*\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}\\u00A0\\u1680\\u2000-\\u200A\\u202F\\u205F\\u3000]+(?<!\\s)(?:/(?!\\s)(?!\\.{1,2}(?:/|$))[^/\\\\*\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}\\u00A0\\u1680\\u2000-\\u200A\\u202F\\u205F\\u3000]+(?<!\\s))*/?$" } },

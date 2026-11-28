@@ -20,7 +20,6 @@ const DEFAULTS = {
   deleteMergedBranch: false,
   issuesPerWorker: 1,
   keepRunning: false,
-  permissionPrompts: 'block',
   mode: 'supervised',
   riskyPaths: [],
   review: { depth: 'high', sensitiveDepth: 'high', sensitivePaths: [] },
@@ -163,10 +162,6 @@ test('policy: each refused value is named with its rule and path', () => {
   for (const [doc, rule, path] of REFUSED) {
     assert.deepEqual(rules(validate(doc)), [[rule, path]], JSON.stringify(doc));
   }
-});
-
-test('policy: permissionPrompts takes block alone', () => {
-  assert.deepEqual(validate({ permissionPrompts: 'decline' }), [{ rule: 'enum', path: 'permissionPrompts', message: 'must be one of "block"' }]);
 });
 
 test('policy: a skill folder copied alone, as for an agent without plugins, checks with its own schema; minPlugin cannot be checked there and gives no policy', async () => {
