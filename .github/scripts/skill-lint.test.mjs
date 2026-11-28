@@ -276,3 +276,4 @@ test('the checks run their command line when started through a symlinked folder'
   const out = execFileSync(process.execPath, [join(dir, 'link/skill-lint.mjs')], { encoding: 'utf8' });
   assert.match(out, /skills checked, 0 errors/);
 });
+
