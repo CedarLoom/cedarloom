@@ -163,14 +163,17 @@ export function update(path, fields, options) {
 }
 
 // Adds entry to the list in the state file at path (answered.json, pending.json) unless it lists it; a missing file starts empty. Gives true when added.
-export function append(path, entry) {
+// Under the file's write lock, as change() writes: two runs that add at once would else drop one entry.
+export function append(path, entry, { sleep = pause } = {}) {
   if (typeof entry !== 'string' || !entry.trim() || /\p{Cc}/u.test(entry)) throw new Error('append: the entry is no single line');
-  const current = load(path);
-  if (current !== MISSING && !Array.isArray(current)) throw new Error(`${basename(path)} holds no list`);
-  const list = current === MISSING ? [] : current;
-  if (list.includes(entry)) return false;
-  writeState(path, [...list, entry]);
-  return true;
+  return writeLocked(path, () => {
+    const current = load(path);
+    if (current !== MISSING && !Array.isArray(current)) throw new Error(`${basename(path)} holds no list`);
+    const list = current === MISSING ? [] : current;
+    if (list.includes(entry)) return false;
+    writeState(path, [...list, entry]);
+    return true;
+  }, sleep);
 }
 
 // pr-<pr>.json rebuilt from fields the run gathered (the pull request, its reviews and claim comment, worker-list, automations list), through change. Its version starts after now in milliseconds, so a version read before the rebuild never comes back. A file that was unreadable, or fields whose pull request merged (mergedAt) with no merge log line, also get mergeCommandAt and held "state rebuilt", which pause every merge until the owner's answer. A readable file is never replaced. Gives { held }.
