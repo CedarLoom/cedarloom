@@ -29,7 +29,7 @@ Both modes: an item held for the owner before its start gets an Orca gate on a d
 
 ## Tasks and gates
 
-Each item has one Orca task, its item task: the task its first `worker-start` returns, for a batch one task for all its issues. Keep its id and status in the handoff file. It records the first start's status and the item's gates for Resume, not the item's end: after a continuation it keeps the status restored after its gate; the outcome still comes from the report ([Worker reports](orca-messages.md#worker-reports)). A follow-up and every later start make a task of their own and leave the item task as it is: a `send` to a worker whose item task was `blocked` made a new task and left that one `blocked`.
+Each item has one Orca task, its item task: the task its first `worker-start` returns, for a batch one task for all its issues. Its id and status come from `ORCA orchestration task-list`. It records the first start's status and the item's gates, not the item's end: after a continuation it keeps the status restored after its gate; the outcome still comes from the report ([Worker reports](orca-messages.md#worker-reports)). A follow-up and every later start make a task of their own and leave the item task as it is: a `send` to a worker whose item task was `blocked` made a new task and left that one `blocked`.
 
 What Orca does:
 
@@ -40,7 +40,7 @@ What Orca does:
 
 `task-update` without `--result` keeps the stored result; `task-update --status failed` is accepted from `ready`; a gate on a `failed` task is accepted.
 
-The coordinator never starts a worker on a task because Orca lists it `ready`, as the loop of Orca's guide does, and never on a task titled `Decision:`. Put each title and question in single quotes, in your own words, as an approval's title ([approvals.md](approvals.md#labels-and-title)), and each answer as its option label. Write the handoff file after each step below and before each `gate-resolve`. A refused command of this section goes into the report with its error; the approval still holds the item, the outcome of a final answer stands, and nothing is stopped, retried or started because of it.
+The coordinator never starts a worker on a task because Orca lists it `ready`, as the loop of Orca's guide does, and never on a task titled `Decision:`. Put each title and question in single quotes, in your own words, as an approval's title ([approvals.md](approvals.md#labels-and-title)), and each answer as its option label. A refused command of this section goes into the report with its error; the approval still holds the item, the outcome of a final answer stands, and nothing is stopped, retried or started because of it.
 
 ### A hold before the start
 
@@ -55,15 +55,15 @@ On the answer, in one turn: `ORCA orchestration gate-resolve --id <gate id> --re
 
 ### A gate after a report
 
-A report or merge step that needs the owner (a BLOCKED report with an owner question, a merge outside `merge.allowed` or above `merge.autoMergeMax`, an owner-only file or a release) gets a gate, for an approval still open then, once the item's worker settled: its `worker_done` arrived, or an automatic worker's release is confirmed (below). Write the item task's status into the approval's line ([approvals.md](approvals.md#once-per-pull-request-and-gate)) first, then:
+A report or merge step that needs the owner (a BLOCKED report with an owner question, a merge outside `merge.allowed` or above `merge.autoMergeMax`, an owner-only file or a release) gets a gate, for an approval still open then, once the item's worker settled: its `worker_done` arrived, or an automatic worker's release is confirmed (below). Name the item task's status in the approval's Context first, then:
 
 ```text
 ORCA orchestration gate-create --task <item task id> --question '<title>' --json
 ```
 
-An item task with a pending gate gets no second one: a second approval for it, another issue of its batch, names the same gate and the status the first one recorded, and the gate stays pending until the last is settled (answered or its issue closed). A later head that voids an answer ([The answer](approvals.md#the-answer), The head) gets a new gate the same way once that head's worker settled.
+An item task with a pending gate gets no second one: a second approval for it, another issue of its batch, names the same gate and the status the first one names, and the gate stays pending until the last is settled (answered or its issue closed). A later head that voids an answer ([The answer](approvals.md#the-answer), The head) gets a new gate the same way once that head's worker settled.
 
-On the answer, or once a wake-up check sees the pull request merged or the issue of the gate's last unsettled approval closed (`gh issue view <issue number> -R <repository> --json state --jq .state` prints `CLOSED`), and only when its last approval is settled: `gate-resolve` as above (the item task turns `ready`; `--resolution 'closed'` when none of its approvals has an answer), then in the same turn `ORCA orchestration task-update --id <item task id> --status <status from the approval's line> --json`, with no `--result`, so the worker's result stays and no item task stays `ready` without a worker. Then every line that names the gate changes as [The answer](approvals.md#the-answer), The Orca gate, says, and the item goes on as [Gates](modes.md#gates) says. A pull request closed without a merge leaves its gate pending and its line in `## Open`, and each report names it until the owner answers the approval.
+On the answer, or once a wake-up check sees the pull request merged or the issue of the gate's last unsettled approval closed (`gh issue view <issue number> -R <repository> --json state --jq .state` prints `CLOSED`), and only when its last approval is settled: `gate-resolve` as above (the item task turns `ready`; `--resolution 'closed'` when none of its approvals has an answer), then in the same turn `ORCA orchestration task-update --id <item task id> --status <the status the approval's Context names> --json`, with no `--result`, so the worker's result stays and no item task stays `ready` without a worker. Then the item goes on as [Gates](modes.md#gates) says. A pull request closed without a merge leaves its gate pending, and each report names it until the owner answers the approval.
 
 ### An automatic worker's task
 

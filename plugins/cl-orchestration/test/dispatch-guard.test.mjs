@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -255,7 +255,6 @@ test('clone-checkout: checkout, switch, restore and worktree in a scratch clone,
   const changes = Array.from({ length: 30 }, (_, k) => `cd d${k}`).join('; ');
   // From the temp folder: each path lookup under /home goes through the automounter on macOS.
   refused('clone-checkout', [`${changes}; git checkout main`], 'Bash', tmpdir());
-  refused('handoff-size', [`${changes}; echo x > handoff.md`, `${changes}; echo x > /tmp/.cedarloom/runs/handoff.md`], 'Bash', tmpdir());
   passed([`${changes}; git status`], 'Bash', tmpdir());
   // A bot home holds .cedarloom/runs/ and its clones beside it.
   const home = mkdtempSync(join(tmpdir(), 'bot-'));
@@ -272,26 +271,4 @@ test('clone-checkout: checkout, switch, restore and worktree in a scratch clone,
     `git -C ${CLONE} rev-parse --git-dir`,
   ]);
   passed(['git checkout main'], 'Bash', '/home/user/clones/app');
-});
-
-test('handoff-size: a handoff file over 8,000 characters, or a write the guard cannot measure, is refused', () => {
-  const handoff = `${CWD}/.cedarloom/runs/handoff.md`;
-  assert.match(reason({ file_path: handoff, content: 'x'.repeat(8001) }, 'Write'), /\bhandoff-size: /);
-  assert.match(reason({ file_path: '.cedarloom/runs/handoff.md', content: 'x'.repeat(8001) }, 'Write'), /\bhandoff-size: /);
-  assert.equal(reason({ file_path: handoff, content: 'é'.repeat(8000) }, 'Write'), 'none');
-  assert.equal(reason({ file_path: `${CWD}/notes.md`, content: 'x'.repeat(9000) }, 'Write'), 'none');
-  const dir = mkdtempSync(join(tmpdir(), 'run-'));
-  const file = join(dir, '.cedarloom', 'runs', 'handoff.md');
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `# Handoff\n${'x'.repeat(7990)}\n`);
-  try {
-    assert.match(reason({ file_path: file, old_string: '# Handoff', new_string: '# Handoff and more' }, 'Edit'), /\bhandoff-size: /);
-    assert.match(reason({ file_path: file, edits: [{ old_string: 'x', new_string: 'yy', replace_all: true }] }, 'MultiEdit'), /\bhandoff-size: /);
-    assert.match(reason({ file_path: file, old_string: 'missing', new_string: 'y' }, 'Edit'), /\bhandoff-size: /);
-    assert.equal(reason({ file_path: file, old_string: '# Handoff', new_string: '# Run' }, 'Edit'), 'none');
-  } finally {
-    rmSync(dir, { recursive: true });
-  }
-  refused('handoff-size', ['echo x > .cedarloom/runs/handoff.md', 'cp big.md .cedarloom/runs/handoff.md', 'cd .cedarloom/runs && tee handoff.md < notes.md', 'echo x >> "$OUT"', 'cat notes.md > "$RUN/handoff.md"']);
-  passed(['cat .cedarloom/runs/handoff.md', 'wc -c .cedarloom/runs/handoff.md', 'echo x > notes.md']);
 });

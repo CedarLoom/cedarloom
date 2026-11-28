@@ -13,7 +13,7 @@ execution:
     Dry run of one wake-up: run no command and change no file; decide from the facts below and the files they name.
 
     - The run is under way in supervised mode; `project` is example-org/widget, default branch `main`. Its policy is `project/cedarloom.json` as committed.
-    - The handoff file's `## Open` holds: `Approval example-org/widget#40: merge, example-org/widget#31, head 3f786850e387550fdab836ed7e6dc881de23001b`. Its text is `.cedarloom/runs/r1/approval-31-merge.md`.
+    - Issue example-org/widget#40 is the open merge approval of example-org/widget#31 for head 3f786850e387550fdab836ed7e6dc881de23001b. Its text is `.cedarloom/runs/r1/approval-31-merge.md`.
     - The owner answered (a) on issue example-org/widget#40 for that head; `approval.mjs apply` then took `cl:needs-human` off, and the issue is open with no label. The saved `gh issue view` output is `.cedarloom/runs/r1/issue-40.json`.
     - Since then the worker pushed a fix for a review finding. `gh pr view 31 -R example-org/widget --json headRefOid` now prints head 89e6c98d92887913cadf06b2adb97f26cde4849b. The fix changes no row of the approval.
 

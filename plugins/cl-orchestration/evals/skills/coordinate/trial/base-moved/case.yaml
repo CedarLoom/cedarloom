@@ -13,7 +13,7 @@ execution:
     This is a dry run of step 5.4 of Merge for one pull request: run no command and change no file. Decide from the facts below and the files in `project/`, whose `cedarloom.json` is the policy as the default branch has it.
 
     - Repository example-org/widget, default branch main. Pull request #31 for issue 31, `<head>` 4c1d9e0a7b2f3c4d5e6f708192a3b4c5d6e7f809, which is also the reviewed head.
-    - Step 3 gave `next` trial. The trial merge passed, its comment is posted, and the handoff file records the trial's default-branch commit 9a8b7c6d5e4f30211203f4e5d6c7b8a9f0e1d2c3.
+    - Step 3 gave `next` trial. The trial merge passed, its comment is posted, and `trialBase` of the state file holds the trial's default-branch commit 9a8b7c6d5e4f30211203f4e5d6c7b8a9f0e1d2c3.
     - Steps 4 to 5.3 passed; the verdict taken again at step 5.3 says `next` trial, `pin` reviewed, `upToDate` false.
     - In the scratch clone made after the trial, `git -C <scratch path> rev-parse refs/remotes/origin/main` now prints 1f2e3d4c5b6a79880716253443526170a9b8c7d6: another pull request merged since the trial.
 

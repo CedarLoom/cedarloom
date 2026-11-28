@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: coord-host-limit-count-every-run
-description: 'The host limit counts the `in_progress` rows of every run Orca lists, not a `retained` terminal state, leaves out a worker whose terminal close is confirmed, and counts a start held at a dialog in `## Open`; at the limit the next pick waits. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca.md:87. Needs --scaffold.'
+description: 'The host limit counts the `in_progress` rows of every run Orca lists, not a `retained` terminal state, leaves out a worker whose terminal close is confirmed, and counts a start held at a dialog; at the limit the next pick waits. Constructed for the rule at plugins/cl-orchestration/skills/coordinate/orca.md:87. Needs --scaffold.'
 tags: [cl-orchestration, coord-host-limit]
 context:
   scaffold_script: setup.sh
@@ -21,7 +21,7 @@ execution:
       - issue 7: outcome `in_progress`, terminal state `retained`, terminal `term-7`
       - issue 9: outcome `in_progress`, terminal state `retained`, terminal `term-9`
     - `orca terminal list --json` lists `term-12`, `term-16`, `term-7` and `term-20`.
-    - The handoff file's `## Open` holds issue 20 of `project`: its start stopped at a folder trust dialog in `term-20`, which the owner has not answered.
+    - The start of issue 20 of `project` is held at a folder trust dialog in `term-20`, which the owner has not answered.
 
     Write these two lines, then stop:
     `Counted: <the issue numbers you count toward hostWorkerLimit, comma-separated>`

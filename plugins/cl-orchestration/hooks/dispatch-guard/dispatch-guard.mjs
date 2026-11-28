@@ -1,4 +1,4 @@
-// PreToolUse hook for Bash, Monitor and PowerShell, and for Write, Edit and MultiEdit (rule handoff-size). It refuses, in every
+// PreToolUse hook for Bash, Monitor and PowerShell. It refuses, in every
 // session that loads this plugin, the commands that docs/worker-bounds.md lists, each refusal naming its rule; a command it cannot
 // read for a rule (a variable, a command substitution) is refused under that rule. It reads the command text with the role guard's
 // reading (shell-commands.mjs): a script, a file a command names or a program that runs git or gh as a child is not seen.
@@ -6,7 +6,7 @@
 // its prompt, typed into its terminal). Such a session could set the answer flag of the local question queue, since its hook input
 // looks like a typed command (cl-workflow's ask hook). This rule reads the text as written: a command that only mentions both words
 // is refused.
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { ansiC } from '../ansi-c-quote.mjs';
@@ -55,8 +55,6 @@ function awayOff(command) {
 }
 
 const ROLE = 'CEDARLOOM_ROLE';
-const HANDOFF = '/.cedarloom/runs/handoff.md';
-const HANDOFF_LIMIT = 8000;
 // The folders the guard follows in one command, as the role guard does.
 const MAX_FOLDERS = 64;
 const SHA = /^[0-9a-f]{40}$/;
@@ -127,7 +125,6 @@ function inClone(path) {
     return (parts[i - 2] === 'runs' && parts[i - 3] === '.cedarloom') || existsSync(join(home, '.cedarloom', 'runs'));
   });
 }
-const isHandoff = (path) => real(path).replaceAll('\\', '/').toLowerCase().endsWith(HANDOFF);
 
 // The folders a command may run in, null for one the guard cannot read. A folder change adds its folder to the ones before: it
 // may fail with the next command still running (cd x; git ...), or run in a subshell that ends before that command.
@@ -270,14 +267,6 @@ function bypassRules(words, at, refuse) {
   if (name !== undefined && LAUNCHERS.has(name) && words.slice(at + 1).some(expands)) refuse('bypass-flag', 'an agent launch with a word the guard cannot read (a variable or command substitution), which could hold a bypass flag: write it out');
 }
 
-function handoffRules({ words, targets }, at, places, powershell, refuse) {
-  // An absolute path names one file in any folder; in a folder the guard cannot read, a relative path that ends in handoff.md may
-  // be the handoff file.
-  const named = (w) => (isAbsolute(w) ? isHandoff(w) : [...places].some((p) => (p === null ? /(^|[/\\])handoff\.md$/i.test(w) : isHandoff(resolve(p, w)))));
-  if (targets.some((t) => expands(t) || named(t))) refuse('handoff-size', 'a redirection that writes the handoff file, or into a path the guard cannot read: write the handoff file with the Write or Edit tool, which this rule measures');
-  else if (at >= 0 && !plain({ words }, powershell) && words.slice(at + 1).some((w) => named(w) || (expands(w) && /handoff/i.test(w)))) refuse('handoff-size', 'a command that may write the handoff file: write it with the Write or Edit tool, which this rule measures');
-}
-
 function commandRules(command, cwd, powershell) {
   const reasons = new Set();
   const refuse = (rule, why) => reasons.add(`${rule}: ${why}.`);
@@ -289,7 +278,6 @@ function commandRules(command, cwd, powershell) {
     for (const c of parsed) {
       const at = programIndex(c.words, powershell);
       const name = at < 0 ? undefined : program(c.words[at]);
-      handoffRules(c, at, places, powershell, refuse);
       // A plain reader or filter (grep, cat) runs none of its words.
       if (plain(c, powershell)) continue;
       // env -S with its value joined (-S'...', --split-string=...) runs that value as a command; only env's own options count.
@@ -355,35 +343,6 @@ function xargsWords(words, from, at) {
   return [...words.slice(0, p), ...words.slice(p).map((w) => (replace && w.includes(replace) ? UNSEEN : w)), UNSEEN];
 }
 
-// The handoff file as a Write, Edit or MultiEdit call leaves it, in characters (code points): null where the guard cannot work it out.
-function handoffAfter(tool, input, path) {
-  if (tool === 'Write') return typeof input.content === 'string' ? input.content : null;
-  let content;
-  try {
-    content = readFileSync(path, 'utf8');
-  } catch {
-    return null;
-  }
-  for (const edit of tool === 'MultiEdit' ? (Array.isArray(input.edits) ? input.edits : [null]) : [input]) {
-    const { old_string: from, new_string: to, replace_all: all } = edit ?? {};
-    if (typeof from !== 'string' || typeof to !== 'string' || !from || !content.includes(from)) return null;
-    content = all ? content.split(from).join(to) : content.slice(0, content.indexOf(from)) + to + content.slice(content.indexOf(from) + from.length);
-  }
-  return content;
-}
-
-function editRules(tool, input, cwd) {
-  const file = input.file_path;
-  if (typeof file !== 'string') return [];
-  const path = isAbsolute(file) ? file : typeof cwd === 'string' ? resolve(cwd, file) : null;
-  if (path === null) return ['handoff-size: an edit of a relative path without the session folder, which the guard cannot place.'];
-  if (!isHandoff(path)) return [];
-  const after = handoffAfter(tool, input, path);
-  if (after === null) return ['handoff-size: an edit of the handoff file whose result the guard cannot work out: write the whole file with the Write tool.'];
-  const size = [...after].length;
-  return size > HANDOFF_LIMIT ? [`handoff-size: the handoff file would hold ${size} characters, over ${HANDOFF_LIMIT}; it comes back into the context as instructions: shorten it (run-files.md).`] : [];
-}
-
 // Exit 2 refuses the call; onFailure "block" also refuses it when the hook cannot start.
 const fail = (why) => {
   process.stderr.write(`CedarLoom dispatch guard: ${why}, so the call is refused.\n`);
@@ -396,9 +355,8 @@ else {
   const command = input.tool_input?.command;
   try {
     let reasons = [];
-    if (['Write', 'Edit', 'MultiEdit'].includes(tool)) reasons = editRules(tool, input.tool_input ?? {}, input.cwd);
     // A Monitor call on a WebSocket runs no command.
-    else if (command !== undefined && typeof command !== 'string') fail('the command is no string');
+    if (command !== undefined && typeof command !== 'string') fail('the command is no string');
     else if (command) reasons = [...awayOff(command), ...commandRules(command, input.cwd, tool === 'PowerShell')];
     if (reasons.length) {
       const reason = `CedarLoom dispatch guard refused the call. ${reasons.join(' ')} See docs/worker-bounds.md of the CedarLoom repository.`;

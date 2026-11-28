@@ -6,7 +6,7 @@ The trial is the one step that checks files out and runs the pull request's code
 
 The trial passes when `merge` exits 0 and the project's changed-files check passes in the trial clone, run as `AGENTS.md` says. Anything else, a trial that cannot run included, takes the `strict` step (`update` in step 3 of [Merge](merge.md#merge)). Steps 5 and 6 follow every trial that ran `devcontainer up`, whatever its result (a failed start can leave a container).
 
-1. **Default-branch commit.** Run `git -C <scratch path> rev-parse refs/remotes/origin/<default branch>`. `<default-branch commit>` is what it printed, the commit the trial merges: write it into the handoff file before the check runs (a project bot: `trialBase` of the state file, which `merge.mjs` compares), and never read it from the trial clone.
+1. **Default-branch commit.** Run `git -C <scratch path> rev-parse refs/remotes/origin/<default branch>`. `<default-branch commit>` is what it printed, the commit the trial merges: write it into `trialBase` of the state file before the check runs, which `merge.mjs` compares, and never read it from the trial clone.
 2. **Whether the trial can run.** It cannot when one of these holds:
    - `AGENTS.md` runs no command in a dev container.
    - The check is more than one command and `AGENTS.md` names no compound form for it (step 4 runs the check as one command).

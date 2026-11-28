@@ -16,10 +16,11 @@ All bots and workers may act under one GitHub login, so each line holds by these
 
 | Action | Who | Never |
 |---|---|---|
-| Choose the work (`startLabel`), merge a pull request with an owner-only file, releases and tags, settings, rulesets, secrets, tokens, spend limits | the owner | any bot |
+| Choose the work (`startLabel`), merge a pull request with an owner-only file, releases and tags, settings, rulesets, secrets, tokens, spend limits, user-scope settings, approve a permission or trust dialog | the owner | any bot |
 | Merge any other pull request | the project bot, through `merge.mjs` only | role bots, workers |
 | Start a worker or role bot run, route a pull request event | the project bot | role bots |
 | Plan a deep or open issue | a builder bot run that only plans | the project bot |
+| Split an issue into several pull requests | a builder bot run posts the list on the issue; the project bot approves it before implementation ([Outcomes](outcomes.md)) | a builder implementing a list nobody approved |
 | Implement an issue | a builder bot run | the project bot, reviewers |
 | Review a head | a new reviewer bot run per first review and round | a run reviewing its own change; a built-in review bot counting as one |
 | Post the review of record | the project bot, with the verdict its reviewer run returned | role bots |

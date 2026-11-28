@@ -22,7 +22,6 @@ execution:
     `Offer: <yes or no: whether you offer the owner a policy file>`
     `What: <the What line of that approval, or none>`
     `File: <the offered file's content on one line, or none>`
-    `Open line: <the line you record in ## Open, with <n> for the approval's issue number, or none>`
   max_turns: 10
   disallowed_tools: [AskUserQuestion, EnterPlanMode, WebFetch, WebSearch]
 graders:
@@ -41,7 +40,4 @@ graders:
   - type: regex
     name: minimal-file
     pattern: 'File:[\s*`]*\{(?=[^\n}]*"\$schema"\s*:\s*"https://cedarloom\.github\.io/cedarloom/schema/cedarloom\.json")(?=[^\n}]*"schemaVersion"\s*:\s*3\b)(?=[^\n}]*"startLabel"\s*:\s*"cl:ready-for-agent")(?:\s*"[^"\n]+"\s*:\s*(?:"[^"\n]*"|\d+)\s*,){2}\s*"[^"\n]+"\s*:\s*(?:"[^"\n]*"|\d+)\s*\}'
-  - type: regex
-    name: open-line-without-head
-    pattern: 'Open line:[\s*`]*Approval example-org/widget#[^\s:]+: policy, example-org/widget(?![\w/,-])'
-expected_outcome: 'Pick: none; Offer: yes; a What line starting `policy example-org/widget`; the file `{"$schema": "https://cedarloom.github.io/cedarloom/schema/cedarloom.json", "schemaVersion": 3, "startLabel": "cl:ready-for-agent"}`; the Open line `Approval example-org/widget#<n>: policy, example-org/widget`, with no head.'
+expected_outcome: 'Pick: none; Offer: yes; a What line starting `policy example-org/widget`; the file `{"$schema": "https://cedarloom.github.io/cedarloom/schema/cedarloom.json", "schemaVersion": 3, "startLabel": "cl:ready-for-agent"}`.'
