@@ -54,6 +54,20 @@ test('facts: an open question with an answer an agent recorded or the owner comm
   assert.ok(failed.includes('| 41 | cl:needs-human, label edit failed | a | 2026-11-13T09:00Z |'));
 });
 
+test('facts: each --approvals repository gets its own start label, cl:ready-for-agent without one; a bad name or label is refused', () => {
+  const lib = Object.fromEntries(Object.entries(COMMANDS).filter(([key]) => key.startsWith('gh issue list -R octo/app') || key.startsWith('gh api repos/octo/app/')).map(([key, found]) => [key.replace('octo/app', 'octo/lib'), found]));
+  const edits = [];
+  const exec = (cmd, args) => { if (args[0] === 'issue' && args[1] === 'edit') { edits.push(args.join(' ')); return ''; } return fake({ ...COMMANDS, ...lib })(cmd, args); };
+  facts({ run: RUN, repos: ['octo/app'], approvals: ['octo/app=go', 'octo/lib'], now: NOW, exec });
+  assert.deepEqual(edits, [
+    'issue edit 41 -R octo/app --remove-label cl:needs-human --add-label go',
+    'issue edit 46 -R octo/app --remove-label cl:needs-human --add-label go',
+    'issue edit 41 -R octo/lib --remove-label cl:needs-human --add-label cl:ready-for-agent',
+    'issue edit 46 -R octo/lib --remove-label cl:needs-human --add-label cl:ready-for-agent',
+  ]);
+  for (const value of ['octo/app=', 'octo/app=cl:needs-human', 'octo=go']) assert.throws(() => facts({ run: RUN, repos: ['octo/app'], approvals: [value], now: NOW, exec: fake(COMMANDS) }), /^Error: --approvals /);
+});
+
 test('facts: a Head comment that lands between the open and the recent read voids the answer of an open question', () => {
   const key = 'gh issue list -R octo/app --state all --search updated:>=2026-11-12 --limit 200 --json number,state,labels,comments,author,body';
   const recent = COMMANDS[key].out.map((i) => (i.number === 41 ? { ...i, comments: [...i.comments, { author: { login: 'coordinator' }, authorAssociation: 'OWNER', body: 'Head: abc1234', createdAt: '2026-11-13T11:00:00Z' }] } : i));

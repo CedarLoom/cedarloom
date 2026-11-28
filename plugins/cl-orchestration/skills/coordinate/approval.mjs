@@ -124,10 +124,10 @@ const fullAnswer = (body, at) => {
 const ASKING = ['cl:needs-human', 'cl:deferred'];
 const START = 'cl:ready-for-agent';
 
-// The start label from a command line, refused where cedarloom.json would refuse it as startLabel.
-export function startLabel(label = START) {
+// The start label from a command line, refused where cedarloom.json would refuse it as startLabel; flag names the option in the error.
+export function startLabel(label = START, flag = '--start-label') {
   const [error] = validate({ startLabel: label });
-  if (error) throw new Error(`--start-label ${error.message}`);
+  if (error) throw new Error(`${flag} ${error.message}`);
   return label;
 }
 
