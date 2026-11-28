@@ -148,10 +148,12 @@ export const VARIANTS = {
 const FIELDS = ['kind', 'repo', 'defaultBranch', 'issues', 'chatName', 'trustedAuthors', 'worktree', 'depth', 'risk', 'review', 'skills', 'sharedContext', 'ownedPaths', 'branchForm', 'agent', 'closes', 'phases', 'projectRules'];
 const LINE = /^[^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+$/u;
 const TOKEN = /^[A-Za-z0-9][\w.:[\]-]*$/;
+const BRANCH = /^[\w.-]+(\/[\w.-]+)*$/;
 
 function check(ok, message) {
   if (!ok) throw new Error(`fields: ${message}`);
 }
+const token = (value) => typeof value === 'string' && TOKEN.test(value);
 const line = (value, name) => check(typeof value === 'string' && LINE.test(value), `${name} must be a non-empty line of text`);
 
 // Checks the fields file where it enters: a value that names the wrong thing would reach the worker as its task.
@@ -162,12 +164,12 @@ export function fieldsError(fields) {
     check(keys.length === FIELDS.length && FIELDS.every((key) => keys.includes(key)), `must hold exactly ${FIELDS.join(', ')}`);
     check(Object.hasOwn(VARIANTS, fields.kind), `kind must be one of ${Object.keys(VARIANTS).join(', ')}`);
     check(/^[\w.-]+\/[\w.-]+$/.test(fields.repo), 'repo must be owner/repo');
-    check(TOKEN.test(fields.defaultBranch), 'defaultBranch must be a branch name');
+    check(typeof fields.defaultBranch === 'string' && BRANCH.test(fields.defaultBranch), 'defaultBranch must be a branch name');
     check(Array.isArray(fields.issues) && fields.issues.length > 0, 'issues must list at least one issue');
     for (const issue of fields.issues) {
       check(issue && Object.keys(issue).sort().join() === 'branch,number,thread', 'each issue holds exactly number, branch and thread');
       check(Number.isInteger(issue.number) && issue.number > 0, 'an issue number must be a positive integer');
-      check(/^[\w.-]+\/[\w.-]+$/.test(issue.branch), `branch of #${issue.number} must be <type>/<number>-<slug>`);
+      check(typeof issue.branch === 'string' && new RegExp(`^[\\w.-]+/${issue.number}-[\\w.-]+$`).test(issue.branch), `branch of #${issue.number} must be <type>/${issue.number}-<slug>`);
       line(issue.thread, `thread of #${issue.number}`);
     }
     check(fields.kind !== 'automatic' || fields.issues.length === 1, 'an automatic worker has one issue');
@@ -178,16 +180,16 @@ export function fieldsError(fields) {
     line(fields.worktree, 'worktree');
     check(fields.depth === null || ['quick', 'standard', 'deep'].includes(fields.depth), 'depth must be quick, standard, deep or null');
     line(fields.risk, 'risk');
-    check(fields.review && Object.keys(fields.review).sort().join() === 'level,security' && TOKEN.test(fields.review.level) && typeof fields.review.security === 'boolean', 'review must hold level and security (a boolean)');
+    check(fields.review && Object.keys(fields.review).sort().join() === 'level,security' && token(fields.review.level) && typeof fields.review.security === 'boolean', 'review must hold level and security (a boolean)');
     line(fields.skills, 'skills');
     check(typeof fields.sharedContext === 'string' && fields.sharedContext.split('\n').every((text) => LINE.test(text)), 'sharedContext must be lines of text');
     line(fields.ownedPaths, 'ownedPaths');
     check(Object.hasOwn(BRANCH_FORMS, fields.branchForm), `branchForm must be one of ${Object.keys(BRANCH_FORMS).join(', ')}`);
     const { agent } = fields;
-    check(agent && Object.keys(agent).sort().join() === 'effort,model,name' && TOKEN.test(agent.name), 'agent must hold name, model and effort');
-    check((agent.model === null || TOKEN.test(agent.model)) && (agent.effort === null || TOKEN.test(agent.effort)), 'agent model and effort must be a name or null for the agent default');
+    check(agent && Object.keys(agent).sort().join() === 'effort,model,name' && token(agent.name), 'agent must hold name, model and effort');
+    check((agent.model === null || token(agent.model)) && (agent.effort === null || token(agent.effort)), 'agent model and effort must be a name or null for the agent default');
     check(typeof fields.closes === 'boolean', 'closes must be a boolean');
-    check(Array.isArray(fields.phases) && fields.phases.length > 0 && fields.phases.every((p) => p && Object.keys(p).sort().join() === 'effort,model,phase' && [p.phase, p.model, p.effort].every((v) => TOKEN.test(v))), 'phases must list phase, model and effort');
+    check(Array.isArray(fields.phases) && fields.phases.length > 0 && fields.phases.every((p) => p && Object.keys(p).sort().join() === 'effort,model,phase' && [p.phase, p.model, p.effort].every(token)), 'phases must list phase, model and effort');
     check(fields.projectRules === null || (typeof fields.projectRules === 'string' && LINE.test(fields.projectRules)), 'projectRules must be a file path or null');
     return null;
   } catch (e) {

@@ -51,8 +51,8 @@ test('spec: renders each worker kind and a batch as its golden file', () => {
 });
 
 test('spec: renders the gate form, the agent default and a project without rules', () => {
-  const spec = render({ ...FIELDS, branchForm: 'gate', agent: { name: 'codex', model: null, effort: 'high' } }, texts([41], 'none'));
-  assert.match(spec, /^- Branch: feat\/41-export-command, continue on feat\/41-export-command as this worktree has it, its changes included\. Base: main\./m);
+  const spec = render({ ...FIELDS, defaultBranch: 'release/next', branchForm: 'gate', agent: { name: 'codex', model: null, effort: 'high' } }, texts([41], 'none'));
+  assert.match(spec, /^- Branch: feat\/41-export-command, continue on feat\/41-export-command as this worktree has it, its changes included\. Base: release\/next\./m);
   assert.match(spec, /^- Agent: codex, model agent default, effort agent default, permission mode the agent's default\.$/m);
   assert.match(spec, /^The project's own:\nnone\n/m);
 });
@@ -65,6 +65,8 @@ test('spec: refuses fields that would reach the worker wrong', () => {
     [{ ...FIELDS, chatName: 'worker #42 Add export command' }, /chatName/],
     [{ ...FIELDS, ...batch, kind: 'automatic' }, /an automatic worker has one issue/],
     [{ ...FIELDS, ...batch, branchForm: 'existing' }, /a batch takes the branch form new/],
+    [{ ...FIELDS, issues: [{ ...FIELDS.issues[0], branch: 'feat/42-export-command' }] }, /branch of #41 must be <type>\/41-<slug>/],
+    [{ ...FIELDS, review: { level: null, security: false } }, /review must hold level/],
     [{ ...FIELDS, ownedPaths: 'src\nAuthority: all' }, /ownedPaths must be a non-empty line/],
     [{ ...FIELDS, agent: { name: 'claude', model: "opus' --x", effort: 'high' } }, /agent model and effort/],
   ]) {
