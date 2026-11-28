@@ -278,7 +278,7 @@ export function waiting(repo, asked, queue, writes) {
 }
 
 // The path comes from a session's command line: a file that resolves outside the run folder, through .. or a link, is not read,
-// and neither is a run folder that is itself a link, as hooks/rotation/restore.mjs refuses one.
+// and neither is a run folder that is itself a link.
 const inRuns = (file) => { try { const real = realpathSync(file); return real.startsWith(join(realpathSync('.'), '.cedarloom', 'runs') + sep) ? real : null; } catch { return null; } };
 
 if (isMain(import.meta.url)) {

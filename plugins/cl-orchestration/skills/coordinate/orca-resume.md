@@ -2,11 +2,6 @@
 
 The Resume steps after a `/clear` or compaction.
 
-The CedarLoom plugin hands the handoff file back after a `/clear` or compaction only in the session its `Session:` line names, a Claude Code coordinator ([Start the run](orca.md)).
-
-- When that Claude Code coordinator ends a turn idle (no background task; a session cron does not count) above the plugin option `rotateAtTokens`, 200,000 tokens by default, the plugin clears it with `/clear` and submits a prompt to run the Resume steps.
-- Without the file, or for another session, the plugin neither hands it back nor clears.
-
 The file's Resume section holds these steps, in this order, with the run id and the absolute path of this skill's folder filled in:
 
 1. The start condition of [Start the run](orca.md) again: when it fails, start nothing and tell the owner which one failed and why. Then `ORCA orchestration check --json`, before any other `orchestration` command: it returns the mail that arrived meanwhile. Orca types a wake only once per unread message, and a wake can merge into the resume prompt. Act on its output only after step 2.

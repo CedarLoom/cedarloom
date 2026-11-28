@@ -10,7 +10,7 @@ execution:
 
     This is a dry run: run no command and change no file. Decide from these facts and the skill's text. Orca's executable is `orca`.
 
-    The plugin handed back the handoff file of run run-7 after a `/clear`, and Resume steps 1 to 4 passed with no mail. The handoff file says:
+    After a `/clear`, the owner asked you to resume run run-7, and Resume steps 1 to 4 passed with no mail. The handoff file says:
 
         ## Decisions
         - (owner) Issue 12: design approved, option "Approve", read from approval issue example-org/widget#44; decision task t-12d, gate g-1.

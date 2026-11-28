@@ -5,7 +5,7 @@ Hooks and their settings, workflow definitions, Code Mode and the filter for unt
 | Plugin | Hooks | Settings |
 |---|---|---|
 | `cl-workflow` | [Terminal questions](#terminal-questions), [role guard](#role-guard) | `mode` |
-| `cl-orchestration` | [Coordinator context rotation](#coordinator-context-rotation), [dispatch guard](worker-bounds.md) | `rotateAtTokens`, `rotateAtPercent` |
+| `cl-orchestration` | [dispatch guard](worker-bounds.md) | none |
 | `cl-repo` | none | none |
 
 Every hook runs `node`, so Node.js must be on the PATH. Codex runs neither the terminal-questions hooks nor the role guard. Set options with `/plugin` (Installed tab, Configure options) or under `pluginConfigs` in `$HOME/.claude/settings.json`, then start a new session.
@@ -79,27 +79,6 @@ A bot role in `CEDARLOOM_ROLE` (`env` in its home's `.claude/settings.json`) gua
 - The table's `gh` rules apply where `gh` runs as the command: first, or after env assignments, shell keywords (`do`, `then`) and wrappers such as `env`, `sudo`, `xargs`, `timeout` and `eval`; in PowerShell also after an assignment, `&` or `.`, and first in a script block. Elsewhere, as in `grep gh`, a guarded session's rules apply.
 - The builder bot pushes from a local branch named like its remote branch.
 - Merges go through `merge.mjs`, whose `gh` child process no hook sees, so no bot needs a merge exception.
-
-## Coordinator context rotation
-
-An idle coordinator of `/cl-orchestration:coordinate` clears its context and resumes from its handoff file, so it never grows until auto-compaction garbles its state.
-
-Where it applies:
-
-- Only a coordinator whose project folder (where the agent started; a shell `cd` does not move it) holds the handoff file `.cedarloom/runs/handoff.md`, which the skill writes when a run starts and deletes when it closes, and whose session id the file names (`Session: <id>`). A Codex session holds no run: the coordinator needs Claude Code ([Start the run](../plugins/cl-orchestration/skills/coordinate/orca.md#start-the-run)).
-- The hooks act only in the session whose id matches and that draws on a surface. A `claude -p` run that resumes it never counts as the coordinator, except for the hand-back after a compaction, which that command hook cannot tell apart. A `claude --resume` of it in a second terminal draws on a surface too, so both processes can restore, clear and move the line.
-- After one or more `/clear` in the same Claude Code process, the plugin moves the line to the new session id at the next prompt or turn. Only a `session.end` with reason `clear` arms that move, for one use; any other session end disarms it. If that hook did not run, or a `/resume` away and back follows the `/clear`, the line keeps the old id: no restore, stamp or clear until the owner asks the coordinator to resume the run and it writes its id into the line ([Handoff file](../plugins/cl-orchestration/skills/coordinate/run-files.md#handoff-file)).
-- Without the file or that line the hooks do nothing. They also refuse a file that is a symbolic link or sits behind one, and a folder that is no readable git repository or where git tracks anything under `.cedarloom/runs`, so a repository cannot plant the file.
-
-What it does:
-
-- After a `/clear` or compaction, the plugin hands the file back with a line telling the model to run its Resume steps first (Orca's mail, then the run's state): after a `/clear` with the first prompt that is no slash command, as context, or in its own resume prompt; after a compaction through a `SessionStart` command hook that reads it from the folder `CLAUDE_PROJECT_DIR` names, which may not follow a `/cd`, a host's directory change or a worktree move. After the file comes what git shows changed since the coordinator last wrote it (the plugin's own status line does not count): commits on local branches and uncommitted files with a newer modification time, at most 20 each; a git failure leaves the section out. At most 9,000 characters come back: the file, a line saying the rest was cut, then the section in the room left.
-- In Claude Code the plugin also writes a status line into the file's status block before a compaction and before its own clear.
-- Where Claude Code's built-in guard loads, it passes over the settings hook events of a user-installed mod ([mods admin](https://code.claude.com/docs/en/plugins/mods/admin)): the status line before a compaction and the idle clear do not run, only the hand-back, so the context grows until auto-compaction, or to the window limit when that is off.
-- Claude Code only: when the main loop ends a turn with no background task running and no other Stop hook blocking, and its context is above the option `rotateAtTokens` (200000 by default), the plugin runs `/clear` and submits a prompt that resumes the coordinator from the file. `rotateAtPercent` above 0 compares that percent of the model's context window instead; both at 0 turns it off. On a model with a 200k window auto-compaction comes first, so set `rotateAtPercent` there (for example 60). At most one clear every 10 minutes. Without a reported context size the plugin says so once in the transcript and clears nothing at the threshold.
-- A `/clear` and resume prompt not finished after 15 minutes are given up: the plugin says so in the transcript and clears again at a later idle stop.
-
-The hooks write only the handoff file. They read it, run `git` in its project folder (`ls-files`, `status`, `rev-parse`, `log`), read the modification times of the changed files git lists, and make no network request of their own.
 
 ## Model map
 
