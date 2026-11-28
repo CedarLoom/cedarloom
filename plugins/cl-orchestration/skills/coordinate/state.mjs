@@ -3,7 +3,7 @@
 // pr-<n>.json: version (one up with each write, from the time of its rebuild in milliseconds: change), repo, pr, issue, branch, project (the bot's checkout of the repository), dispatches, reviewedHead, reviewUrl, riskClass, round, claim, trialBase, updatedAt (the bot's last update of the branch), mergeCommandAt, mergedAt, held (why it waits for the owner), cappedOn (the UTC day the pull request reached its run limit), rules, clones (scratch clones, the newest last), runs and handled ({ head, action }: the last head the bot judged and its verdict's next).
 // Each entry of dispatches and runs: { startedAt, head, role, resultFile, result }, head the head it started for, role builder or reviewer for a role bot run in runs, worker, reviewer or fixer for an Orca worker in dispatches, resultFile naming a headless job's result file, result set once the bot read the result.
 // tip.json: { sha, firstSeen, passed }, the default branch's tip, when the bot first saw it, and the last tip whose watch passed. red-main.json: { sha, report, pr }, the red tip, its report and the pull request the answered report named.
-// answered.json: ["<file> <at>" or "#<n> <at>"...], each owner answer the bot acted on, of a local question (approval.mjs queue) or of issue n (approval.mjs answer). claim-<n>-<head>: the folder a review claim makes. counts-<day>.json: count() below. probe-<day>.json and failed-<day>.json: the catch-up run's daily probe and reported precheck failure. maintain.json: decide() below.
+// answered.json: ["<file> <at>" or "#<n> <at>"...], each owner answer the bot acted on, of a local question (approval.mjs queue) or of issue n (approval.mjs answer). pending.json: ["#<n>"...], each issue whose answer a run took on, written before approval.mjs apply changes its labels. claim-<n>-<head>: the folder a review claim makes. counts-<day>.json: count() below. probe-<day>.json and failed-<day>.json: the catch-up run's daily probe and reported precheck failure. maintain.json: decide() below.
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { appendFileSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -162,15 +162,18 @@ export function update(path, fields, options) {
   return { written: written !== null, version: written?.version ?? version };
 }
 
-// Adds entry to the list in the state file at path (answered.json) unless it lists it; a missing file starts empty. Gives true when added.
-export function append(path, entry) {
+// Adds entry to the list in the state file at path (answered.json, pending.json) unless it lists it; a missing file starts empty. Gives true when added.
+// Under the file's write lock, as change() writes: two runs that add at once would else drop one entry.
+export function append(path, entry, { sleep = pause } = {}) {
   if (typeof entry !== 'string' || !entry.trim() || /\p{Cc}/u.test(entry)) throw new Error('append: the entry is no single line');
-  const current = load(path);
-  if (current !== MISSING && !Array.isArray(current)) throw new Error(`${basename(path)} holds no list`);
-  const list = current === MISSING ? [] : current;
-  if (list.includes(entry)) return false;
-  writeState(path, [...list, entry]);
-  return true;
+  return writeLocked(path, () => {
+    const current = load(path);
+    if (current !== MISSING && !Array.isArray(current)) throw new Error(`${basename(path)} holds no list`);
+    const list = current === MISSING ? [] : current;
+    if (list.includes(entry)) return false;
+    writeState(path, [...list, entry]);
+    return true;
+  }, sleep);
 }
 
 // pr-<pr>.json rebuilt from fields the run gathered (the pull request, its reviews and claim comment, worker-list, automations list), through change. Its version starts after now in milliseconds, so a version read before the rebuild never comes back. A file that was unreadable, or fields whose pull request merged (mergedAt) with no merge log line, also get mergeCommandAt and held "state rebuilt", which pause every merge until the owner's answer. A readable file is never replaced. Gives { held }.

@@ -220,11 +220,19 @@ test('approval: apply moves a question the owner answered to cl:ready-for-agent,
   assert.equal(started.status, 0, started.stderr);
   assert.deepEqual(JSON.parse(started.stdout), { option: 'a', text: '', at: '2026-11-11T10:00:00Z', labels: ['bug'] });
   assert.deepEqual(started.edits, ['issue edit 12 -R owner/tracker --remove-label cl:needs-human --remove-label cl:ready-for-agent']);
+  // A project's own startLabel goes on, and comes off an approval, in place of cl:ready-for-agent.
+  const custom = run([SECOND], { args: ['owner/tracker', '12', '--start-label', 'go'] });
+  assert.equal(custom.status, 0, custom.stderr);
+  assert.deepEqual(custom.edits, ['issue edit 12 -R owner/tracker --remove-label cl:needs-human --remove-label CL:Deferred --add-label go']);
+  const customApproval = run([said('a', '2026-11-11T10:00:00Z')], { body: FILLED, tags: [{ name: 'cl:needs-human' }, { name: 'Go' }, { name: 'cl:ready-for-agent' }], args: ['owner/tracker', '12', '--start-label', 'go'] });
+  assert.equal(customApproval.status, 0, customApproval.stderr);
+  assert.deepEqual(customApproval.edits, ['issue edit 12 -R owner/tracker --remove-label cl:needs-human --remove-label Go']);
   for (const comments of [[], [{ ...SECOND, authorAssociation: 'COLLABORATOR' }], [{ ...SECOND, authorAssociation: 'MEMBER' }]]) {
     const open = run(comments);
     assert.deepEqual([open.status, open.stdout, open.edits], [1, '', []]);
   }
-  for (const args of [['owner/tracker'], ['owner', '12'], ['owner/tracker', '12x']]) {
+  // A start label cedarloom.json would refuse is refused here too.
+  for (const args of [['owner/tracker'], ['owner', '12'], ['owner/tracker', '12x'], ['owner/tracker', '12', '--start-label', 'cl:needs-human'], ['owner/tracker', '12', '--start-label', '']]) {
     const refused = run([SECOND], { args });
     assert.deepEqual([refused.status, refused.edits], [2, []]);
   }
@@ -284,7 +292,7 @@ test('approval: without a private tracker, the question goes into the local queu
   writeFileSync(join(dir, '.cedarloom/questions/project-1.md'), `${filed.replace('Status: open', 'Status: answered')}\nOwner answer (2026-11-15): b. Hold it for now.\n`);
   // A question that holds back a work issue names it on its Issue line.
   writeFileSync(join(dir, '.cedarloom/questions/project-2.md'), `${filed.replace('Status: open', 'Status: deferred')}\nIssue: acme/app#7\nDeferred by the owner on 2026-11-15.\n`);
-  assert.deepEqual(queue(), [{ file: 'project-1.md', status: 'answered', option: 'b', text: 'Hold it for now.', at: '2026-11-15', held: true }, { file: 'project-2.md', status: 'deferred', issue: 'acme/app#7' }]);
+  assert.deepEqual(queue(), [{ file: 'project-1.md', status: 'answered', option: 'b', text: 'Hold it for now.', at: '2026-11-15', held: true }, { file: 'project-2.md', status: 'deferred', issues: ['acme/app#7'] }]);
   // A file answered without an answer line is an error, never "no answer yet", and holds back no other answer.
   writeFileSync(join(dir, '.cedarloom/questions/project-2.md'), `Status: answered\n\n${FILLED}`);
   assert.deepEqual(queue()[1], { file: 'project-2.md', error: 'answered, but no Owner answer line' });
